@@ -1,0 +1,32 @@
+# Environments & Secrets
+.env
+.venv/
+env/
+venv/
+
+# Build & Distribution
+dist/
+build/
+*.egg-info/
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Linters & Tooling
+.ruff_cache/
+.mypy_cache/
+
+# Experiment outputs & local artifacts
+artifacts/
+
+# OS artifacts
+.DS_Store
+Thumbs.db
