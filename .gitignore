@@ -20,13 +20,26 @@ __pycache__/
 htmlcov/
 coverage.xml
 
-# Linters & Tooling
-.ruff_cache/
-.mypy_cache/
 
 # Experiment outputs & local artifacts
 artifacts/
+scratch/
+
+# IDEs & Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Type checking & Linters
+.ruff_cache/
+.mypy_cache/
+.ty_cache/
+
+# Logs & temp files
+*.log
 
 # OS artifacts
 .DS_Store
 Thumbs.db
+
