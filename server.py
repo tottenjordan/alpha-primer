@@ -227,7 +227,9 @@ if __name__ == "__main__":
                 super().do_GET()
 
         httpd = http.server.ThreadingHTTPServer((host, port), FallbackHandler)
-        print(f"Serving AlphaEvolve Executive Suite at http://127.0.0.1:{port} (bound to {host}:{port})")
+        print(
+            f"Serving AlphaEvolve Executive Suite at http://127.0.0.1:{port} (bound to {host}:{port})"
+        )
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:

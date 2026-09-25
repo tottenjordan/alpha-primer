@@ -2,7 +2,7 @@
   "use_case_id": "inventory_replenishment",
   "title": "Autonomous Multi-Echelon & Perishable Inventory Replenishment",
   "subtitle": "Google Cloud Discovery Engine AlphaEvolve (v1alpha) Digital Twin Heuristic Optimization",
-  "recorded_at_utc": "2026-09-25T22:38:43.637257+00:00",
+  "recorded_at_utc": "2026-09-25T22:47:07.687477+00:00",
   "baseline_summary": {
     "total_cost": 68410.0,
     "holding_cost": 14210.0,
