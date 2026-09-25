@@ -52,8 +52,10 @@ We adhere to the modern Python ecosystem standards (based on the `modern-python`
 - **Commit Frequency & Quality**:
   - Commit frequently, one logical change per commit.
   - A commit must always leave the test suite green (`uv run pytest`, `make check`).
-- **Authorization Required**:
-  - Commit or push **only when explicitly asked** by the user.
+- **Authorization & Workflow**:
+  - You do not need permission to commit and push changes to a feature branch or open PR designated for review.
+  - **NEVER** push directly to `main` without explicit approval; `main` is merged strictly via PR.
+
 - **Commit Trailers**:
   - **NEVER** add `Co-Authored-By` trailers when making commits or submitting pull requests.
 - **Commit Messages**:

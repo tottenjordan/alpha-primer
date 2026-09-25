@@ -21,9 +21,11 @@
 4. **Git Operations**:
    - Work on a branch; `main` is merged via PR.
    - Commit frequently (one logical change per commit), ensuring every commit leaves the test suite green.
-   - Commit or push **only when explicitly asked**.
+   - You do not need permission to commit and push to a feature branch or open PR for review.
+   - **Never** push directly to `main` without explicit approval.
    - **Never** add `Co-Authored-By` trailers in commits or PR descriptions.
    - Follow Conventional Commits formatting.
+
 5. **Session Notes & Collaboration**:
    - Document cross-session, non-recoverable insights under `docs/notes/` organized by topic.
    - Keep the top-level index [docs/notes/README.md](file:///usr/local/google/home/jordantotten/alpha/alpha-primer/docs/notes/README.md) under 200 lines and link key files and single-topic note files.
