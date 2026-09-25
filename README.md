@@ -86,6 +86,15 @@ uv run python examples/inventory_replenishment/run_evolution.py --max-programs 2
 - **Output Artifacts**: When complete, the winning code and holdout benchmark results are saved locally to `artifacts/inventory_replenishment/` (`best_evolved_program.py` and `best_evaluation_summary.json`).
 See [docs/notes/cloud_resources_and_execution.md](docs/notes/cloud_resources_and_execution.md) for full architectural details.
 
+### 5. Launching the Interactive Executive Dashboard
+
+View the interactive 90-day supply chain digital twin simulation, 31-generation evolutionary scrubber replay, What-If stress-testing sandbox, and side-by-side code diffs:
+
+```bash
+uv run python server.py
+```
+Open [http://127.0.0.1:8080](http://127.0.0.1:8080) in your browser. (Zero external server dependencies required; runs on standard library `http.server` with optional FastAPI/Uvicorn support).
+
 ---
 
 
