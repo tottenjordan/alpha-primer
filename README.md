@@ -88,14 +88,36 @@ See [docs/notes/cloud_resources_and_execution.md](docs/notes/cloud_resources_and
 
 ### 5. Launching the Interactive Executive Dashboard
 
-View the interactive 90-day supply chain digital twin simulation, 31-generation evolutionary scrubber replay, What-If stress-testing sandbox, and side-by-side code diffs:
+Launch the local web server to interact with the dashboard:
 
 ```bash
 uv run python server.py
 ```
+
 Open [http://127.0.0.1:8080](http://127.0.0.1:8080) in your browser. (Zero external server dependencies required; runs on standard library `http.server` with optional FastAPI/Uvicorn support).
 
 ---
+
+## 🎬 Interactive Executive Walkthrough (`.gif`)
+
+![AlphaEvolve Supply Chain & Digital Twin Intelligence Suite](dashboard/assets/inventory_replenishment_dashboard.gif)
+
+### Interactive Dashboard Capabilities
+
+The repository includes a decoupled web dashboard (`dashboard/index.html` + `server.py`) for visually exploring the multi-echelon inventory replenishment digital twin and verifying AlphaEvolve's optimization trajectory:
+
+1. **Digital Twin & 31-Generation Evolution Scrubber**:
+   - Scrub through Generations `0` to `30` to inspect day-by-day inventory cohorts, arriving pipeline orders, demand fulfillment, and spoilage across a 90-day simulation.
+   - Highlights key evolutionary breakthroughs: **Gen 0** Static $(s, S)$ seed baseline ($68.4k cost, 14.6% spoilage) &rarr; **Gen 8** Censored Demand Imputation &rarr; **Gen 17** Dynamic FIFO Spoilage Deduction &rarr; **Gen 30** Global Champion ($45.2k cost, **-33.9% reduction**, 93.49% fill rate, 8.45% spoilage).
+2. **Interactive What-If Sandbox**:
+   - Test model robustness under real-time demand shocks, supplier lead-time delays (+1 to +5 days), and promotional demand spikes (+10% to +80%) across SKU archetypes (Ultra-Perishables, Chilled Dairy, Ambient Grocery).
+3. **Benchmark & Perishability Mathematics**:
+   - View statistical significance tests ($p < 0.001$, paired Wilcoxon signed-rank), Monte Carlo seed distributions, and closed-form mathematical equations for FIFO cohort aging, critical fractiles, and censored demand estimation.
+4. **Side-by-Side Evolved Python Code Diffs**:
+   - Review the exact `# EVOLVE-BLOCK` mutations discovered by Gemini 3.5 Flash against the static baseline seed, ready for 1-click clipboard export into production pipelines.
+
+---
+
 
 
 ## Featured Use Cases
