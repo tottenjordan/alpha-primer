@@ -1,0 +1,141 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Conservative: least-privilege permissions at workflow level
+permissions:
+  contents: read
+
+# Concurrency: cancel in-progress runs for the same branch/PR to save CI resources
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-format:
+    name: Lint & Format Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+
+      - name: Set up uv package manager
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.1.0
+        with:
+          enable-cache: true
+
+      - name: Install lint dependencies
+        run: uv sync --group dev
+
+      - name: Ruff Lint (with GitHub annotations)
+        run: uv run ruff check --output-format=github .
+
+      - name: Ruff Formatting Check
+        run: uv run ruff format --check --diff .
+
+  typecheck:
+    name: Type Check (ty)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+
+      - name: Set up uv package manager
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.1.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Run ty type checker
+        run: uv run ty check src/
+
+  test:
+    name: Test Suite (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+
+      - name: Set up uv package manager
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.1.0
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install test dependencies
+        run: uv sync --all-groups
+
+      - name: Run pytest with coverage
+        run: |
+          uv run pytest -v --cov=alpha_evolve --cov-report=term-missing
+
+      - name: Post Job Summary
+        if: always()
+        run: |
+          echo "### 🧪 Test Run Summary (Python ${{ matrix.python-version }})" >> $GITHUB_STEP_SUMMARY
+          echo "- **Outcome**: ${{ job.status == 'success' && '✅ Passed' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Python Version**: \`${{ matrix.python-version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Runner**: \`${{ runner.os }} (${{ runner.arch }})\`" >> $GITHUB_STEP_SUMMARY
+
+  e2e-dryrun:
+    name: E2E Example Validation (Offline Dry-Run)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+
+      - name: Set up uv package manager
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.1.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --all-groups
+
+      - name: Run Inventory Replenishment optimization dry-run
+        run: |
+          uv run python examples/inventory_replenishment/run_evolution.py --dry-run --max-programs 3
+
+      - name: Verify generated artifacts
+        run: |
+          test -f artifacts/inventory_replenishment/best_evolved_program.py
+          test -f artifacts/inventory_replenishment/best_evaluation_summary.json
+          echo "### 🚀 End-to-End Dry-Run Validation" >> $GITHUB_STEP_SUMMARY
+          echo "Verified that newly cloned repositories can run standalone use cases out of the box." >> $GITHUB_STEP_SUMMARY
+          echo "```json" >> $GITHUB_STEP_SUMMARY
+          cat artifacts/inventory_replenishment/best_evaluation_summary.json >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
+
+  security-audit:
+    name: Dependency Vulnerability Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+
+      - name: Set up uv package manager
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.1.0
+        with:
+          enable-cache: true
+
+      - name: Install audit tools
+        run: uv sync --group dev
+
+      - name: Run pip-audit
+        run: uv run pip-audit
