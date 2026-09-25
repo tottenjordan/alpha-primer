@@ -188,7 +188,7 @@ except ImportError:
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
-    host = "0.0.0.0" if os.environ.get("K_SERVICE") else "127.0.0.1"
+    host = os.environ.get("HOST", "0.0.0.0")
 
     if app is not None:
         try:
@@ -206,6 +206,12 @@ if __name__ == "__main__":
             def __init__(self, *args: Any, **kwargs: Any) -> None:
                 super().__init__(*args, directory=str(DASHBOARD_DIR), **kwargs)
 
+            def end_headers(self) -> None:
+                for hk, hv in SECURITY_HEADERS.items():
+                    if hk not in ("Content-Type", "Content-Length"):
+                        self.send_header(hk, hv)
+                super().end_headers()
+
             def do_GET(self) -> None:
                 if self.path in (
                     "/health",
@@ -215,15 +221,13 @@ if __name__ == "__main__":
                     code, hdrs, body = handle_api_request(self.path)
                     self.send_response(code)
                     self.send_header("Content-Type", "application/json")
-                    for hk, hv in hdrs.items():
-                        self.send_header(hk, hv)
                     self.end_headers()
                     self.wfile.write(json.dumps(body).encode("utf-8"))
                     return
                 super().do_GET()
 
         httpd = http.server.ThreadingHTTPServer((host, port), FallbackHandler)
-        print(f"Serving AlphaEvolve Executive Suite at http://{host}:{port} (stdlib fallback)")
+        print(f"Serving AlphaEvolve Executive Suite at http://127.0.0.1:{port} (bound to {host}:{port})")
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
