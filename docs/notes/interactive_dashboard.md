@@ -23,6 +23,9 @@ Documenting the interactive executive suite for the Multi-Echelon Perishable Inv
 ## Running the Dashboard
 
 ```bash
-uv run python server.py
+uv run --frozen python server.py
 ```
-Visit `http://127.0.0.1:8080` in any browser.
+Visit `http://127.0.0.1:8080` (or `http://<workstation-hostname>:8080` over UberProxy / SSH port-forwarding).
+
+- **`--frozen`**: Prevents `uv` from attempting to re-resolve package locks against internal Airlock proxies before launching.
+- **Default Host**: Automatically binds to `0.0.0.0` (configurable via `HOST` env var) so corporate proxy routing and remote workstations can access the port seamlessly.
