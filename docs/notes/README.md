@@ -12,6 +12,8 @@ Top-level index of session notes and key repository files (kept under 200 lines)
 ## Topic Notes
 
 - [alphaevolve_architecture.md](alphaevolve_architecture.md) — Module resolution for standalone scripts, signal-free worker timeouts, causal time indexing, and mock client iteration.
+- [alphaevolve_api_wire_spec.md](alphaevolve_api_wire_spec.md) — Discovery Engine v1alpha AlphaEvolve REST endpoints, wire schemas, lock tokens, and start/submission payloads.
 - [ci_tooling.md](ci_tooling.md) — uv lockfile generation, internal Airlock proxies vs public PyPI index for GitHub Actions runners.
 - [cloud_resources_and_execution.md](cloud_resources_and_execution.md) — Cloud resources created during execution, serverless Discovery Engine architecture, UI/observability, and local simulation runtime.
+
 

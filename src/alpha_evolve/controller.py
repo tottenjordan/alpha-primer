@@ -90,8 +90,10 @@ class EvolutionController:
         )
 
         # Register seed program and start experiment
-        self.client.create_initial_program(exp_name, self.config.seed_code)
-        self.client.start_experiment(exp_name)
+        initial_prog_name = self.client.create_initial_program(
+            exp_name, self.config.seed_code, baseline_score=baseline_score
+        )
+        self.client.start_experiment(exp_name, initial_prog_name)
 
         # Step 2: Evolutionary Candidate Loop
         console.print("\n[bold green]Step 2: Entering Evolutionary Loop...[/bold green]")
@@ -130,7 +132,7 @@ class EvolutionController:
                             "[yellow]Idle timeout reached while waiting for new candidates.[/yellow]"
                         )
                         break
-                    time.sleep(3.0)
+                    time.sleep(5.0)
                     continue
 
                 consecutive_empty = 0
@@ -164,6 +166,7 @@ class EvolutionController:
                     submissions.append(
                         AlphaEvolveEvaluationSubmission(
                             program=cand.program_id,
+                            lockToken=cand.lock_token,
                             evaluation=AlphaEvolveProgramEvaluation(
                                 scores=eval_res.scores,
                                 insights=eval_res.insights,
