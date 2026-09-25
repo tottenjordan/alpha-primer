@@ -67,14 +67,27 @@ To run offline in **Dry-Run Mode** without consuming Google Cloud quotas, set `M
 Navigate to any example directory or run directly from root:
 
 ```bash
-# Run the Inventory Replenishment Digital Twin in dry-run mode
+# Run the Inventory Replenishment Digital Twin in dry-run mode (offline)
 uv run python examples/inventory_replenishment/run_evolution.py --dry-run --max-programs 5
 
 # Run with live Gemini Enterprise API
 uv run python examples/inventory_replenishment/run_evolution.py --max-programs 20
 ```
 
+#### What Happens When You Run This Command?
+- **UI & Observability**: Execution runs directly in your terminal with live evaluation metrics streamed to the console (no web browser or UI window is automatically opened). You can optionally view the assistant and session history in the [Google Cloud Console](https://console.cloud.google.com/gen-app-builder/engines).
+- **Cloud Resources Created**: Uses **serverless API resources** within your existing Discovery Engine. No VMs, GKE clusters, or persistent disks are created. Specifically, it dynamically provisions:
+  1. An episodic **Session** under your engine.
+  2. An **AlphaEvolve Experiment** entity defining the optimization goal and prompts.
+  3. The **Seed Program** and evolutionary **Program Candidates**.
+- **Execution Split**:
+  - *LLM reasoning & code mutation* occurs serverlessly in Gemini Enterprise.
+  - *Evaluation & digital twin simulation* runs **locally on your machine** inside an isolated worker pool—your proprietary evaluation data and simulation logic never leave your environment.
+- **Output Artifacts**: When complete, the winning code and holdout benchmark results are saved locally to `artifacts/inventory_replenishment/` (`best_evolved_program.py` and `best_evaluation_summary.json`).
+See [docs/notes/cloud_resources_and_execution.md](docs/notes/cloud_resources_and_execution.md) for full architectural details.
+
 ---
+
 
 ## Featured Use Cases
 
