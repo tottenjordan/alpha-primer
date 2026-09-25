@@ -73,6 +73,10 @@ class AlphaEvolveEvaluationSubmission(BaseModel):
     """Submission payload for a single program evaluation."""
 
     program: str = Field(description="Full resource name of the program candidate.")
+    lockToken: str | None = Field(
+        default=None,
+        description="Lock token acquired with the program.",
+    )
     evaluation: AlphaEvolveProgramEvaluation
 
 
@@ -112,8 +116,10 @@ class ProgramCandidate(BaseModel):
         description="Unique identifier / resource name for the program candidate."
     )
     code: str = Field(description="Full Python source code of the candidate.")
+    lock_token: str | None = Field(default=None, description="Lock token acquired from the API.")
     iteration: int = Field(default=0, description="Evolution generation / iteration index.")
     parent_id: str | None = Field(default=None, description="Parent program ID if known.")
+
     created_at: str = Field(
         default_factory=lambda: datetime.now(UTC).isoformat(),
         description="Timestamp of generation.",
@@ -134,9 +140,10 @@ class RunSettings(BaseModel):
     )
     parallel_workers: int = Field(default=4, description="Number of parallel evaluation workers.")
     idle_timeout_s: float = Field(
-        default=60.0,
+        default=300.0,
         description="Seconds to wait for new candidates before terminating.",
     )
+
     mock_mode: bool = Field(
         default=False,
         description="Whether to run in offline mock mode without connecting to GCP.",

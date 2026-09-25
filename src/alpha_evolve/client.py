@@ -81,65 +81,52 @@ class AlphaEvolveClient:
         }
 
     def create_session(self) -> str:
-        """Create a new conversational session under the engine assistant."""
-        url = f"{self.base_url}/{self.engine_path}/assistants/{self.assistant_id}:streamAssist"
-        payload = {
-            "query": {"text": "AlphaEvolve session initialization"},
-            "assistSkippingMode": "REQUEST_ASSIST",
-        }
+        """Create a new conversational session under the engine."""
+        url = f"{self.base_url}/{self.engine_path}/sessions"
+        payload = {"displayName": "AlphaEvolve Session"}
         resp = self._http_client.post(url, headers=self._headers(), json=payload)
         resp.raise_for_status()
         data = resp.json()
-
-        session_name: str | None = None
-        # Handle list or object response from streamAssist
-        entries = data if isinstance(data, list) else [data]
-        for item in entries:
-            session_info = item.get("sessionInfo", {})
-            if "session" in session_info:
-                session_name = session_info["session"]
-                break
-
+        session_name: str | None = data.get("name")
         if not session_name:
-            raise RuntimeError(f"Could not extract session from assistant response: {data}")
+            raise RuntimeError(f"Could not extract session name from response: {data}")
         return session_name
 
     def create_experiment(self, session_name: str, config: ExperimentConfig) -> str:
         """Register a new AlphaEvolveExperiment under the session."""
         url = f"{self.base_url}/{session_name}/alphaEvolveExperiments"
-        exp_id = f"exp_{int(random.random() * 1e8)}"
-        params = {"alphaEvolveExperimentId": exp_id}
 
         req_config = {
             "title": config.experiment_name,
-            "user_context": config.user_instructions,
-            "run_settings": {
-                "max_programs": config.run_settings.max_programs,
-                "parallel_evaluation": True,
+            "problemDescription": config.user_instructions,
+            "runSettings": {
+                "maxPrograms": config.run_settings.max_programs,
+                "concurrency": config.run_settings.parallel_workers,
             },
         }
 
         resp = self._http_client.post(
             url,
             headers=self._headers(),
-            params=params,
             json={"config": req_config},
         )
         resp.raise_for_status()
         exp_data = resp.json()
-        experiment_name: str = exp_data.get(
-            "name", f"{session_name}/alphaEvolveExperiments/{exp_id}"
-        )
+        experiment_name: str | None = exp_data.get("name")
+        if not experiment_name:
+            raise RuntimeError(f"Could not extract experiment name from response: {exp_data}")
         return experiment_name
 
-    def create_initial_program(self, experiment_name: str, seed_code: str) -> str:
+    def create_initial_program(
+        self, experiment_name: str, seed_code: str, baseline_score: float = 0.0
+    ) -> str:
         """Submit the initial seed program to seed the evolutionary population."""
         url = f"{self.base_url}/{experiment_name}/alphaEvolvePrograms"
         payload = {
-            "program": {
-                "description": "Initial Seed Program Baseline",
-                "files": [{"path": "program.py", "content": seed_code}],
-            }
+            "content": {
+                "files": [{"path": "initial_program.py", "content": seed_code}],
+            },
+            "evaluation": {"scores": {"scores": [{"metric": "score", "score": baseline_score}]}},
         }
         resp = self._http_client.post(url, headers=self._headers(), json=payload)
         resp.raise_for_status()
@@ -147,27 +134,39 @@ class AlphaEvolveClient:
         prog_name: str = prog_data.get("name", "seed_program")
         return prog_name
 
-    def start_experiment(self, experiment_name: str) -> None:
+    def start_experiment(self, experiment_name: str, initial_program_name: str) -> None:
         """Trigger start of the evolutionary generation cycle."""
         url = f"{self.base_url}/{experiment_name}:start"
-        resp = self._http_client.post(url, headers=self._headers(), json={"name": experiment_name})
+        payload = {
+            "name": experiment_name,
+            "initialProgram": initial_program_name,
+        }
+        resp = self._http_client.post(url, headers=self._headers(), json=payload)
         resp.raise_for_status()
 
     def acquire_programs(self, experiment_name: str, count: int = 2) -> list[ProgramCandidate]:
         """Poll the API to acquire newly generated program candidates awaiting evaluation."""
         url = f"{self.base_url}/{experiment_name}:acquirePrograms"
-        payload = {"parent": experiment_name, "desired_programs_count": count}
+        payload = {"parent": experiment_name, "desiredProgramsCount": count}
         resp = self._http_client.post(url, headers=self._headers(), json=payload)
         resp.raise_for_status()
         data = resp.json()
 
         candidates: list[ProgramCandidate] = []
-        raw_programs = data.get("programs", [])
+        raw_programs = data.get("programs") or data.get("alphaEvolvePrograms", [])
+        default_lock = data.get("lockToken", "")
         for item in raw_programs:
             prog_name = item.get("name", f"prog_{int(random.random() * 1e6)}")
-            files = item.get("program", {}).get("files", [])
+            files = item.get("content", {}).get("files", [])
             code = files[0].get("content", "") if files else ""
-            candidates.append(ProgramCandidate(program_id=prog_name, code=code))
+            lock_token = item.get("lockToken") or default_lock
+            candidates.append(
+                ProgramCandidate(
+                    program_id=prog_name,
+                    code=code,
+                    lock_token=lock_token,
+                )
+            )
 
         return candidates
 
@@ -176,12 +175,14 @@ class AlphaEvolveClient:
     ) -> None:
         """Submit completed evaluation scores and diagnostic insights back to AlphaEvolve."""
         url = f"{self.base_url}/{experiment_name}:submitProgramsEvaluations"
-        payload = {
-            "parent": experiment_name,
-            "evaluation_submissions": [s.model_dump() for s in submissions],
-        }
-        resp = self._http_client.post(url, headers=self._headers(), json=payload)
-        resp.raise_for_status()
+        for sub in submissions:
+            sub_dict = sub.model_dump(exclude_none=True)
+            payload = {
+                "parent": experiment_name,
+                "evaluationSubmissions": [sub_dict],
+            }
+            resp = self._http_client.post(url, headers=self._headers(), json=payload)
+            resp.raise_for_status()
 
 
 class MockAlphaEvolveClient:
@@ -203,11 +204,13 @@ class MockAlphaEvolveClient:
     def create_experiment(self, session_name: str, config: ExperimentConfig) -> str:
         return f"{session_name}/alphaEvolveExperiments/mock-exp-001"
 
-    def create_initial_program(self, experiment_name: str, seed_code: str) -> str:
+    def create_initial_program(
+        self, experiment_name: str, seed_code: str, baseline_score: float = 0.0
+    ) -> str:
         self.seed_code = seed_code
         return f"{experiment_name}/alphaEvolvePrograms/seed"
 
-    def start_experiment(self, experiment_name: str) -> None:
+    def start_experiment(self, experiment_name: str, initial_program_name: str = "") -> None:
         pass
 
     def acquire_programs(self, experiment_name: str, count: int = 1) -> list[ProgramCandidate]:
