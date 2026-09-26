@@ -800,6 +800,16 @@ def build_dashboard_html() -> Path:
       border-radius: 4px;
     }}
 
+    .pill-inn {{
+      background: rgba(6, 182, 212, 0.12);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      color: var(--accent-cyan);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+    }}
+
     .diff-table-wrapper {{
       background: #040810;
       border: 1px solid var(--border-subtle);
@@ -1327,12 +1337,14 @@ def build_dashboard_html() -> Path:
         <span style="color: var(--border-subtle); margin: 0 4px;">|</span>
         <label for="diff-select-base" style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">Base:</label>
         <select id="diff-select-base" class="diff-select">
-          <option value="0">Gen 0 (Baseline)</option>
+          <option value="0" selected>Gen 0 (Baseline)</option>
           <option value="8">Gen 8 (Imputation)</option>
           <option value="17">Gen 17 (FIFO)</option>
+          <option value="30">Gen 30 (Champion)</option>
         </select>
         <label for="diff-select-evolved" style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">Evolved:</label>
         <select id="diff-select-evolved" class="diff-select">
+          <option value="0">Gen 0 (Baseline)</option>
           <option value="8" selected>Gen 8 (Imputation)</option>
           <option value="17">Gen 17 (FIFO)</option>
           <option value="30">Gen 30 (Champion)</option>
@@ -1354,6 +1366,7 @@ def build_dashboard_html() -> Path:
       <div>
         <div class="diff-mutation-title" id="diff-banner-title">Gen 0 Baseline ➔ Gen 8 Censored Demand Imputation</div>
         <div class="diff-mutation-desc" id="diff-banner-desc">Detects historical stockout periods and imputes unobserved customer demand using raw_mean + 1.2*raw_std.</div>
+        <div class="diff-innovations-pills" id="diff-innovations-pills" style="margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap;"></div>
       </div>
       <div class="diff-stats-pills">
         <span class="pill-add" id="diff-stat-add">+14 additions</span>
@@ -1423,6 +1436,10 @@ def build_dashboard_html() -> Path:
           const targetId = btn.getAttribute("data-tab");
           const target = document.getElementById(targetId);
           if (target) target.classList.add("active");
+
+          if (targetId !== "tab-replay") {{
+            pauseReplay();
+          }}
 
           if (targetId === "tab-replay") {{
             drawTrajectoryChart(currentGen);
@@ -1496,6 +1513,7 @@ def build_dashboard_html() -> Path:
           node.appendChild(tip);
 
           node.addEventListener("click", () => {{
+            pauseReplay();
             updateDisplay(item.generation);
           }});
 
@@ -1536,6 +1554,15 @@ def build_dashboard_html() -> Path:
       const scrubberLabel = document.getElementById("scrubber-label");
       const playBtn = document.getElementById("btn-play");
 
+      function pauseReplay() {{
+        if (isPlaying) {{
+          isPlaying = false;
+          if (playBtn) playBtn.textContent = "▶ Play Evolution";
+          if (playInterval) clearInterval(playInterval);
+          playInterval = null;
+        }}
+      }}
+
       function updateDisplay(genIdx) {{
         currentGen = Math.max(0, Math.min(maxGen, genIdx));
         if (scrubber) scrubber.value = currentGen;
@@ -1563,12 +1590,14 @@ def build_dashboard_html() -> Path:
 
       if (scrubber) {{
         scrubber.addEventListener("input", (e) => {{
+          pauseReplay();
           updateDisplay(parseInt(e.target.value, 10));
         }});
       }}
 
       document.querySelectorAll(".btn-preset").forEach(btn => {{
         btn.addEventListener("click", () => {{
+          pauseReplay();
           const g = parseInt(btn.getAttribute("data-gen"), 10);
           updateDisplay(g);
         }});
@@ -1584,15 +1613,12 @@ def build_dashboard_html() -> Path:
               currentGen++;
               if (currentGen > maxGen) {{
                 currentGen = maxGen;
-                isPlaying = false;
-                playBtn.textContent = "▶ Play Evolution";
-                clearInterval(playInterval);
+                pauseReplay();
               }}
               updateDisplay(currentGen);
             }}, 400);
           }} else {{
-            playBtn.textContent = "▶ Play Evolution";
-            clearInterval(playInterval);
+            pauseReplay();
           }}
         }});
       }}
@@ -1766,15 +1792,14 @@ def build_dashboard_html() -> Path:
           ctx.stroke();
         }}
 
-        // Non-Dominated Pareto Frontier Envelope (connected stepped curve)
-        const paretoPoints = paretoFrontier.filter(p => p.is_pareto);
-        paretoPoints.sort((a, b) => a.cost_reduction_pct - b.cost_reduction_pct);
-
-        ctx.strokeStyle = "#10B981";
-        ctx.lineWidth = 2;
-        ctx.setLineDash([4, 3]);
+        // Full reference envelope (faint dotted guide to Gen 30)
+        const allPareto = paretoFrontier.filter(p => p.is_pareto);
+        allPareto.sort((a, b) => a.cost_reduction_pct - b.cost_reduction_pct);
+        ctx.strokeStyle = "rgba(16, 185, 129, 0.2)";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([2, 3]);
         ctx.beginPath();
-        paretoPoints.forEach((p, idx) => {{
+        allPareto.forEach((p, idx) => {{
           const px = mapX(p.cost_reduction_pct);
           const py = mapY(p.fill_rate_pct);
           if (idx === 0) ctx.moveTo(px, py);
@@ -1783,27 +1808,54 @@ def build_dashboard_html() -> Path:
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Plot 31-Generation Bubbles with Spoilage Gradient
+        // Dynamic Non-Dominated Pareto Frontier Envelope (active up to currentGen)
+        const activePareto = allPareto.filter(p => p.generation <= currentGen);
+        if (activePareto.length > 0) {{
+          const currPt = trajectories[currentGen];
+          if (currPt && !activePareto.some(p => p.generation === currentGen)) {{
+            activePareto.push({{
+              generation: currentGen,
+              cost_reduction_pct: currPt.metrics.cost_reduction_pct,
+              fill_rate_pct: currPt.metrics.fill_rate_pct
+            }});
+            activePareto.sort((a, b) => a.cost_reduction_pct - b.cost_reduction_pct);
+          }}
+
+          ctx.strokeStyle = "#10B981";
+          ctx.lineWidth = 2.5;
+          ctx.setLineDash([4, 3]);
+          ctx.beginPath();
+          activePareto.forEach((p, idx) => {{
+            const px = mapX(p.cost_reduction_pct);
+            const py = mapY(p.fill_rate_pct);
+            if (idx === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }});
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }}
+
+        // Plot 31-Generation Bubbles with Spoilage Gradient (active vs ghosted)
         trajectories.forEach((t, gen) => {{
           const m = t.metrics;
           const px = mapX(m.cost_reduction_pct);
           const py = mapY(m.fill_rate_pct);
+          const isPassed = gen <= currentGen;
 
-          // Color gradient by spoilage: high spoilage (~14.6%) coral -> low spoilage (~8.45%) emerald
           const spoilNorm = Math.max(0, Math.min(1, (m.spoilage_rate_pct - 8.45) / (14.6 - 8.45)));
-          // Interpolate RGB from #10B981 (16, 185, 129) to #F43F5E (244, 63, 94)
           const r = Math.round(16 + spoilNorm * (244 - 16));
           const g = Math.round(185 - spoilNorm * (185 - 63));
           const b = Math.round(129 - spoilNorm * (129 - 94));
+          const alpha = isPassed ? 0.85 : 0.2;
 
           const radius = gen === currentGen ? 7 : (gen === 0 || gen === 30 || gen === 8 || gen === 17 ? 5.5 : 4);
 
-          ctx.fillStyle = "rgba(" + r + "," + g + "," + b + ", 0.85)";
+          ctx.fillStyle = "rgba(" + r + "," + g + "," + b + "," + alpha + ")";
           ctx.beginPath();
           ctx.arc(px, py, radius, 0, Math.PI * 2);
           ctx.fill();
 
-          if (gen === 0 || gen === 8 || gen === 17 || gen === 30) {{
+          if (isPassed && (gen === 0 || gen === 8 || gen === 17 || gen === 30)) {{
             ctx.fillStyle = "#CBD5E1";
             ctx.font = "9px JetBrains Mono, monospace";
             ctx.fillText("G" + gen, px + 6, py - 4);
@@ -1840,11 +1892,11 @@ def build_dashboard_html() -> Path:
         ctx.font = "10px Plus Jakarta Sans, sans-serif";
         ctx.fillText("Cost Reduction % →", padL + (w - padL - padR) / 2 - 45, h - 8);
 
-        // Legend
+        // Legend repositioned to top-left to avoid occluding Gen 30 Champion
         ctx.fillStyle = "#10B981";
-        ctx.fillText("● Pareto Envelope", w - padR - 100, padT + 12);
+        ctx.fillText("● Active Pareto Envelope", padL + 10, padT + 12);
         ctx.fillStyle = "#F43F5E";
-        ctx.fillText("■ Spoilage Gradient", w - padR - 100, padT + 26);
+        ctx.fillText("■ Spoilage Gradient", padL + 10, padT + 26);
       }}
 
       // 9. Retina Canvas 2D: Mode B 31-Generation Stacked Cost Component Waterfall
@@ -1880,26 +1932,35 @@ def build_dashboard_html() -> Path:
           ctx.stroke();
         }}
 
-        // Waterfall Columns:
-        // 1. Baseline ($68.4k)
-        // 2. Spoilage Savings (-$11.9k)
-        // 3. Stockout Savings (-$9.6k)
-        // 4. Holding Savings (-$1.2k)
-        // 5. Ordering Savings (-$395)
-        // 6. Champion ($45.2k)
-        const cols = [
-          {{ label: "Baseline", val: 68410, isTotal: true, color: "#64748B", text: "$68.4k" }},
-          {{ label: "Spoilage", delta: -11945, color: "#F43F5E", text: "-$11.9k" }},
-          {{ label: "Stockout", delta: -9627, color: "#F59E0B", text: "-$9.6k" }},
-          {{ label: "Holding", delta: -1205, color: "#38BDF8", text: "-$1.2k" }},
-          {{ label: "Ordering", delta: -395, color: "#A855F7", text: "-$395" }},
-          {{ label: "Champion", val: 45238, isTotal: true, color: "#10B981", text: "$45.2k" }}
+        // Dynamic Columns from telemetry data
+        const baseTot = (costWaterfall && costWaterfall.baseline_total) || 68410;
+        const champTot = (costWaterfall && costWaterfall.champion_total) || 45238;
+        const components = (costWaterfall && costWaterfall.components) || [
+          {{ category: "Spoilage Waste", key: "spoilage", savings: 11945, savings_label: "-$11.9k", color: "#F43F5E" }},
+          {{ category: "Stockout Penalty", key: "stockout", savings: 9627, savings_label: "-$9.6k", color: "#F59E0B" }},
+          {{ category: "Holding Cost", key: "holding", savings: 1205, savings_label: "-$1.2k", color: "#38BDF8" }},
+          {{ category: "Ordering Cost", key: "ordering", savings: 395, savings_label: "-$395", color: "#A855F7" }}
         ];
+
+        const cols = [
+          {{ label: "Baseline", val: baseTot, isTotal: true, color: "#64748B", text: "$" + (baseTot / 1000).toFixed(1) + "k" }}
+        ];
+
+        components.forEach(c => {{
+          cols.push({{
+            label: c.key.charAt(0).toUpperCase() + c.key.slice(1),
+            delta: -Math.abs(c.savings),
+            color: c.color,
+            text: c.savings_label || ("-$" + Math.round(c.savings))
+          }});
+        }});
+
+        cols.push({{ label: "Champion", val: champTot, isTotal: true, color: "#10B981", text: "$" + (champTot / 1000).toFixed(1) + "k" }});
 
         const colW = (w - padL - padR) / cols.length;
         const barW = Math.min(38, colW - 12);
 
-        let runningVal = 68410;
+        let runningVal = baseTot;
 
         cols.forEach((col, idx) => {{
           const x = padL + idx * colW + (colW - barW) / 2;
@@ -1912,12 +1973,13 @@ def build_dashboard_html() -> Path:
 
             ctx.fillStyle = "#FFFFFF";
             ctx.font = "bold 10px JetBrains Mono, monospace";
-            ctx.fillText(col.text, x - 2, topY - 6);
+            ctx.textAlign = "center";
+            ctx.fillText(col.text, x + barW / 2, topY - 6);
           }} else {{
             const prevY = mapY(runningVal);
             const nextVal = runningVal + col.delta;
             const nextY = mapY(nextVal);
-            const barH = nextY - prevY; // positive since delta is negative
+            const barH = Math.max(3, nextY - prevY);
 
             ctx.fillStyle = col.color;
             ctx.fillRect(x, prevY, barW, barH);
@@ -1933,15 +1995,18 @@ def build_dashboard_html() -> Path:
 
             ctx.fillStyle = col.color;
             ctx.font = "bold 9.5px JetBrains Mono, monospace";
-            ctx.fillText(col.text, x - 4, nextY + 12);
+            ctx.textAlign = "center";
+            ctx.fillText(col.text, x + barW / 2, nextY + 12);
 
             runningVal = nextVal;
           }}
 
           ctx.fillStyle = "#94A3B8";
           ctx.font = "9.5px Plus Jakarta Sans, sans-serif";
-          ctx.fillText(col.label, x - 2, h - 10);
+          ctx.textAlign = "center";
+          ctx.fillText(col.label, x + barW / 2, h - 10);
         }});
+        ctx.textAlign = "start";
 
         // Axis
         ctx.fillStyle = "#94A3B8";
@@ -2017,7 +2082,7 @@ def build_dashboard_html() -> Path:
         const savedPerDay = Math.max(0, baseDailyCost - champDailyCost);
         const fillDiff = champFillRate - baseFillRate;
         document.getElementById("whatif-resilience-text").textContent =
-          "Champion prevents SLA deficit (+" + fillDiff.toFixed(1) + "% fill rate) and saves +$" + savedPerDay + "/day under disruption.";
+          "Champion prevents SLA deficit (+" + fillDiff.toFixed(1) + "% fill rate) and saves +$" + savedPerDay.toLocaleString() + "/day under disruption.";
 
         drawWhatIfDualCanvas(baseFillRate, champFillRate, baseSpoilUnits, champSpoilUnits, baseDailyCost, champDailyCost);
       }}
@@ -2038,17 +2103,18 @@ def build_dashboard_html() -> Path:
         const h = rect.height;
         ctx.clearRect(0, 0, w, h);
 
-        const padL = 40, padR = 20, padT = 18, padB = 28;
+        const padL = 40, padR = 20, padT = 20, padB = 28;
         const groupW = (w - padL - padR) / 3;
         const barW = groupW * 0.34;
 
-        // Metric 1: Fill Rate % (0 to 100)
-        // Metric 2: Spoilage Units (0 to 25)
-        // Metric 3: Daily Cost / 20 ($0 to $2000 scaled)
+        // Dynamic scaling for groups to prevent clipping under high stress multiplier
+        const maxSpoil = Math.max(20, Math.ceil(Math.max(bSpoil, cSpoil) * 1.25));
+        const maxCost = Math.max(2000, Math.ceil(Math.max(bCost, cCost) * 1.25));
+
         const groups = [
           {{ label: "Fill Rate %", bVal: bFill, cVal: cFill, maxVal: 100, bText: bFill.toFixed(1) + "%", cText: cFill.toFixed(1) + "%" }},
-          {{ label: "Spoilage Units", bVal: bSpoil, cVal: cSpoil, maxVal: 20, bText: bSpoil.toFixed(1), cText: cSpoil.toFixed(1) }},
-          {{ label: "Cost ($/day)", bVal: bCost, cVal: cCost, maxVal: 2200, bText: "$" + bCost, cText: "$" + cCost }}
+          {{ label: "Spoilage Units", bVal: bSpoil, cVal: cSpoil, maxVal: maxSpoil, bText: bSpoil.toFixed(1), cText: cSpoil.toFixed(1) }},
+          {{ label: "Cost ($/day)", bVal: bCost, cVal: cCost, maxVal: maxCost, bText: "$" + Math.round(bCost).toLocaleString(), cText: "$" + Math.round(cCost).toLocaleString() }}
         ];
 
         groups.forEach((g, idx) => {{
@@ -2067,9 +2133,9 @@ def build_dashboard_html() -> Path:
           // Labels
           ctx.fillStyle = "#CBD5E1";
           ctx.font = "9.5px JetBrains Mono, monospace";
-          ctx.fillText(g.bText, gx + 10, (h - padB) - bh - 4);
+          ctx.fillText(g.bText, gx + 10, Math.max(padT - 2, (h - padB) - bh - 4));
           ctx.fillStyle = "#10B981";
-          ctx.fillText(g.cText, gx + 16 + barW, (h - padB) - ch - 4);
+          ctx.fillText(g.cText, gx + 16 + barW, Math.max(padT - 2, (h - padB) - ch - 4));
 
           ctx.fillStyle = "#94A3B8";
           ctx.font = "10.5px Plus Jakarta Sans, sans-serif";
@@ -2092,9 +2158,9 @@ def build_dashboard_html() -> Path:
 
         // Legend
         ctx.fillStyle = "#64748B";
-        ctx.fillText("■ Baseline (s,S)", w - padR - 170, padT);
+        ctx.fillText("■ Baseline (s,S)", w - padR - 170, padT - 4);
         ctx.fillStyle = "#10B981";
-        ctx.fillText("■ Champion", w - padR - 80, padT);
+        ctx.fillText("■ Champion", w - padR - 80, padT - 4);
       }}
 
       [skuSelect, slideLead, slidePromo, slideSpoil, slideStock].forEach(ctrl => {{
@@ -2138,6 +2204,14 @@ def build_dashboard_html() -> Path:
         }}
 
         while (i < len) {{
+          // Batched whitespace
+          const wsMatch = line.slice(i).match(/^\\s+/);
+          if (wsMatch) {{
+            tokens.push({{ text: wsMatch[0], type: "plain" }});
+            i += wsMatch[0].length;
+            continue;
+          }}
+
           // Multi-line docstring start
           const tri3 = line.slice(i, i + 3);
           if (tri3 === '\"\"\"' || tri3 === \"'''\") {{
@@ -2162,7 +2236,7 @@ def build_dashboard_html() -> Path:
           }}
 
           // String literals
-          if (line[i] === '"' || line[i] === "'") {{
+          if (line[i] === '\"' || line[i] === "'") {{
             const q = line[i];
             let j = i + 1;
             while (j < len && line[j] !== q) {{
@@ -2220,6 +2294,13 @@ def build_dashboard_html() -> Path:
         return tokens;
       }}
 
+      // Pre-tokenize full program code sequentially to avoid lexer state leaks
+      function tokenizePythonCode(code) {{
+        const lines = code.split(/\\r?\\n/);
+        const state = {{ inDocstring: false, docDelim: null }};
+        return lines.map(line => tokenizePythonLine(line, state));
+      }}
+
       // Client-Side Longest Common Subsequence (LCS) Diff Algorithm (<1ms in V8)
       function computeLcsDiff(linesA, linesB) {{
         const n = linesA.length;
@@ -2255,15 +2336,25 @@ def build_dashboard_html() -> Path:
         return diff;
       }}
 
-      // Word-Level Diff Highlighter
-      function computeWordDiff(wordsA, wordsB) {{
-        const n = wordsA.length;
-        const m = wordsB.length;
+      // Token-Level LCS Highlighter (Index-Precise)
+      function computeTokenLcs(tokensA, tokensB) {{
+        const nonWsA = [];
+        tokensA.forEach((tok, idx) => {{
+          if (tok.type !== "plain") nonWsA.push({{ tok, idx }});
+        }});
+
+        const nonWsB = [];
+        tokensB.forEach((tok, idx) => {{
+          if (tok.type !== "plain") nonWsB.push({{ tok, idx }});
+        }});
+
+        const n = nonWsA.length;
+        const m = nonWsB.length;
         const dp = Array.from({{ length: n + 1 }}, () => new Int32Array(m + 1));
 
         for (let i = 1; i <= n; i++) {{
           for (let j = 1; j <= m; j++) {{
-            if (wordsA[i - 1] === wordsB[j - 1]) {{
+            if (nonWsA[i - 1].tok.text === nonWsB[j - 1].tok.text) {{
               dp[i][j] = dp[i - 1][j - 1] + 1;
             }} else {{
               dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
@@ -2271,11 +2362,13 @@ def build_dashboard_html() -> Path:
           }}
         }}
 
-        const lcsWords = new Set();
+        const matchedA = new Set();
+        const matchedB = new Set();
         let i = n, j = m;
         while (i > 0 && j > 0) {{
-          if (wordsA[i - 1] === wordsB[j - 1]) {{
-            lcsWords.add(wordsA[i - 1]);
+          if (nonWsA[i - 1].tok.text === nonWsB[j - 1].tok.text) {{
+            matchedA.add(nonWsA[i - 1].idx);
+            matchedB.add(nonWsB[j - 1].idx);
             i--; j--;
           }} else if (dp[i][j - 1] >= dp[i - 1][j]) {{
             j--;
@@ -2283,15 +2376,16 @@ def build_dashboard_html() -> Path:
             i--;
           }}
         }}
-        return lcsWords;
+
+        return {{ matchedA, matchedB }};
       }}
 
-      // Render Token Array with Syntax Highlighting and Word Diff to DOM (Safe DOM)
-      function renderTokensToSpan(tokens, container, wordDiffClass, changedWords) {{
-        tokens.forEach(tok => {{
+      // Render Token Array with Syntax Highlighting and Token Diff to DOM (Safe DOM)
+      function renderTokensToSpan(tokens, container, wordDiffClass, matchedSet) {{
+        tokens.forEach((tok, idx) => {{
           if (!tok.text) return;
           const span = el("span", "tok-" + tok.type, tok.text);
-          if (wordDiffClass && changedWords && !changedWords.has(tok.text.trim()) && tok.text.trim().length > 0) {{
+          if (wordDiffClass && matchedSet && tok.type !== "plain" && !matchedSet.has(idx)) {{
             span.classList.add(wordDiffClass);
           }}
           container.appendChild(span);
@@ -2312,6 +2406,17 @@ def build_dashboard_html() -> Path:
       const diffSelectBase = document.getElementById("diff-select-base");
       const diffSelectEvolved = document.getElementById("diff-select-evolved");
 
+      function updateStepperActivePreset() {{
+        const pairKey = leftMilestoneKey + "-" + rightMilestoneKey;
+        document.querySelectorAll(".diff-stepper-btn[data-pair]").forEach(b => {{
+          if (b.getAttribute("data-pair") === pairKey) {{
+            b.classList.add("active");
+          }} else {{
+            b.classList.remove("active");
+          }}
+        }});
+      }}
+
       function renderCurrentDiff() {{
         if (!diffTableBody) return;
         diffTableBody.replaceChildren();
@@ -2322,8 +2427,12 @@ def build_dashboard_html() -> Path:
         const codeA = baseM.evolve_block || "";
         const codeB = evoM.evolve_block || "";
 
-        const linesA = codeA.split("\\n");
-        const linesB = codeB.split("\\n");
+        const linesA = codeA.split(/\\r?\\n/);
+        const linesB = codeB.split(/\\r?\\n/);
+
+        // Pre-tokenize both files sequentially once
+        const allTokensA = tokenizePythonCode(codeA);
+        const allTokensB = tokenizePythonCode(codeB);
 
         const rawDiff = computeLcsDiff(linesA, linesB);
 
@@ -2342,6 +2451,16 @@ def build_dashboard_html() -> Path:
         document.getElementById("diff-banner-title").textContent = baseM.title + " ➔ " + evoM.title;
         document.getElementById("diff-banner-desc").textContent = evoM.description;
 
+        // Render Key Innovations in banner via Safe DOM
+        const innContainer = document.getElementById("diff-innovations-pills");
+        if (innContainer) {{
+          innContainer.replaceChildren();
+          const inns = evoM.key_innovations || [];
+          inns.forEach(inn => {{
+            innContainer.appendChild(el("span", "pill-inn", "★ " + inn));
+          }});
+        }}
+
         document.getElementById("diff-header-left").textContent = baseM.title;
         document.getElementById("diff-header-right").textContent = evoM.title;
 
@@ -2350,6 +2469,8 @@ def build_dashboard_html() -> Path:
           const rightHeader = document.getElementById("diff-header-right");
           if (rightHeader) rightHeader.style.display = diffViewMode === "split" ? "block" : "none";
         }}
+
+        updateStepperActivePreset();
 
         // Prepare Render Rows (Group changes for split alignment)
         const renderRows = [];
@@ -2360,7 +2481,6 @@ def build_dashboard_html() -> Path:
             renderRows.push({{ type: "same", item: item }});
             k++;
           }} else {{
-            // Gather consecutive deletions and additions
             const dels = [];
             const adds = [];
             while (k < rawDiff.length && rawDiff[k].type === "del") {{
@@ -2372,24 +2492,26 @@ def build_dashboard_html() -> Path:
               k++;
             }}
 
-            const maxLen = Math.max(dels.length, adds.length);
-            for (let r = 0; r < maxLen; r++) {{
-              renderRows.push({{
-                type: "change",
-                delItem: dels[r] || null,
-                addItem: adds[r] || null
-              }});
+            if (diffViewMode === "split") {{
+              const maxLen = Math.max(dels.length, adds.length);
+              for (let r = 0; r < maxLen; r++) {{
+                renderRows.push({{
+                  type: "change",
+                  delItem: dels[r] || null,
+                  addItem: adds[r] || null
+                }});
+              }}
+            }} else {{
+              // Unified view: all deletions first, then all additions
+              dels.forEach(d => renderRows.push({{ type: "change-del", delItem: d }}));
+              adds.forEach(a => renderRows.push({{ type: "change-add", addItem: a }}));
             }}
           }}
         }}
 
         // Handle Folding of Unchanged Code Blocks (>= 7 lines)
-        const lexerStateA = {{ inDocstring: false, docDelim: null }};
-        const lexerStateB = {{ inDocstring: false, docDelim: null }};
-
         let idx = 0;
         while (idx < renderRows.length) {{
-          // Detect contiguous run of 'same' rows
           if (renderRows[idx].type === "same") {{
             let runEnd = idx;
             while (runEnd < renderRows.length && renderRows[runEnd].type === "same") {{
@@ -2398,14 +2520,12 @@ def build_dashboard_html() -> Path:
             const runLen = runEnd - idx;
 
             if (diffFoldUnchanged && runLen >= 7) {{
-              // Show 2 context lines at top, 2 at bottom, fold the rest
               const foldStart = idx + 2;
               const foldEnd = runEnd - 2;
               const foldCount = foldEnd - foldStart;
 
-              // Render top context lines
               for (let i = idx; i < foldStart; i++) {{
-                renderSingleDiffRow(renderRows[i], lexerStateA, lexerStateB);
+                diffTableBody.appendChild(buildDiffRowElement(renderRows[i], allTokensA, allTokensB));
               }}
 
               // Render Fold Bar (Safe DOM)
@@ -2413,22 +2533,17 @@ def build_dashboard_html() -> Path:
               foldRow.textContent = "↕ ... " + foldCount + " unchanged lines hidden (click to expand) ...";
               const hiddenRows = renderRows.slice(foldStart, foldEnd);
               foldRow.addEventListener("click", () => {{
-                // Expand hidden rows in place
                 const frag = document.createDocumentFragment();
-                const tempLexA = Object.assign({{}}, lexerStateA);
-                const tempLexB = Object.assign({{}}, lexerStateB);
                 hiddenRows.forEach(hr => {{
-                  const rowNode = buildDiffRowElement(hr, tempLexA, tempLexB);
-                  frag.appendChild(rowNode);
+                  frag.appendChild(buildDiffRowElement(hr, allTokensA, allTokensB));
                 }});
                 diffTableBody.insertBefore(frag, foldRow);
                 foldRow.remove();
               }});
               diffTableBody.appendChild(foldRow);
 
-              // Render bottom context lines
               for (let i = foldEnd; i < runEnd; i++) {{
-                renderSingleDiffRow(renderRows[i], lexerStateA, lexerStateB);
+                diffTableBody.appendChild(buildDiffRowElement(renderRows[i], allTokensA, allTokensB));
               }}
 
               idx = runEnd;
@@ -2436,17 +2551,12 @@ def build_dashboard_html() -> Path:
             }}
           }}
 
-          renderSingleDiffRow(renderRows[idx], lexerStateA, lexerStateB);
+          diffTableBody.appendChild(buildDiffRowElement(renderRows[idx], allTokensA, allTokensB));
           idx++;
         }}
       }}
 
-      function renderSingleDiffRow(rRow, lexA, lexB) {{
-        const rowNode = buildDiffRowElement(rRow, lexA, lexB);
-        diffTableBody.appendChild(rowNode);
-      }}
-
-      function buildDiffRowElement(rRow, lexA, lexB) {{
+      function buildDiffRowElement(rRow, allTokensA, allTokensB) {{
         const rowEl = el("div", "diff-row " + diffViewMode);
 
         if (diffViewMode === "split") {{
@@ -2456,50 +2566,50 @@ def build_dashboard_html() -> Path:
 
           if (rRow.type === "same") {{
             const it = rRow.item;
+            const toksA = allTokensA[it.lineA - 1] || [];
+            const toksB = allTokensB[it.lineB - 1] || [];
+
             leftCell.appendChild(el("span", "diff-gutter-num", it.lineA));
             leftCell.appendChild(el("span", "diff-gutter-badge", " "));
             const codeLeft = el("span", "diff-line-code");
-            const toks = tokenizePythonLine(it.textA, lexA);
-            renderTokensToSpan(toks, codeLeft, null, null);
+            renderTokensToSpan(toksA, codeLeft, null, null);
             leftCell.appendChild(codeLeft);
 
             rightCell.appendChild(el("span", "diff-gutter-num", it.lineB));
             rightCell.appendChild(el("span", "diff-gutter-badge", " "));
             const codeRight = el("span", "diff-line-code");
-            renderTokensToSpan(toks, codeRight, null, null);
+            renderTokensToSpan(toksB, codeRight, null, null);
             rightCell.appendChild(codeRight);
           }} else {{
-            // Changed or One-Sided
             const del = rRow.delItem;
             const add = rRow.addItem;
 
-            // Word diff calculation if both sides present
-            let lcsWords = null;
+            let tokenLcs = null;
             if (del && add) {{
-              const wA = del.textA.trim().split(/\\s+/);
-              const wB = add.textB.trim().split(/\\s+/);
-              lcsWords = computeWordDiff(wA, wB);
+              const toksA = allTokensA[del.lineA - 1] || [];
+              const toksB = allTokensB[add.lineB - 1] || [];
+              tokenLcs = computeTokenLcs(toksA, toksB);
             }}
 
             if (del) {{
+              const toksA = allTokensA[del.lineA - 1] || [];
               leftCell.classList.add("diff-row-del");
               leftCell.appendChild(el("span", "diff-gutter-num", del.lineA));
               leftCell.appendChild(el("span", "diff-gutter-badge", "-"));
               const codeLeft = el("span", "diff-line-code");
-              const toks = tokenizePythonLine(del.textA, lexA);
-              renderTokensToSpan(toks, codeLeft, "diff-word-del", lcsWords);
+              renderTokensToSpan(toksA, codeLeft, "diff-word-del", tokenLcs ? tokenLcs.matchedA : null);
               leftCell.appendChild(codeLeft);
             }} else {{
               leftCell.classList.add("diff-cell-empty");
             }}
 
             if (add) {{
+              const toksB = allTokensB[add.lineB - 1] || [];
               rightCell.classList.add("diff-row-add");
               rightCell.appendChild(el("span", "diff-gutter-num", add.lineB));
               rightCell.appendChild(el("span", "diff-gutter-badge", "+"));
               const codeRight = el("span", "diff-line-code");
-              const toks = tokenizePythonLine(add.textB, lexB);
-              renderTokensToSpan(toks, codeRight, "diff-word-add", lcsWords);
+              renderTokensToSpan(toksB, codeRight, "diff-word-add", tokenLcs ? tokenLcs.matchedB : null);
               rightCell.appendChild(codeRight);
             }} else {{
               rightCell.classList.add("diff-cell-empty");
@@ -2510,51 +2620,39 @@ def build_dashboard_html() -> Path:
           rowEl.appendChild(rightCell);
         }} else {{
           // Unified View
-          const cell = el("div", "diff-cell unified");
-
           if (rRow.type === "same") {{
             const it = rRow.item;
+            const toks = allTokensA[it.lineA - 1] || [];
+            const cell = el("div", "diff-cell unified");
             cell.appendChild(el("span", "diff-gutter-num", it.lineA));
             cell.appendChild(el("span", "diff-gutter-num", it.lineB));
             cell.appendChild(el("span", "diff-gutter-badge", " "));
             const code = el("span", "diff-line-code");
-            const toks = tokenizePythonLine(it.textA, lexA);
             renderTokensToSpan(toks, code, null, null);
             cell.appendChild(code);
             rowEl.appendChild(cell);
-          }} else {{
+          }} else if (rRow.type === "change-del") {{
             const del = rRow.delItem;
+            const toks = allTokensA[del.lineA - 1] || [];
+            const cellDel = el("div", "diff-cell unified diff-row-del");
+            cellDel.appendChild(el("span", "diff-gutter-num", del.lineA));
+            cellDel.appendChild(el("span", "diff-gutter-num", " "));
+            cellDel.appendChild(el("span", "diff-gutter-badge", "-"));
+            const code = el("span", "diff-line-code");
+            renderTokensToSpan(toks, code, null, null);
+            cellDel.appendChild(code);
+            rowEl.appendChild(cellDel);
+          }} else if (rRow.type === "change-add") {{
             const add = rRow.addItem;
-
-            let lcsWords = null;
-            if (del && add) {{
-              const wA = del.textA.trim().split(/\\s+/);
-              const wB = add.textB.trim().split(/\\s+/);
-              lcsWords = computeWordDiff(wA, wB);
-            }}
-
-            if (del) {{
-              const cellDel = el("div", "diff-cell unified diff-row-del");
-              cellDel.appendChild(el("span", "diff-gutter-num", del.lineA));
-              cellDel.appendChild(el("span", "diff-gutter-num", " "));
-              cellDel.appendChild(el("span", "diff-gutter-badge", "-"));
-              const code = el("span", "diff-line-code");
-              const toks = tokenizePythonLine(del.textA, lexA);
-              renderTokensToSpan(toks, code, "diff-word-del", lcsWords);
-              cellDel.appendChild(code);
-              rowEl.appendChild(cellDel);
-            }}
-            if (add) {{
-              const cellAdd = el("div", "diff-cell unified diff-row-add");
-              cellAdd.appendChild(el("span", "diff-gutter-num", " "));
-              cellAdd.appendChild(el("span", "diff-gutter-num", add.lineB));
-              cellAdd.appendChild(el("span", "diff-gutter-badge", "+"));
-              const code = el("span", "diff-line-code");
-              const toks = tokenizePythonLine(add.textB, lexB);
-              renderTokensToSpan(toks, code, "diff-word-add", lcsWords);
-              cellAdd.appendChild(code);
-              rowEl.appendChild(cellAdd);
-            }}
+            const toks = allTokensB[add.lineB - 1] || [];
+            const cellAdd = el("div", "diff-cell unified diff-row-add");
+            cellAdd.appendChild(el("span", "diff-gutter-num", " "));
+            cellAdd.appendChild(el("span", "diff-gutter-num", add.lineB));
+            cellAdd.appendChild(el("span", "diff-gutter-badge", "+"));
+            const code = el("span", "diff-line-code");
+            renderTokensToSpan(toks, code, null, null);
+            cellAdd.appendChild(code);
+            rowEl.appendChild(cellAdd);
           }}
         }}
 
@@ -2564,9 +2662,6 @@ def build_dashboard_html() -> Path:
       // Stepper Presets
       document.querySelectorAll(".diff-stepper-btn[data-pair]").forEach(btn => {{
         btn.addEventListener("click", () => {{
-          document.querySelectorAll(".diff-stepper-btn[data-pair]").forEach(b => b.classList.remove("active"));
-          btn.classList.add("active");
-
           const pair = btn.getAttribute("data-pair").split("-");
           leftMilestoneKey = pair[0];
           rightMilestoneKey = pair[1];
@@ -2612,10 +2707,22 @@ def build_dashboard_html() -> Path:
         }});
       }}
 
-      document.getElementById("btn-copy-diff")?.addEventListener("click", () => {{
-        const evoM = milestones[rightMilestoneKey] || milestones["30"];
-        navigator.clipboard.writeText(evoM.evolve_block || "");
-      }});
+      const btnCopy = document.getElementById("btn-copy-diff");
+      if (btnCopy) {{
+        btnCopy.addEventListener("click", () => {{
+          const evoM = milestones[rightMilestoneKey] || milestones["30"];
+          const textToCopy = evoM.evolve_block || "";
+          if (navigator.clipboard && navigator.clipboard.writeText) {{
+            navigator.clipboard.writeText(textToCopy).then(() => {{
+              const origText = btnCopy.textContent;
+              btnCopy.textContent = "✓ Copied!";
+              setTimeout(() => {{ btnCopy.textContent = origText; }}, 1500);
+            }}).catch(err => {{
+              console.warn("Clipboard write failed", err);
+            }});
+          }}
+        }});
+      }}
 
       // 12. Initial Mount & Resize Handlers
       renderMilestoneRibbon();

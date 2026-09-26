@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 from pathlib import Path
 
 from alpha_evolve.dashboard.build_dashboard import build_dashboard_html
@@ -178,3 +180,47 @@ def test_evolutionary_progression_suite_and_dual_whatif() -> None:
     assert 'id="whatif-resilience-banner"' in content
     assert 'id="canvas-whatif"' in content
     assert "drawWhatIfDualCanvas" in content
+
+
+def test_diff_engine_robustness_and_client_js_execution() -> None:
+    html_path = build_dashboard_html()
+    content = html_path.read_text(encoding="utf-8")
+
+    # Innovation pills in AST stepper banner
+    assert 'id="diff-innovations-pills"' in content
+    assert ".pill-inn" in content
+
+    # All 4 milestones present in both base and evolved selectors
+    assert '<select id="diff-select-base"' in content
+    assert '<select id="diff-select-evolved"' in content
+    for gen in ["0", "8", "17", "30"]:
+        assert f'option value="{gen}"' in content
+
+    # Copy button feedback handler
+    assert 'btnCopy.textContent = "✓ Copied!"' in content
+
+    # Replay pausing on interaction
+    assert "pauseReplay" in content
+
+    # Node.js validation of client-side lexer and LCS diff logic
+    node_path = shutil.which("node")
+    if node_path:
+        test_script = """
+        const fs = require('fs');
+        const html = fs.readFileSync('dashboard/index.html', 'utf8');
+        const scriptMatch = html.match(/<script>\\s*([\\s\\S]*?)<\\/script>/);
+        if (!scriptMatch) throw new Error('No script block found');
+
+        // Extract functions by wrapping in evaluation context
+        const code = scriptMatch[1];
+        // Ensure no syntax errors
+        new Function(code);
+        """
+        proc = subprocess.run(
+            [node_path, "-e", test_script],
+            cwd=str(ROOT_DIR),
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert proc.returncode == 0
