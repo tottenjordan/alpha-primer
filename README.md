@@ -128,6 +128,16 @@ The repository includes a decoupled web dashboard (`dashboard/index.html` + `ser
 
 ---
 
+## 🏛️ System Architecture & Reference Designs
+
+For complete high-resolution architecture diagrams and execution workflows, see [docs/architecture/README.md](docs/architecture/README.md):
+- **Hybrid Evolutionary Architecture**: Visual breakdown of the local data-isolated worker sandbox and Gemini Enterprise Discovery Engine integration.
+- **Cloud Run & Gemini Assistant Grounding**: Production deployment topology and external agent webhook routing.
+- **Digital Twin Closed-Loop Evaluation**: 4-phase simulation cycle (causal state ingestion, policy execution, FIFO age depletion, multi-objective fitness).
+
+---
+
+
 
 
 ## Featured Use Cases
