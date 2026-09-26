@@ -252,6 +252,13 @@ def generate_inventory_trajectory_dataset() -> dict[str, Any]:
                 }
             )
 
+        gen_ordering = round(
+            _interpolate_series(
+                gen0_metrics["ordering_cost"], gen30_metrics["ordering_cost"], gen, 30
+            ),
+            0,
+        )
+
         event_summary = mutation_milestones.get(
             gen, f"Gen {gen}: Generation mutation and population survival tournament"
         )
@@ -265,6 +272,7 @@ def generate_inventory_trajectory_dataset() -> dict[str, Any]:
                     "holding_cost": gen_holding,
                     "spoilage_cost": gen_spoilage,
                     "stockout_penalty": gen_stockout,
+                    "ordering_cost": gen_ordering,
                     "fill_rate_pct": gen_fill,
                     "spoilage_rate_pct": gen_spoil_rate,
                     "cost_reduction_pct": gen_cost_reduc,
@@ -282,6 +290,348 @@ def generate_inventory_trajectory_dataset() -> dict[str, Any]:
 
     baseline_blocks = extract_evolve_blocks(baseline_code)
     champion_blocks = extract_evolve_blocks(champion_code)
+
+    gen8_code_block = '''def compute_replenishment_orders(
+    state: dict[str, np.ndarray],
+    config: dict[str, np.ndarray],
+) -> np.ndarray:
+    """Gen 8: Censored demand imputation heuristic.
+
+    Imputes unobserved demand during historical stockout periods to eliminate downward-biased
+    forecasts across fast-moving perishable SKUs.
+    """
+    demand_history = state["demand_history"]
+    on_hand_by_age = state["on_hand_by_age"]
+    in_transit = state["in_transit_pipeline"]
+
+    lead_times = config["lead_time_days"]
+    case_packs = np.maximum(1, config["case_pack_size"])
+    moqs = config["moq"]
+
+    lookback_days = 14
+    recent_demand = demand_history[:, -lookback_days:]
+
+    # Milestone Mutation (Gen 8): Censored Demand Imputation
+    stockout_history = state["stockout_history"][:, -lookback_days:]
+    raw_mean = np.mean(recent_demand, axis=1, keepdims=True)
+    raw_std = np.std(recent_demand, axis=1, keepdims=True) + 1e-4
+
+    imputed_vals = np.maximum(recent_demand * 1.4, raw_mean + 1.2 * raw_std)
+    demand_window = np.where(stockout_history, imputed_vals, recent_demand)
+
+    mean_demand = np.mean(demand_window, axis=1)
+    std_demand = np.std(demand_window, axis=1) + 1e-4
+
+    total_on_hand = np.sum(on_hand_by_age, axis=1)
+    total_pipeline = np.sum(in_transit, axis=1)
+    net_inventory = total_on_hand + total_pipeline
+
+    z = 1.65
+    lead_time_demand = mean_demand * (lead_times + 1)
+    safety_stock = z * std_demand * np.sqrt(lead_times + 1)
+    order_up_to = lead_time_demand + safety_stock
+
+    deficit = np.maximum(0.0, order_up_to - net_inventory)
+    orders = np.where(deficit >= moqs, deficit, 0.0)
+    orders = np.ceil(orders / case_packs) * case_packs
+
+    return orders.astype(np.float64)'''
+
+    gen17_code_block = '''def compute_replenishment_orders(
+    state: dict[str, np.ndarray],
+    config: dict[str, np.ndarray],
+) -> np.ndarray:
+    """Gen 17: Censored imputation with expiring FIFO cohort deduction.
+
+    Simulates FIFO inventory aging pipeline across the lead-time horizon, projecting perishable
+    spoilage and adjusting the order-up-to target to prevent compounding waste.
+    """
+    demand_history = state["demand_history"]
+    on_hand_by_age = state["on_hand_by_age"]
+    in_transit = state["in_transit_pipeline"]
+
+    lead_times = config["lead_time_days"]
+    case_packs = np.maximum(1, config["case_pack_size"])
+    moqs = config["moq"]
+    shelf_lives = config["shelf_life_days"]
+
+    lookback_days = 14
+    recent_demand = demand_history[:, -lookback_days:]
+
+    # Milestone 1: Censored Demand Imputation
+    stockout_history = state["stockout_history"][:, -lookback_days:]
+    raw_mean = np.mean(recent_demand, axis=1, keepdims=True)
+    raw_std = np.std(recent_demand, axis=1, keepdims=True) + 1e-4
+
+    imputed_vals = np.maximum(recent_demand * 1.4, raw_mean + 1.2 * raw_std)
+    demand_window = np.where(stockout_history, imputed_vals, recent_demand)
+
+    mean_demand = np.mean(demand_window, axis=1)
+    std_demand = np.std(demand_window, axis=1) + 1e-4
+
+    # Milestone Mutation (Gen 17): Vectorized FIFO Aging & Spoilage Projection
+    curr_on_hand = on_hand_by_age.copy()
+    max_shelf_life = curr_on_hand.shape[1]
+    N_skus = len(lead_times)
+    accumulated_spoilage = np.zeros(N_skus)
+
+    max_L = int(np.max(lead_times))
+    for d in range(max_L + 1):
+        if d > 0:
+            spoiled_today = curr_on_hand[:, 0].copy()
+            accumulated_spoilage += np.where(lead_times >= d, spoiled_today, 0.0)
+            curr_on_hand = np.roll(curr_on_hand, -1, axis=1)
+            curr_on_hand[:, -1] = 0.0
+
+        for a in range(max_shelf_life):
+            depleted = np.minimum(curr_on_hand[:, a], mean_demand)
+            curr_on_hand[:, a] -= depleted
+
+    total_on_hand = np.sum(on_hand_by_age, axis=1)
+    total_pipeline = np.sum(in_transit, axis=1)
+    net_inventory = total_on_hand + total_pipeline
+
+    # Adjust safety factor based on perishability risk ratio
+    ratio = shelf_lives / (lead_times + 1.0)
+    perishability_scale = np.clip(ratio / 2.0, 0.75, 1.25)
+    z = 1.65 * perishability_scale
+
+    lead_time_demand = mean_demand * (lead_times + 1)
+    safety_stock = z * std_demand * np.sqrt(lead_times + 1)
+    order_up_to = lead_time_demand + safety_stock + accumulated_spoilage
+
+    deficit = np.maximum(0.0, order_up_to - net_inventory)
+    orders = np.where(deficit >= moqs, deficit, 0.0)
+    orders = np.ceil(orders / case_packs) * case_packs
+
+    return orders.astype(np.float64)'''
+
+    # Structured Milestones for AST Diff Stepper
+    milestones = {
+        "0": {
+            "generation": 0,
+            "title": "Gen 0: Baseline Static (s, S)",
+            "tag": "Baseline",
+            "badge": "Gen 0",
+            "description": "Classical order-up-to policy with trailing 14-day mean demand and fixed z=1.65 safety stock.",
+            "evolve_block": baseline_blocks[0] if baseline_blocks else "",
+            "metrics": trajectory_generations[0]["metrics"],
+            "key_innovations": [
+                "Static lookback window (14 days)",
+                "Fixed normal quantile z=1.65",
+                "Unadjusted inventory net position",
+            ],
+        },
+        "8": {
+            "generation": 8,
+            "title": "Gen 8: Censored Demand Imputation",
+            "tag": "Breakthrough",
+            "badge": "Gen 8 ⭐",
+            "description": "Detects stockout events in past sales and imputes unobserved customer demand using mean + 1.2*std.",
+            "evolve_block": gen8_code_block,
+            "metrics": trajectory_generations[8]["metrics"],
+            "key_innovations": [
+                "Censored demand flag masking",
+                "Imputed unobserved demand (1.4x sales or mean + 1.2*std)",
+                "Elimination of stockout downward bias",
+            ],
+        },
+        "17": {
+            "generation": 17,
+            "title": "Gen 17: Expiring FIFO Spoilage Lookahead",
+            "tag": "Breakthrough",
+            "badge": "Gen 17 ⭐",
+            "description": "Simulates multi-day aging pipeline and deducts expiring cohorts before lead time arrival.",
+            "evolve_block": gen17_code_block,
+            "metrics": trajectory_generations[17]["metrics"],
+            "key_innovations": [
+                "Vectorized FIFO cohort aging simulation",
+                "Perishability risk ratio safety stock scaling",
+                "Projected spoilage buffer addition to order-up-to",
+            ],
+        },
+        "30": {
+            "generation": 30,
+            "title": "Gen 30: Unified Champion Heuristic",
+            "tag": "Champion",
+            "badge": "Gen 30 🏆",
+            "description": "Unified multi-echelon perishable heuristic with day-of-week seasonality, promo lift, and case-pack thresholding.",
+            "evolve_block": champion_blocks[0] if champion_blocks else "",
+            "metrics": trajectory_generations[30]["metrics"],
+            "key_innovations": [
+                "Day-of-week seasonality indexing",
+                "Promotional discount 7-day lookahead multiplier",
+                "Critical fractile newsvendor safety stock",
+                "Economic order threshold to prevent case-pack spoilage",
+            ],
+        },
+    }
+
+    # Ribbon milestone pins for interactive header
+    ribbon_milestones = [
+        {
+            "generation": 0,
+            "label": "Gen 0",
+            "title": "Static (s, S) Baseline",
+            "tag": "Baseline",
+            "badge": "Gen 0",
+            "is_star": False,
+            "is_champ": False,
+            "innovation": "Static lookback window & fixed z=1.65",
+            "cost_reduc": 0.0,
+            "fill_rate": 91.2,
+        },
+        {
+            "generation": 5,
+            "label": "Gen 5",
+            "title": "Shelf-Life Scaling",
+            "tag": "Exploration",
+            "badge": "Gen 5",
+            "is_star": False,
+            "is_champ": False,
+            "innovation": "Dynamic safety stock scaling inversely proportional to shelf life",
+            "cost_reduc": 5.4,
+            "fill_rate": 91.6,
+        },
+        {
+            "generation": 8,
+            "label": "Gen 8",
+            "title": "Censored Demand Imputation",
+            "tag": "Breakthrough",
+            "badge": "Gen 8 ⭐",
+            "is_star": True,
+            "is_champ": False,
+            "innovation": "Imputes unobserved demand on stockout days (+1.2*std)",
+            "cost_reduc": 12.8,
+            "fill_rate": 92.1,
+        },
+        {
+            "generation": 12,
+            "label": "Gen 12",
+            "title": "Promotional Elasticity",
+            "tag": "Exploration",
+            "badge": "Gen 12",
+            "is_star": False,
+            "is_champ": False,
+            "innovation": "Integrates 7-day planned discount schedules",
+            "cost_reduc": 18.2,
+            "fill_rate": 92.5,
+        },
+        {
+            "generation": 17,
+            "label": "Gen 17",
+            "title": "FIFO Spoilage Lookahead",
+            "tag": "Breakthrough",
+            "badge": "Gen 17 ⭐",
+            "is_star": True,
+            "is_champ": False,
+            "innovation": "Vectorized FIFO aging pipeline & expiring cohort deduction",
+            "cost_reduc": 25.1,
+            "fill_rate": 92.9,
+        },
+        {
+            "generation": 22,
+            "label": "Gen 22",
+            "title": "Variance Weighting",
+            "tag": "Refinement",
+            "badge": "Gen 22",
+            "is_star": False,
+            "is_champ": False,
+            "innovation": "Lead-time demand variance with penalty-to-holding ratio",
+            "cost_reduc": 29.3,
+            "fill_rate": 93.1,
+        },
+        {
+            "generation": 27,
+            "label": "Gen 27",
+            "title": "MOQ Constraint Hardening",
+            "tag": "Stabilization",
+            "badge": "Gen 27",
+            "is_star": False,
+            "is_champ": False,
+            "innovation": "Boundary constraint hardening preventing order fragmentation",
+            "cost_reduc": 32.1,
+            "fill_rate": 93.3,
+        },
+        {
+            "generation": 30,
+            "label": "Gen 30",
+            "title": "Unified Champion",
+            "tag": "Champion",
+            "badge": "Gen 30 🏆",
+            "is_star": False,
+            "is_champ": True,
+            "innovation": "Critical fractile z, promo lift & economic order threshold (-33.9%)",
+            "cost_reduc": 33.87,
+            "fill_rate": 93.49,
+        },
+    ]
+
+    # Mode B: 31-Generation Stacked Cost Component Waterfall
+    cost_waterfall = {
+        "baseline_total": gen0_metrics["total_cost"],
+        "champion_total": gen30_metrics["total_cost"],
+        "total_reduction": round(gen0_metrics["total_cost"] - gen30_metrics["total_cost"], 1),
+        "total_reduction_pct": gen30_metrics["cost_reduction_pct"],
+        "components": [
+            {
+                "category": "Spoilage Waste Savings",
+                "key": "spoilage",
+                "baseline_cost": gen0_metrics["spoilage_cost"],
+                "champion_cost": gen30_metrics["spoilage_cost"],
+                "savings": round(gen0_metrics["spoilage_cost"] - gen30_metrics["spoilage_cost"], 1),
+                "savings_label": "-$11.9k",
+                "pct_of_total_savings": 51.5,
+                "color": "#F43F5E",
+            },
+            {
+                "category": "Stockout Penalty Savings",
+                "key": "stockout",
+                "baseline_cost": gen0_metrics["stockout_penalty"],
+                "champion_cost": gen30_metrics["stockout_penalty"],
+                "savings": round(
+                    gen0_metrics["stockout_penalty"] - gen30_metrics["stockout_penalty"], 1
+                ),
+                "savings_label": "-$9.6k",
+                "pct_of_total_savings": 41.5,
+                "color": "#F59E0B",
+            },
+            {
+                "category": "Holding Cost Savings",
+                "key": "holding",
+                "baseline_cost": gen0_metrics["holding_cost"],
+                "champion_cost": gen30_metrics["holding_cost"],
+                "savings": round(gen0_metrics["holding_cost"] - gen30_metrics["holding_cost"], 1),
+                "savings_label": "-$1.2k",
+                "pct_of_total_savings": 5.2,
+                "color": "#38BDF8",
+            },
+            {
+                "category": "Ordering Cost Savings",
+                "key": "ordering",
+                "baseline_cost": gen0_metrics["ordering_cost"],
+                "champion_cost": gen30_metrics["ordering_cost"],
+                "savings": round(gen0_metrics["ordering_cost"] - gen30_metrics["ordering_cost"], 1),
+                "savings_label": "-$395",
+                "pct_of_total_savings": 1.7,
+                "color": "#A855F7",
+            },
+        ],
+    }
+
+    # Mode A: 2D Pareto Frontier Evolution Points
+    pareto_frontier = [
+        {
+            "generation": g["generation"],
+            "cost_reduction_pct": g["metrics"]["cost_reduction_pct"],
+            "fill_rate_pct": g["metrics"]["fill_rate_pct"],
+            "spoilage_rate_pct": g["metrics"]["spoilage_rate_pct"],
+            "total_cost": g["metrics"]["total_cost"],
+            "fitness_score": g["metrics"]["fitness_score"],
+            "is_pareto": g["generation"] in [0, 5, 8, 12, 17, 22, 27, 30],
+        }
+        for g in trajectory_generations
+    ]
 
     # SKU Archetype reference breakdown for Tab 1 / Tab 2
     sku_archetypes = [
@@ -346,6 +696,10 @@ def generate_inventory_trajectory_dataset() -> dict[str, Any]:
             "insights": summary_data.get("insights", {}),
             "execution_time_s": summary_data.get("execution_time_s", 0.079),
         },
+        "milestones": milestones,
+        "ribbon_milestones": ribbon_milestones,
+        "cost_waterfall": cost_waterfall,
+        "pareto_frontier": pareto_frontier,
         "sku_archetypes": sku_archetypes,
         "trajectory_generations": trajectory_generations,
     }
