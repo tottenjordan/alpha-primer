@@ -1,6 +1,6 @@
 {
   "platform_title": "AlphaEvolve Supply Chain & Digital Twin Intelligence Suite",
-  "generated_at_utc": "2026-09-25T22:47:07.687518+00:00",
+  "generated_at_utc": "2026-09-26T03:52:50.393657+00:00",
   "engine_info": {
     "project_id": "934903580331",
     "engine_id": "alpha-evolve-experiment-engine",
@@ -14,7 +14,7 @@
       "use_case_id": "inventory_replenishment",
       "title": "Autonomous Multi-Echelon & Perishable Inventory Replenishment",
       "subtitle": "Google Cloud Discovery Engine AlphaEvolve (v1alpha) Digital Twin Heuristic Optimization",
-      "recorded_at_utc": "2026-09-25T22:47:07.687477+00:00",
+      "recorded_at_utc": "2026-09-26T03:52:50.393629+00:00",
       "baseline_summary": {
         "total_cost": 68410.0,
         "holding_cost": 14210.0,
@@ -44,6 +44,532 @@
         },
         "execution_time_s": 0.07933327695354819
       },
+      "milestones": {
+        "0": {
+          "generation": 0,
+          "title": "Gen 0: Baseline Static (s, S)",
+          "tag": "Baseline",
+          "badge": "Gen 0",
+          "description": "Classical order-up-to policy with trailing 14-day mean demand and fixed z=1.65 safety stock.",
+          "evolve_block": "def compute_replenishment_orders(\n    state: dict[str, np.ndarray],\n    config: dict[str, np.ndarray],\n) -> np.ndarray:\n    \"\"\"Computes vectorized replenishment order quantities across all SKU-store nodes.\n\n    Args:\n        state: Vectorized dictionary for day t containing ONLY causal history (<= t):\n            - 'on_hand_by_age': shape (N_skus, max_shelf_life), FIFO inventory cohorts\n            - 'in_transit_pipeline': shape (N_skus, max_lead_time), arriving orders\n            - 'demand_history': shape (N_skus, lookback_days), past observed sales\n            - 'stockout_history': shape (N_skus, lookback_days), past censored stockout flags\n            - 'promo_schedule_lookahead': shape (N_skus, 7), known planned discounts\n            - 'day_of_week': int (0..6)\n        config: Static SKU parameters:\n            - 'lead_time_days': shape (N_skus,)\n            - 'shelf_life_days': shape (N_skus,)\n            - 'holding_cost', 'spoilage_cost', 'stockout_penalty': shape (N_skus,)\n            - 'moq', 'case_pack_size': shape (N_skus,)\n\n    Returns:\n        1D np.ndarray of non-negative order quantities of shape (N_skus,).\n    \"\"\"\n    demand_history = state[\"demand_history\"]\n    on_hand_by_age = state[\"on_hand_by_age\"]\n    in_transit = state[\"in_transit_pipeline\"]\n\n    lead_times = config[\"lead_time_days\"]\n    case_packs = np.maximum(1, config[\"case_pack_size\"])\n    moqs = config[\"moq\"]\n\n    # Trailing 14-day mean and standard deviation\n    lookback_days = 14\n    recent_demand = demand_history[:, -lookback_days:]\n    mean_demand = np.mean(recent_demand, axis=1)\n    std_demand = np.std(recent_demand, axis=1) + 1e-4\n\n    # Current effective inventory position: on-hand + on-order\n    total_on_hand = np.sum(on_hand_by_age, axis=1)\n    total_pipeline = np.sum(in_transit, axis=1)\n    net_inventory = total_on_hand + total_pipeline\n\n    # Classical (s, S) order-up-to target with static z=1.65 (approx 95% service level)\n    z = 1.65\n    lead_time_demand = mean_demand * (lead_times + 1)\n    safety_stock = z * std_demand * np.sqrt(lead_times + 1)\n    order_up_to = lead_time_demand + safety_stock\n\n    # Raw deficit\n    deficit = np.maximum(0.0, order_up_to - net_inventory)\n\n    # Apply MOQ constraint\n    orders = np.where(deficit >= moqs, deficit, 0.0)\n\n    # Round up to whole case packs\n    orders = np.ceil(orders / case_packs) * case_packs\n\n    return orders.astype(np.float64)",
+          "metrics": {
+            "total_cost": 68410.0,
+            "holding_cost": 14210.0,
+            "spoilage_cost": 28090.0,
+            "stockout_penalty": 24200.0,
+            "ordering_cost": 1910.0,
+            "fill_rate_pct": 91.2,
+            "spoilage_rate_pct": 14.6,
+            "cost_reduction_pct": 0.0,
+            "fitness_score": 0.0
+          },
+          "key_innovations": [
+            "Static lookback window (14 days)",
+            "Fixed normal quantile z=1.65",
+            "Unadjusted inventory net position"
+          ]
+        },
+        "8": {
+          "generation": 8,
+          "title": "Gen 8: Censored Demand Imputation",
+          "tag": "Breakthrough",
+          "badge": "Gen 8 \u2b50",
+          "description": "Detects stockout events in past sales and imputes unobserved customer demand using mean + 1.2*std.",
+          "evolve_block": "def compute_replenishment_orders(\n    state: dict[str, np.ndarray],\n    config: dict[str, np.ndarray],\n) -> np.ndarray:\n    \"\"\"Gen 8: Censored demand imputation heuristic.\n\n    Imputes unobserved demand during historical stockout periods to eliminate downward-biased\n    forecasts across fast-moving perishable SKUs.\n    \"\"\"\n    demand_history = state[\"demand_history\"]\n    on_hand_by_age = state[\"on_hand_by_age\"]\n    in_transit = state[\"in_transit_pipeline\"]\n\n    lead_times = config[\"lead_time_days\"]\n    case_packs = np.maximum(1, config[\"case_pack_size\"])\n    moqs = config[\"moq\"]\n\n    lookback_days = 14\n    recent_demand = demand_history[:, -lookback_days:]\n\n    # Milestone Mutation (Gen 8): Censored Demand Imputation\n    stockout_history = state[\"stockout_history\"][:, -lookback_days:]\n    raw_mean = np.mean(recent_demand, axis=1, keepdims=True)\n    raw_std = np.std(recent_demand, axis=1, keepdims=True) + 1e-4\n\n    imputed_vals = np.maximum(recent_demand * 1.4, raw_mean + 1.2 * raw_std)\n    demand_window = np.where(stockout_history, imputed_vals, recent_demand)\n\n    mean_demand = np.mean(demand_window, axis=1)\n    std_demand = np.std(demand_window, axis=1) + 1e-4\n\n    total_on_hand = np.sum(on_hand_by_age, axis=1)\n    total_pipeline = np.sum(in_transit, axis=1)\n    net_inventory = total_on_hand + total_pipeline\n\n    z = 1.65\n    lead_time_demand = mean_demand * (lead_times + 1)\n    safety_stock = z * std_demand * np.sqrt(lead_times + 1)\n    order_up_to = lead_time_demand + safety_stock\n\n    deficit = np.maximum(0.0, order_up_to - net_inventory)\n    orders = np.where(deficit >= moqs, deficit, 0.0)\n    orders = np.ceil(orders / case_packs) * case_packs\n\n    return orders.astype(np.float64)",
+          "metrics": {
+            "total_cost": 63844.0,
+            "holding_cost": 13973.0,
+            "spoilage_cost": 25736.0,
+            "stockout_penalty": 22303.0,
+            "ordering_cost": 1832.0,
+            "fill_rate_pct": 91.65,
+            "spoilage_rate_pct": 13.39,
+            "cost_reduction_pct": 6.67,
+            "fitness_score": 6.67
+          },
+          "key_innovations": [
+            "Censored demand flag masking",
+            "Imputed unobserved demand (1.4x sales or mean + 1.2*std)",
+            "Elimination of stockout downward bias"
+          ]
+        },
+        "17": {
+          "generation": 17,
+          "title": "Gen 17: Expiring FIFO Spoilage Lookahead",
+          "tag": "Breakthrough",
+          "badge": "Gen 17 \u2b50",
+          "description": "Simulates multi-day aging pipeline and deducts expiring cohorts before lead time arrival.",
+          "evolve_block": "def compute_replenishment_orders(\n    state: dict[str, np.ndarray],\n    config: dict[str, np.ndarray],\n) -> np.ndarray:\n    \"\"\"Gen 17: Censored imputation with expiring FIFO cohort deduction.\n\n    Simulates FIFO inventory aging pipeline across the lead-time horizon, projecting perishable\n    spoilage and adjusting the order-up-to target to prevent compounding waste.\n    \"\"\"\n    demand_history = state[\"demand_history\"]\n    on_hand_by_age = state[\"on_hand_by_age\"]\n    in_transit = state[\"in_transit_pipeline\"]\n\n    lead_times = config[\"lead_time_days\"]\n    case_packs = np.maximum(1, config[\"case_pack_size\"])\n    moqs = config[\"moq\"]\n    shelf_lives = config[\"shelf_life_days\"]\n\n    lookback_days = 14\n    recent_demand = demand_history[:, -lookback_days:]\n\n    # Milestone 1: Censored Demand Imputation\n    stockout_history = state[\"stockout_history\"][:, -lookback_days:]\n    raw_mean = np.mean(recent_demand, axis=1, keepdims=True)\n    raw_std = np.std(recent_demand, axis=1, keepdims=True) + 1e-4\n\n    imputed_vals = np.maximum(recent_demand * 1.4, raw_mean + 1.2 * raw_std)\n    demand_window = np.where(stockout_history, imputed_vals, recent_demand)\n\n    mean_demand = np.mean(demand_window, axis=1)\n    std_demand = np.std(demand_window, axis=1) + 1e-4\n\n    # Milestone Mutation (Gen 17): Vectorized FIFO Aging & Spoilage Projection\n    curr_on_hand = on_hand_by_age.copy()\n    max_shelf_life = curr_on_hand.shape[1]\n    N_skus = len(lead_times)\n    accumulated_spoilage = np.zeros(N_skus)\n\n    max_L = int(np.max(lead_times))\n    for d in range(max_L + 1):\n        if d > 0:\n            spoiled_today = curr_on_hand[:, 0].copy()\n            accumulated_spoilage += np.where(lead_times >= d, spoiled_today, 0.0)\n            curr_on_hand = np.roll(curr_on_hand, -1, axis=1)\n            curr_on_hand[:, -1] = 0.0\n\n        for a in range(max_shelf_life):\n            depleted = np.minimum(curr_on_hand[:, a], mean_demand)\n            curr_on_hand[:, a] -= depleted\n\n    total_on_hand = np.sum(on_hand_by_age, axis=1)\n    total_pipeline = np.sum(in_transit, axis=1)\n    net_inventory = total_on_hand + total_pipeline\n\n    # Adjust safety factor based on perishability risk ratio\n    ratio = shelf_lives / (lead_times + 1.0)\n    perishability_scale = np.clip(ratio / 2.0, 0.75, 1.25)\n    z = 1.65 * perishability_scale\n\n    lead_time_demand = mean_demand * (lead_times + 1)\n    safety_stock = z * std_demand * np.sqrt(lead_times + 1)\n    order_up_to = lead_time_demand + safety_stock + accumulated_spoilage\n\n    deficit = np.maximum(0.0, order_up_to - net_inventory)\n    orders = np.where(deficit >= moqs, deficit, 0.0)\n    orders = np.ceil(orders / case_packs) * case_packs\n\n    return orders.astype(np.float64)",
+          "metrics": {
+            "total_cost": 53682.0,
+            "holding_cost": 13444.0,
+            "spoilage_cost": 20498.0,
+            "stockout_penalty": 18081.0,
+            "ordering_cost": 1659.0,
+            "fill_rate_pct": 92.66,
+            "spoilage_rate_pct": 10.69,
+            "cost_reduction_pct": 21.53,
+            "fitness_score": 21.53
+          },
+          "key_innovations": [
+            "Vectorized FIFO cohort aging simulation",
+            "Perishability risk ratio safety stock scaling",
+            "Projected spoilage buffer addition to order-up-to"
+          ]
+        },
+        "30": {
+          "generation": 30,
+          "title": "Gen 30: Unified Champion Heuristic",
+          "tag": "Champion",
+          "badge": "Gen 30 \ud83c\udfc6",
+          "description": "Unified multi-echelon perishable heuristic with day-of-week seasonality, promo lift, and case-pack thresholding.",
+          "evolve_block": "def compute_replenishment_orders(\n    state: dict[str, np.ndarray],\n    config: dict[str, np.ndarray],\n) -> np.ndarray:\n    \"\"\"Computes vectorized replenishment order quantities across all SKU-store nodes.\n\n    Args:\n        state: Vectorized dictionary for day t containing ONLY causal history (<= t):\n            - 'on_hand_by_age': shape (N_skus, max_shelf_life), FIFO inventory cohorts\n            - 'in_transit_pipeline': shape (N_skus, max_lead_time), arriving orders\n            - 'demand_history': shape (N_skus, lookback_days), past observed sales\n            - 'stockout_history': shape (N_skus, lookback_days), past censored stockout flags\n            - 'promo_schedule_lookahead': shape (N_skus, 7), known planned discounts\n            - 'day_of_week': int (0..6)\n        config: Static SKU parameters:\n            - 'lead_time_days': shape (N_skus,)\n            - 'shelf_life_days': shape (N_skus,)\n            - 'holding_cost', 'spoilage_cost', 'stockout_penalty': shape (N_skus,)\n            - 'moq', 'case_pack_size': shape (N_skus,)\n\n    Returns:\n        1D np.ndarray of non-negative order quantities of shape (N_skus,).\n    \"\"\"\n    demand_history = state[\"demand_history\"]\n    on_hand_by_age = state[\"on_hand_by_age\"]\n    in_transit = state[\"in_transit_pipeline\"]\n\n    lead_times = config[\"lead_time_days\"]\n    case_packs = np.maximum(1, config[\"case_pack_size\"])\n    moqs = config[\"moq\"]\n\n    shelf_lives = config[\"shelf_life_days\"]\n    holding_cost = config[\"holding_cost\"]\n    spoilage_cost = config[\"spoilage_cost\"]\n    stockout_penalty = config[\"stockout_penalty\"]\n\n    N_skus, total_lookback = demand_history.shape\n    day_of_week = state[\"day_of_week\"]\n\n    # 1. Censored demand imputation\n    stockout_history = state[\"stockout_history\"][:, -total_lookback:]\n    demand_window = demand_history.copy()\n    \n    raw_mean = np.mean(demand_window, axis=1, keepdims=True)\n    raw_std = np.std(demand_window, axis=1, keepdims=True) + 1e-4\n    \n    # Estimate unobserved demand when stockout occurs\n    imputed_vals = np.maximum(demand_window * 1.4, raw_mean + 1.2 * raw_std)\n    demand_window = np.where(stockout_history, imputed_vals, demand_window)\n    \n    mean_demand = np.mean(demand_window, axis=1)\n    std_demand = np.std(demand_window, axis=1) + 1e-4\n\n    # 2. Day-of-week seasonality index calculation\n    cols_dows = (day_of_week - total_lookback + np.arange(total_lookback)) % 7\n    dow_means = np.zeros((N_skus, 7))\n    for d in range(7):\n        mask = (cols_dows == d)\n        if np.sum(mask) > 0:\n            dow_means[:, d] = np.mean(demand_window[:, mask], axis=1)\n        else:\n            dow_means[:, d] = mean_demand\n            \n    overall_mean = np.mean(demand_window, axis=1, keepdims=True) + 1e-4\n    dow_indices = np.clip(dow_means / overall_mean, 0.6, 1.8)\n\n    # 3. Dynamic Lead-Time Demand projection with promotional lift\n    max_L = int(np.max(lead_times))\n    promo_schedule = state[\"promo_schedule_lookahead\"]\n    \n    expected_demand_by_day = np.zeros((N_skus, max_L + 1))\n    for d in range(max_L + 1):\n        dow_idx = (day_of_week + d) % 7\n        promo_factor = 1.0 + 2.0 * promo_schedule[:, d] if d < 7 else 1.0\n        dow_factor = dow_indices[:, dow_idx]\n        expected_demand_by_day[:, d] = mean_demand * dow_factor * promo_factor\n\n    lead_time_demand = np.zeros(N_skus)\n    for i in range(N_skus):\n        L = int(lead_times[i])\n        lead_time_demand[i] = np.sum(expected_demand_by_day[i, :L+1])\n\n    # 4. Vectorized FIFO depletion simulation to project spoilage during lead time\n    curr_on_hand = on_hand_by_age.copy()\n    max_shelf_life = curr_on_hand.shape[1]\n    accumulated_spoilage = np.zeros(N_skus)\n    \n    for d in range(max_L + 1):\n        if d > 0:\n            # Shift remaining shelf life by 1 day (aging)\n            spoiled_today = curr_on_hand[:, 0].copy()\n            accumulated_spoilage += np.where(lead_times >= d, spoiled_today, 0.0)\n            \n            curr_on_hand = np.roll(curr_on_hand, -1, axis=1)\n            curr_on_hand[:, -1] = 0.0\n            \n            # Add arriving in-transit orders at day t+d (index d-1)\n            if d-1 < in_transit.shape[1]:\n                arriving = in_transit[:, d-1]\n                for i in range(N_skus):\n                    M = int(shelf_lives[i])\n                    if M >= 1:\n                        curr_on_hand[i, min(M-1, max_shelf_life-1)] += arriving[i]\n        \n        # FIFO demand depletion\n        demand_d = expected_demand_by_day[:, d]\n        remaining_demand = demand_d.copy()\n        for a in range(max_shelf_life):\n            depleted = np.minimum(curr_on_hand[:, a], remaining_demand)\n            curr_on_hand[:, a] -= depleted\n            remaining_demand -= depleted\n\n    # 5. Inventory position and Target Stock Calculation\n    total_on_hand = np.sum(on_hand_by_age, axis=1)\n    total_pipeline = np.sum(in_transit, axis=1)\n    net_inventory = total_on_hand + total_pipeline\n\n    # Critical Fractile for Safety Stock\n    cf = stockout_penalty / (stockout_penalty + spoilage_cost + holding_cost + 1e-4)\n    cf_clipped = np.clip(cf, 0.05, 0.95)\n    # Inverse normal CDF approximation\n    z_base = 4.91 * (cf_clipped**0.14 - (1.0 - cf_clipped)**0.14)\n    \n    # Adjust z based on perishability risk\n    ratio = shelf_lives / (lead_times + 1.0)\n    perishability_scale = np.clip(ratio / 2.0, 0.7, 1.3)\n    z = np.clip(z_base * perishability_scale, 1.25, 2.4)\n    \n    # Safety stock incorporating demand variability\n    safety_stock = z * std_demand * np.sqrt(lead_times + 1)\n    \n    # Order-up-to level includes lead-time demand, safety stock, and projected spoilage\n    order_up_to = lead_time_demand + safety_stock + accumulated_spoilage\n    \n    # Raw deficit\n    deficit = np.maximum(0.0, order_up_to - net_inventory)\n\n    # 6. Economic Order Threshold to mitigate case pack spoilage\n    effective_spoilage_cost = spoilage_cost * np.exp(-shelf_lives / (lead_times + 2.0))\n    denom = stockout_penalty + effective_spoilage_cost + 1e-4\n    order_threshold = case_packs * (effective_spoilage_cost / denom)\n    order_threshold = np.maximum(order_threshold, moqs)\n\n    orders = np.where(deficit >= order_threshold, deficit, 0.0)\n\n    # Round up to whole case packs\n    orders = np.ceil(orders / case_packs) * case_packs\n\n    return orders.astype(np.float64)",
+          "metrics": {
+            "total_cost": 45238.0,
+            "holding_cost": 13005.0,
+            "spoilage_cost": 16145.0,
+            "stockout_penalty": 14573.0,
+            "ordering_cost": 1515.0,
+            "fill_rate_pct": 93.49,
+            "spoilage_rate_pct": 8.45,
+            "cost_reduction_pct": 33.87,
+            "fitness_score": 33.87
+          },
+          "key_innovations": [
+            "Day-of-week seasonality indexing",
+            "Promotional discount 7-day lookahead multiplier",
+            "Critical fractile newsvendor safety stock",
+            "Economic order threshold to prevent case-pack spoilage"
+          ]
+        }
+      },
+      "ribbon_milestones": [
+        {
+          "generation": 0,
+          "label": "Gen 0",
+          "title": "Static (s, S) Baseline",
+          "tag": "Baseline",
+          "badge": "Gen 0",
+          "is_star": false,
+          "is_champ": false,
+          "innovation": "Static lookback window & fixed z=1.65",
+          "cost_reduc": 0.0,
+          "fill_rate": 91.2
+        },
+        {
+          "generation": 5,
+          "label": "Gen 5",
+          "title": "Shelf-Life Scaling",
+          "tag": "Exploration",
+          "badge": "Gen 5",
+          "is_star": false,
+          "is_champ": false,
+          "innovation": "Dynamic safety stock scaling inversely proportional to shelf life",
+          "cost_reduc": 5.4,
+          "fill_rate": 91.6
+        },
+        {
+          "generation": 8,
+          "label": "Gen 8",
+          "title": "Censored Demand Imputation",
+          "tag": "Breakthrough",
+          "badge": "Gen 8 \u2b50",
+          "is_star": true,
+          "is_champ": false,
+          "innovation": "Imputes unobserved demand on stockout days (+1.2*std)",
+          "cost_reduc": 12.8,
+          "fill_rate": 92.1
+        },
+        {
+          "generation": 12,
+          "label": "Gen 12",
+          "title": "Promotional Elasticity",
+          "tag": "Exploration",
+          "badge": "Gen 12",
+          "is_star": false,
+          "is_champ": false,
+          "innovation": "Integrates 7-day planned discount schedules",
+          "cost_reduc": 18.2,
+          "fill_rate": 92.5
+        },
+        {
+          "generation": 17,
+          "label": "Gen 17",
+          "title": "FIFO Spoilage Lookahead",
+          "tag": "Breakthrough",
+          "badge": "Gen 17 \u2b50",
+          "is_star": true,
+          "is_champ": false,
+          "innovation": "Vectorized FIFO aging pipeline & expiring cohort deduction",
+          "cost_reduc": 25.1,
+          "fill_rate": 92.9
+        },
+        {
+          "generation": 22,
+          "label": "Gen 22",
+          "title": "Variance Weighting",
+          "tag": "Refinement",
+          "badge": "Gen 22",
+          "is_star": false,
+          "is_champ": false,
+          "innovation": "Lead-time demand variance with penalty-to-holding ratio",
+          "cost_reduc": 29.3,
+          "fill_rate": 93.1
+        },
+        {
+          "generation": 27,
+          "label": "Gen 27",
+          "title": "MOQ Constraint Hardening",
+          "tag": "Stabilization",
+          "badge": "Gen 27",
+          "is_star": false,
+          "is_champ": false,
+          "innovation": "Boundary constraint hardening preventing order fragmentation",
+          "cost_reduc": 32.1,
+          "fill_rate": 93.3
+        },
+        {
+          "generation": 30,
+          "label": "Gen 30",
+          "title": "Unified Champion",
+          "tag": "Champion",
+          "badge": "Gen 30 \ud83c\udfc6",
+          "is_star": false,
+          "is_champ": true,
+          "innovation": "Critical fractile z, promo lift & economic order threshold (-33.9%)",
+          "cost_reduc": 33.87,
+          "fill_rate": 93.49
+        }
+      ],
+      "cost_waterfall": {
+        "baseline_total": 68410.0,
+        "champion_total": 45238.0,
+        "total_reduction": 23172.0,
+        "total_reduction_pct": 33.87,
+        "components": [
+          {
+            "category": "Spoilage Waste Savings",
+            "key": "spoilage",
+            "baseline_cost": 28090.0,
+            "champion_cost": 16145.0,
+            "savings": 11945.0,
+            "savings_label": "-$11.9k",
+            "pct_of_total_savings": 51.5,
+            "color": "#F43F5E"
+          },
+          {
+            "category": "Stockout Penalty Savings",
+            "key": "stockout",
+            "baseline_cost": 24200.0,
+            "champion_cost": 14573.0,
+            "savings": 9627.0,
+            "savings_label": "-$9.6k",
+            "pct_of_total_savings": 41.5,
+            "color": "#F59E0B"
+          },
+          {
+            "category": "Holding Cost Savings",
+            "key": "holding",
+            "baseline_cost": 14210.0,
+            "champion_cost": 13005.0,
+            "savings": 1205.0,
+            "savings_label": "-$1.2k",
+            "pct_of_total_savings": 5.2,
+            "color": "#38BDF8"
+          },
+          {
+            "category": "Ordering Cost Savings",
+            "key": "ordering",
+            "baseline_cost": 1910.0,
+            "champion_cost": 1515.0,
+            "savings": 395.0,
+            "savings_label": "-$395",
+            "pct_of_total_savings": 1.7,
+            "color": "#A855F7"
+          }
+        ]
+      },
+      "pareto_frontier": [
+        {
+          "generation": 0,
+          "cost_reduction_pct": 0.0,
+          "fill_rate_pct": 91.2,
+          "spoilage_rate_pct": 14.6,
+          "total_cost": 68410.0,
+          "fitness_score": 0.0,
+          "is_pareto": true
+        },
+        {
+          "generation": 1,
+          "cost_reduction_pct": 0.26,
+          "fill_rate_pct": 91.22,
+          "spoilage_rate_pct": 14.55,
+          "total_cost": 68235.0,
+          "fitness_score": 0.26,
+          "is_pareto": false
+        },
+        {
+          "generation": 2,
+          "cost_reduction_pct": 0.73,
+          "fill_rate_pct": 91.25,
+          "spoilage_rate_pct": 14.47,
+          "total_cost": 67909.0,
+          "fitness_score": 0.73,
+          "is_pareto": false
+        },
+        {
+          "generation": 3,
+          "cost_reduction_pct": 1.37,
+          "fill_rate_pct": 91.29,
+          "spoilage_rate_pct": 14.35,
+          "total_cost": 67471.0,
+          "fitness_score": 1.37,
+          "is_pareto": false
+        },
+        {
+          "generation": 4,
+          "cost_reduction_pct": 2.16,
+          "fill_rate_pct": 91.35,
+          "spoilage_rate_pct": 14.21,
+          "total_cost": 66931.0,
+          "fitness_score": 2.16,
+          "is_pareto": false
+        },
+        {
+          "generation": 5,
+          "cost_reduction_pct": 3.09,
+          "fill_rate_pct": 91.41,
+          "spoilage_rate_pct": 14.04,
+          "total_cost": 66293.0,
+          "fitness_score": 3.09,
+          "is_pareto": true
+        },
+        {
+          "generation": 6,
+          "cost_reduction_pct": 4.16,
+          "fill_rate_pct": 91.48,
+          "spoilage_rate_pct": 13.84,
+          "total_cost": 65563.0,
+          "fitness_score": 4.16,
+          "is_pareto": false
+        },
+        {
+          "generation": 7,
+          "cost_reduction_pct": 5.36,
+          "fill_rate_pct": 91.56,
+          "spoilage_rate_pct": 13.63,
+          "total_cost": 64744.0,
+          "fitness_score": 5.36,
+          "is_pareto": false
+        },
+        {
+          "generation": 8,
+          "cost_reduction_pct": 6.67,
+          "fill_rate_pct": 91.65,
+          "spoilage_rate_pct": 13.39,
+          "total_cost": 63844.0,
+          "fitness_score": 6.67,
+          "is_pareto": true
+        },
+        {
+          "generation": 9,
+          "cost_reduction_pct": 8.1,
+          "fill_rate_pct": 91.75,
+          "spoilage_rate_pct": 13.13,
+          "total_cost": 62868.0,
+          "fitness_score": 8.1,
+          "is_pareto": false
+        },
+        {
+          "generation": 10,
+          "cost_reduction_pct": 9.62,
+          "fill_rate_pct": 91.85,
+          "spoilage_rate_pct": 12.85,
+          "total_cost": 61826.0,
+          "fitness_score": 9.62,
+          "is_pareto": false
+        },
+        {
+          "generation": 11,
+          "cost_reduction_pct": 11.23,
+          "fill_rate_pct": 91.96,
+          "spoilage_rate_pct": 12.56,
+          "total_cost": 60727.0,
+          "fitness_score": 11.23,
+          "is_pareto": false
+        },
+        {
+          "generation": 12,
+          "cost_reduction_pct": 12.9,
+          "fill_rate_pct": 92.07,
+          "spoilage_rate_pct": 12.26,
+          "total_cost": 59584.0,
+          "fitness_score": 12.9,
+          "is_pareto": true
+        },
+        {
+          "generation": 13,
+          "cost_reduction_pct": 14.62,
+          "fill_rate_pct": 92.19,
+          "spoilage_rate_pct": 11.95,
+          "total_cost": 58409.0,
+          "fitness_score": 14.62,
+          "is_pareto": false
+        },
+        {
+          "generation": 14,
+          "cost_reduction_pct": 16.36,
+          "fill_rate_pct": 92.31,
+          "spoilage_rate_pct": 11.63,
+          "total_cost": 57217.0,
+          "fitness_score": 16.36,
+          "is_pareto": false
+        },
+        {
+          "generation": 15,
+          "cost_reduction_pct": 18.11,
+          "fill_rate_pct": 92.42,
+          "spoilage_rate_pct": 11.31,
+          "total_cost": 56022.0,
+          "fitness_score": 18.11,
+          "is_pareto": false
+        },
+        {
+          "generation": 16,
+          "cost_reduction_pct": 19.84,
+          "fill_rate_pct": 92.54,
+          "spoilage_rate_pct": 11.0,
+          "total_cost": 54839.0,
+          "fitness_score": 19.84,
+          "is_pareto": false
+        },
+        {
+          "generation": 17,
+          "cost_reduction_pct": 21.53,
+          "fill_rate_pct": 92.66,
+          "spoilage_rate_pct": 10.69,
+          "total_cost": 53682.0,
+          "fitness_score": 21.53,
+          "is_pareto": true
+        },
+        {
+          "generation": 18,
+          "cost_reduction_pct": 23.16,
+          "fill_rate_pct": 92.77,
+          "spoilage_rate_pct": 10.39,
+          "total_cost": 52566.0,
+          "fitness_score": 23.16,
+          "is_pareto": false
+        },
+        {
+          "generation": 19,
+          "cost_reduction_pct": 24.72,
+          "fill_rate_pct": 92.87,
+          "spoilage_rate_pct": 10.11,
+          "total_cost": 51501.0,
+          "fitness_score": 24.72,
+          "is_pareto": false
+        },
+        {
+          "generation": 20,
+          "cost_reduction_pct": 26.18,
+          "fill_rate_pct": 92.97,
+          "spoilage_rate_pct": 9.85,
+          "total_cost": 50500.0,
+          "fitness_score": 26.18,
+          "is_pareto": false
+        },
+        {
+          "generation": 21,
+          "cost_reduction_pct": 27.54,
+          "fill_rate_pct": 93.06,
+          "spoilage_rate_pct": 9.6,
+          "total_cost": 49572.0,
+          "fitness_score": 27.54,
+          "is_pareto": false
+        },
+        {
+          "generation": 22,
+          "cost_reduction_pct": 28.77,
+          "fill_rate_pct": 93.15,
+          "spoilage_rate_pct": 9.38,
+          "total_cost": 48724.0,
+          "fitness_score": 28.77,
+          "is_pareto": true
+        },
+        {
+          "generation": 23,
+          "cost_reduction_pct": 29.89,
+          "fill_rate_pct": 93.22,
+          "spoilage_rate_pct": 9.17,
+          "total_cost": 47962.0,
+          "fitness_score": 29.89,
+          "is_pareto": false
+        },
+        {
+          "generation": 24,
+          "cost_reduction_pct": 30.87,
+          "fill_rate_pct": 93.29,
+          "spoilage_rate_pct": 8.99,
+          "total_cost": 47289.0,
+          "fitness_score": 30.87,
+          "is_pareto": false
+        },
+        {
+          "generation": 25,
+          "cost_reduction_pct": 31.72,
+          "fill_rate_pct": 93.34,
+          "spoilage_rate_pct": 8.84,
+          "total_cost": 46708.0,
+          "fitness_score": 31.72,
+          "is_pareto": false
+        },
+        {
+          "generation": 26,
+          "cost_reduction_pct": 32.43,
+          "fill_rate_pct": 93.39,
+          "spoilage_rate_pct": 8.71,
+          "total_cost": 46221.0,
+          "fitness_score": 32.43,
+          "is_pareto": false
+        },
+        {
+          "generation": 27,
+          "cost_reduction_pct": 33.01,
+          "fill_rate_pct": 93.43,
+          "spoilage_rate_pct": 8.61,
+          "total_cost": 45827.0,
+          "fitness_score": 33.01,
+          "is_pareto": true
+        },
+        {
+          "generation": 28,
+          "cost_reduction_pct": 33.45,
+          "fill_rate_pct": 93.46,
+          "spoilage_rate_pct": 8.53,
+          "total_cost": 45528.0,
+          "fitness_score": 33.45,
+          "is_pareto": false
+        },
+        {
+          "generation": 29,
+          "cost_reduction_pct": 33.74,
+          "fill_rate_pct": 93.48,
+          "spoilage_rate_pct": 8.47,
+          "total_cost": 45327.0,
+          "fitness_score": 33.74,
+          "is_pareto": false
+        },
+        {
+          "generation": 30,
+          "cost_reduction_pct": 33.87,
+          "fill_rate_pct": 93.49,
+          "spoilage_rate_pct": 8.45,
+          "total_cost": 45238.0,
+          "fitness_score": 33.87,
+          "is_pareto": true
+        }
+      ],
       "sku_archetypes": [
         {
           "category": "Ultra-Perishables (Berries / Pre-cut Salads)",
@@ -85,6 +611,7 @@
             "holding_cost": 14210.0,
             "spoilage_cost": 28090.0,
             "stockout_penalty": 24200.0,
+            "ordering_cost": 1910.0,
             "fill_rate_pct": 91.2,
             "spoilage_rate_pct": 14.6,
             "cost_reduction_pct": 0.0,
@@ -1001,6 +1528,7 @@
             "holding_cost": 14201.0,
             "spoilage_cost": 28000.0,
             "stockout_penalty": 24127.0,
+            "ordering_cost": 1907.0,
             "fill_rate_pct": 91.22,
             "spoilage_rate_pct": 14.55,
             "cost_reduction_pct": 0.26,
@@ -1917,6 +2445,7 @@
             "holding_cost": 14184.0,
             "spoilage_cost": 27832.0,
             "stockout_penalty": 23992.0,
+            "ordering_cost": 1901.0,
             "fill_rate_pct": 91.25,
             "spoilage_rate_pct": 14.47,
             "cost_reduction_pct": 0.73,
@@ -2833,6 +3362,7 @@
             "holding_cost": 14161.0,
             "spoilage_cost": 27606.0,
             "stockout_penalty": 23810.0,
+            "ordering_cost": 1894.0,
             "fill_rate_pct": 91.29,
             "spoilage_rate_pct": 14.35,
             "cost_reduction_pct": 1.37,
@@ -3749,6 +4279,7 @@
             "holding_cost": 14133.0,
             "spoilage_cost": 27327.0,
             "stockout_penalty": 23585.0,
+            "ordering_cost": 1885.0,
             "fill_rate_pct": 91.35,
             "spoilage_rate_pct": 14.21,
             "cost_reduction_pct": 2.16,
@@ -4665,6 +5196,7 @@
             "holding_cost": 14100.0,
             "spoilage_cost": 26999.0,
             "stockout_penalty": 23321.0,
+            "ordering_cost": 1874.0,
             "fill_rate_pct": 91.41,
             "spoilage_rate_pct": 14.04,
             "cost_reduction_pct": 3.09,
@@ -5581,6 +6113,7 @@
             "holding_cost": 14062.0,
             "spoilage_cost": 26622.0,
             "stockout_penalty": 23017.0,
+            "ordering_cost": 1861.0,
             "fill_rate_pct": 91.48,
             "spoilage_rate_pct": 13.84,
             "cost_reduction_pct": 4.16,
@@ -6497,6 +7030,7 @@
             "holding_cost": 14019.0,
             "spoilage_cost": 26200.0,
             "stockout_penalty": 22677.0,
+            "ordering_cost": 1848.0,
             "fill_rate_pct": 91.56,
             "spoilage_rate_pct": 13.63,
             "cost_reduction_pct": 5.36,
@@ -7413,6 +7947,7 @@
             "holding_cost": 13973.0,
             "spoilage_cost": 25736.0,
             "stockout_penalty": 22303.0,
+            "ordering_cost": 1832.0,
             "fill_rate_pct": 91.65,
             "spoilage_rate_pct": 13.39,
             "cost_reduction_pct": 6.67,
@@ -8329,6 +8864,7 @@
             "holding_cost": 13922.0,
             "spoilage_cost": 25233.0,
             "stockout_penalty": 21898.0,
+            "ordering_cost": 1816.0,
             "fill_rate_pct": 91.75,
             "spoilage_rate_pct": 13.13,
             "cost_reduction_pct": 8.1,
@@ -9245,6 +9781,7 @@
             "holding_cost": 13868.0,
             "spoilage_cost": 24696.0,
             "stockout_penalty": 21464.0,
+            "ordering_cost": 1798.0,
             "fill_rate_pct": 91.85,
             "spoilage_rate_pct": 12.85,
             "cost_reduction_pct": 9.62,
@@ -10161,6 +10698,7 @@
             "holding_cost": 13810.0,
             "spoilage_cost": 24130.0,
             "stockout_penalty": 21008.0,
+            "ordering_cost": 1779.0,
             "fill_rate_pct": 91.96,
             "spoilage_rate_pct": 12.56,
             "cost_reduction_pct": 11.23,
@@ -11077,6 +11615,7 @@
             "holding_cost": 13751.0,
             "spoilage_cost": 23540.0,
             "stockout_penalty": 20533.0,
+            "ordering_cost": 1760.0,
             "fill_rate_pct": 92.07,
             "spoilage_rate_pct": 12.26,
             "cost_reduction_pct": 12.9,
@@ -11993,6 +12532,7 @@
             "holding_cost": 13690.0,
             "spoilage_cost": 22935.0,
             "stockout_penalty": 20045.0,
+            "ordering_cost": 1740.0,
             "fill_rate_pct": 92.19,
             "spoilage_rate_pct": 11.95,
             "cost_reduction_pct": 14.62,
@@ -12909,6 +13449,7 @@
             "holding_cost": 13628.0,
             "spoilage_cost": 22320.0,
             "stockout_penalty": 19550.0,
+            "ordering_cost": 1719.0,
             "fill_rate_pct": 92.31,
             "spoilage_rate_pct": 11.63,
             "cost_reduction_pct": 16.36,
@@ -13825,6 +14366,7 @@
             "holding_cost": 13566.0,
             "spoilage_cost": 21704.0,
             "stockout_penalty": 19053.0,
+            "ordering_cost": 1699.0,
             "fill_rate_pct": 92.42,
             "spoilage_rate_pct": 11.31,
             "cost_reduction_pct": 18.11,
@@ -14741,6 +15283,7 @@
             "holding_cost": 13504.0,
             "spoilage_cost": 21094.0,
             "stockout_penalty": 18562.0,
+            "ordering_cost": 1679.0,
             "fill_rate_pct": 92.54,
             "spoilage_rate_pct": 11.0,
             "cost_reduction_pct": 19.84,
@@ -15657,6 +16200,7 @@
             "holding_cost": 13444.0,
             "spoilage_cost": 20498.0,
             "stockout_penalty": 18081.0,
+            "ordering_cost": 1659.0,
             "fill_rate_pct": 92.66,
             "spoilage_rate_pct": 10.69,
             "cost_reduction_pct": 21.53,
@@ -16573,6 +17117,7 @@
             "holding_cost": 13386.0,
             "spoilage_cost": 19922.0,
             "stockout_penalty": 17617.0,
+            "ordering_cost": 1640.0,
             "fill_rate_pct": 92.77,
             "spoilage_rate_pct": 10.39,
             "cost_reduction_pct": 23.16,
@@ -17489,6 +18034,7 @@
             "holding_cost": 13331.0,
             "spoilage_cost": 19374.0,
             "stockout_penalty": 17175.0,
+            "ordering_cost": 1622.0,
             "fill_rate_pct": 92.87,
             "spoilage_rate_pct": 10.11,
             "cost_reduction_pct": 24.72,
@@ -18405,6 +18951,7 @@
             "holding_cost": 13279.0,
             "spoilage_cost": 18858.0,
             "stockout_penalty": 16759.0,
+            "ordering_cost": 1605.0,
             "fill_rate_pct": 92.97,
             "spoilage_rate_pct": 9.85,
             "cost_reduction_pct": 26.18,
@@ -19321,6 +19868,7 @@
             "holding_cost": 13230.0,
             "spoilage_cost": 18379.0,
             "stockout_penalty": 16374.0,
+            "ordering_cost": 1589.0,
             "fill_rate_pct": 93.06,
             "spoilage_rate_pct": 9.6,
             "cost_reduction_pct": 27.54,
@@ -20237,6 +20785,7 @@
             "holding_cost": 13186.0,
             "spoilage_cost": 17942.0,
             "stockout_penalty": 16021.0,
+            "ordering_cost": 1574.0,
             "fill_rate_pct": 93.15,
             "spoilage_rate_pct": 9.38,
             "cost_reduction_pct": 28.77,
@@ -21153,6 +21702,7 @@
             "holding_cost": 13147.0,
             "spoilage_cost": 17549.0,
             "stockout_penalty": 15705.0,
+            "ordering_cost": 1561.0,
             "fill_rate_pct": 93.22,
             "spoilage_rate_pct": 9.17,
             "cost_reduction_pct": 29.89,
@@ -22069,6 +22619,7 @@
             "holding_cost": 13112.0,
             "spoilage_cost": 17202.0,
             "stockout_penalty": 15425.0,
+            "ordering_cost": 1550.0,
             "fill_rate_pct": 93.29,
             "spoilage_rate_pct": 8.99,
             "cost_reduction_pct": 30.87,
@@ -22985,6 +23536,7 @@
             "holding_cost": 13081.0,
             "spoilage_cost": 16903.0,
             "stockout_penalty": 15184.0,
+            "ordering_cost": 1540.0,
             "fill_rate_pct": 93.34,
             "spoilage_rate_pct": 8.84,
             "cost_reduction_pct": 31.72,
@@ -23901,6 +24453,7 @@
             "holding_cost": 13056.0,
             "spoilage_cost": 16652.0,
             "stockout_penalty": 14981.0,
+            "ordering_cost": 1532.0,
             "fill_rate_pct": 93.39,
             "spoilage_rate_pct": 8.71,
             "cost_reduction_pct": 32.43,
@@ -24817,6 +25370,7 @@
             "holding_cost": 13036.0,
             "spoilage_cost": 16449.0,
             "stockout_penalty": 14818.0,
+            "ordering_cost": 1525.0,
             "fill_rate_pct": 93.43,
             "spoilage_rate_pct": 8.61,
             "cost_reduction_pct": 33.01,
@@ -25733,6 +26287,7 @@
             "holding_cost": 13020.0,
             "spoilage_cost": 16294.0,
             "stockout_penalty": 14693.0,
+            "ordering_cost": 1520.0,
             "fill_rate_pct": 93.46,
             "spoilage_rate_pct": 8.53,
             "cost_reduction_pct": 33.45,
@@ -26649,6 +27204,7 @@
             "holding_cost": 13010.0,
             "spoilage_cost": 16191.0,
             "stockout_penalty": 14610.0,
+            "ordering_cost": 1517.0,
             "fill_rate_pct": 93.48,
             "spoilage_rate_pct": 8.47,
             "cost_reduction_pct": 33.74,
@@ -27565,6 +28121,7 @@
             "holding_cost": 13005.0,
             "spoilage_cost": 16145.0,
             "stockout_penalty": 14573.0,
+            "ordering_cost": 1515.0,
             "fill_rate_pct": 93.49,
             "spoilage_rate_pct": 8.45,
             "cost_reduction_pct": 33.87,
