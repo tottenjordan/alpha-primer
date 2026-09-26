@@ -86,8 +86,9 @@ uv run python examples/inventory_replenishment/run_evolution.py --max-programs 2
 - **Output Artifacts**: When complete, the winning code and holdout benchmark results are saved locally to `artifacts/inventory_replenishment/` (`best_evolved_program.py` and `best_evaluation_summary.json`).
 See [docs/notes/cloud_resources_and_execution.md](docs/notes/cloud_resources_and_execution.md) for full architectural details.
 
-### 5. Launching the Interactive Executive Dashboard
+### 5. Launching & Hosting the Interactive Executive Dashboard
 
+**Local Execution:**
 Launch the local web server to interact with the dashboard:
 
 ```bash
@@ -95,6 +96,15 @@ uv run python server.py
 ```
 
 Open [http://127.0.0.1:8080](http://127.0.0.1:8080) in your browser. (Zero external server dependencies required; runs on standard library `http.server` with optional FastAPI/Uvicorn support).
+
+**Google Cloud Run Deployment:**
+To deploy the interactive UI as a serverless service on Google Cloud Run and register it with Gemini Enterprise:
+
+```bash
+PROJECT_ID="your-gcp-project-id" ./scripts/deploy_cloud_run.sh
+```
+
+See [docs/notes/google_cloud_run_hosting.md](docs/notes/google_cloud_run_hosting.md) for full Cloud Run architecture, IAM roles, and Gemini Enterprise external agent registration details.
 
 ---
 

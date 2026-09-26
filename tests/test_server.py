@@ -69,3 +69,15 @@ def test_server_unknown_path() -> None:
     code, headers, body = handle_api_request("/some/unknown/route")
     assert code == 404
     assert body["detail"] == "Not found"
+
+
+def test_server_agent_replenish_query() -> None:
+    code, headers, body = handle_api_request("/api/agent/replenish-query")
+    assert code == 200
+    assert body["status"] == "success"
+    assert body["use_case"] == "inventory_replenishment"
+    assert "Gen 30 Champion reduces supply chain cost" in body["summary"]
+    assert "metrics" in body
+    assert body["metrics"]["cost_reduction_pct"] > 30.0
+    assert len(body["key_innovations"]) == 4
+    assert headers["Content-Type"] == "application/json"
