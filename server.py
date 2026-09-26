@@ -126,6 +126,47 @@ def handle_api_request(path: str) -> tuple[int, dict[str, str], Any]:
         headers["Content-Type"] = "application/json"
         return 200, headers, json.loads(target_path.read_text(encoding="utf-8"))
 
+    if path == "/api/agent/replenish-query":
+        # Grounding endpoint for Gemini Enterprise StreamAssist & external agent webhooks
+        target_path = (RECORDS_DIR / ALLOWED_USE_CASES["inventory_replenishment"]).resolve()
+        if not target_path.exists():
+            return 404, headers, {"detail": "Inventory replenishment trajectory not found."}
+        data = json.loads(target_path.read_text(encoding="utf-8"))
+        champ = data.get("champion_summary", {})
+        baseline = data.get("baseline_summary", {})
+        headers["Content-Type"] = "application/json"
+        return (
+            200,
+            headers,
+            {
+                "status": "success",
+                "use_case": "inventory_replenishment",
+                "title": data.get(
+                    "title", "Autonomous Multi-Echelon & Perishable Inventory Replenishment"
+                ),
+                "summary": (
+                    f"Gen 30 Champion reduces supply chain cost by {champ.get('cost_reduction_pct', 33.87):.1f}% "
+                    f"(${champ.get('total_cost', 45238):,.0f} vs ${baseline.get('total_cost', 68410):,.0f}) "
+                    f"while maintaining a {champ.get('fill_rate_pct', 93.49):.2f}% fill rate and cutting perishable "
+                    f"spoilage from {baseline.get('spoilage_rate_pct', 14.6):.1f}% to {champ.get('spoilage_rate_pct', 8.45):.2f}%."
+                ),
+                "metrics": {
+                    "baseline_cost": baseline.get("total_cost"),
+                    "champion_cost": champ.get("total_cost"),
+                    "cost_reduction_pct": champ.get("cost_reduction_pct"),
+                    "fill_rate_pct": champ.get("fill_rate_pct"),
+                    "spoilage_rate_pct": champ.get("spoilage_rate_pct"),
+                },
+                "key_innovations": [
+                    "Censored demand imputation for stockout periods",
+                    "Dynamic day-of-week seasonality index calculation",
+                    "Vectorized FIFO cohort aging & lead-time spoilage deduction",
+                    "Dynamic critical fractile safety stock with perishability risk scaling",
+                ],
+                "program_resource_name": champ.get("program_resource_name"),
+            },
+        )
+
     return 404, headers, {"detail": "Not found"}
 
 
@@ -182,6 +223,15 @@ try:
             raise HTTPException(status_code=code, detail=body.get("detail", "Error"))
         return JSONResponse(content=body)
 
+    @app.api_route(
+        "/api/agent/replenish-query", methods=["GET", "POST"], tags=["Gemini Enterprise"]
+    )
+    def agent_replenish_query() -> Any:
+        code, _, body = handle_api_request("/api/agent/replenish-query")
+        if code != 200:
+            raise HTTPException(status_code=code, detail=body.get("detail", "Error"))
+        return JSONResponse(content=body)
+
 except ImportError:
     app = None  # type: ignore
 
@@ -212,19 +262,30 @@ if __name__ == "__main__":
                         self.send_header(hk, hv)
                 super().end_headers()
 
+            def _handle_json_route(self) -> None:
+                code, hdrs, body = handle_api_request(self.path)
+                self.send_response(code)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps(body).encode("utf-8"))
+
             def do_GET(self) -> None:
                 if self.path in (
                     "/health",
                     "/api/cloud-status",
                     "/api/data",
+                    "/api/agent/replenish-query",
                 ) or self.path.startswith("/api/trajectories/"):
-                    code, hdrs, body = handle_api_request(self.path)
-                    self.send_response(code)
-                    self.send_header("Content-Type", "application/json")
-                    self.end_headers()
-                    self.wfile.write(json.dumps(body).encode("utf-8"))
+                    self._handle_json_route()
                     return
                 super().do_GET()
+
+            def do_POST(self) -> None:
+                if self.path == "/api/agent/replenish-query":
+                    self._handle_json_route()
+                    return
+                self.send_response(404)
+                self.end_headers()
 
         httpd = http.server.ThreadingHTTPServer((host, port), FallbackHandler)
         print(

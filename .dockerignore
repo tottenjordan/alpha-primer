@@ -1,0 +1,16 @@
+.venv
+__pycache__
+*.pyc
+.git
+.github
+tests
+examples/**/tests
+.pytest_cache
+.ruff_cache
+docs
+artifacts
+.env
+.env.*
+*.gif
+*.png
+node_modules
