@@ -142,21 +142,46 @@ Open **[http://127.0.0.1:8080](http://127.0.0.1:8080)** in your browser.
 
 ---
 
-### Mode D: Serverless Cloud Run Deployment
-Deploy the full web dashboard and Gemini agent webhook to Google Cloud Run:
+### Mode D: Serverless Cloud Run Deployment & Gemini Enterprise Agent Automation
+Deploy the full web dashboard and Gemini agent webhook to Google Cloud Run with automated Artifact Registry provisioning, security hardening, and optional Discovery Engine external agent registration:
 
 ```bash
+# Automated deployment with active gcloud credentials
 ./scripts/deploy_cloud_run.sh
+
+# Or deploy via Makefile target
+make deploy
+
+# Dry-run validation (synthesizes exact execution plan without cloud mutations)
+make deploy-dry-run
+
+# Custom deployment with specific GCP project, region, and Gemini Enterprise Engine ID:
+./scripts/deploy_cloud_run.sh \
+  --project=my-project-id \
+  --region=us-central1 \
+  --service-name=alpha-evolve-primer-ui \
+  --engine-id=my-experiment-engine \
+  --register-agent
 ```
 
-#### What This Provisions
-- Submits a multi-stage container build to **Google Cloud Build** (`gcr.io/<PROJECT_ID>/alpha-evolve-primer-ui:latest`).
-- Deploys a managed **Cloud Run** service in `us-central1` with strict security headers (CSP, HSTS, frame-ancestors).
-- Endpoints exposed:
-  - `GET /` — Interactive executive dashboard.
+#### What This Provisions & Automates
+1. **Pre-flight Checks**: Verifies `gcloud` authentication and ensures required Google Cloud APIs (`run.googleapis.com`, `cloudbuild.googleapis.com`, `artifactregistry.googleapis.com`, `discoveryengine.googleapis.com`) are accessible.
+2. **Container Registry Setup**: Ensures an **Artifact Registry** repository (`alpha-evolve-repo`) exists in the specified region.
+3. **Cloud Build Submission**: Submits a multi-stage non-root container build (`python:3.12-slim` + `uv` frozen dependencies) to **Google Cloud Build**.
+4. **Serverless Cloud Run Deployment**: Deploys managed service with tuned parameters:
+   - Concurrency: 80 requests/instance
+   - Memory: 512Mi / 1 vCPU
+   - Auto-scaling: 0 to 5 instances (scale-to-zero when idle)
+   - Strict enterprise security headers: Content-Security-Policy (CSP), HSTS, nosniff, frame-ancestors.
+5. **Post-Deployment Health Check**: Automatically probes `${SERVICE_URL}/health` and `${SERVICE_URL}/api/cloud-status`.
+6. **Gemini Enterprise Assistant Registration**: Automatically registers the Cloud Run webhook endpoint (`${SERVICE_URL}/api/agent/replenish-query`) as an External Agent (`inventory-replenishment-twin`) under `assistants/default_assistant/agents` in Discovery Engine v1alpha.
+7. **CI/CD Automation**: Fully declarative build via [`cloudbuild.yaml`](../cloudbuild.yaml) and GitHub Actions workflow via [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml).
+
+- **Endpoints Exposed**:
+  - `GET /` — Interactive executive dashboard (Retina Canvas 2D, What-If simulation, AST code diffs).
   - `GET /health` — Service health and ADC credential status.
   - `GET /api/cloud-status` — Discovery Engine connection and experiment metadata.
-  - `POST /api/agent/replenish-query` — Natural-language webhook for conversational agent grounding.
+  - `POST /api/agent/replenish-query` — Gemini Enterprise agent webhook with Markdown grounding cards and dynamic parameter stress tests.
 
 ---
 
@@ -307,6 +332,11 @@ alpha-primer/
 │   ├── index.html                     # Safe DOM, Retina Canvas 2D, LCS diff engine
 │   └── data.json                      # Precompiled 31-generation trajectory records
 ├── server.py                          # Zero-dependency HTTP server & agent webhook
+├── cloudbuild.yaml                    # Declarative Google Cloud Build & Cloud Run pipeline
+├── Dockerfile                         # Non-root hardened container (uv frozen dependencies)
+├── .github/workflows/
+│   ├── ci.yml                         # Automated quality, lint, typecheck & test matrix
+│   └── deploy.yml                     # Automated Cloud Run & agent webhook deployment
 ├── scripts/
 │   └── deploy_cloud_run.sh            # Automated Cloud Build & Cloud Run deployment script
 ├── docs/

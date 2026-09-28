@@ -34,22 +34,50 @@ gcloud services enable \
 
 ## 3. Deploying to Cloud Run
 
-### Option A: Using the Automated Deployment Script
+### Option A: Using the Automated Deployment Script (Recommended)
+
+The deployment script [`scripts/deploy_cloud_run.sh`](../../scripts/deploy_cloud_run.sh) automates pre-flight API verification, Artifact Registry provisioning, Cloud Build execution, Cloud Run deployment, post-deployment health probing, and Discovery Engine External Agent registration in a single step:
+
 ```bash
-PROJECT_ID="your-gcp-project-id" ./scripts/deploy_cloud_run.sh
+# Automated deployment with active gcloud project
+./scripts/deploy_cloud_run.sh
+
+# Or via Makefile target
+make deploy
+
+# Dry-run validation (view synthesized gcloud plan without cloud execution)
+./scripts/deploy_cloud_run.sh --dry-run
+# or: make deploy-dry-run
+
+# Fully parameterized deployment with Gemini Enterprise agent registration
+./scripts/deploy_cloud_run.sh \
+  --project=my-project-id \
+  --region=us-central1 \
+  --service-name=alpha-evolve-primer-ui \
+  --engine-id=alpha-evolve-experiment-engine \
+  --register-agent
 ```
 
-### Option B: Step-by-Step Manual Deployment
+### Option B: Using Google Cloud Build (`cloudbuild.yaml`)
+
+Trigger a declarative multi-step build directly using Google Cloud Build:
+
+```bash
+gcloud builds submit --config=cloudbuild.yaml \
+  --substitutions=_SERVICE_NAME=alpha-evolve-primer-ui,_REGION=us-central1
+```
+
+### Option C: Step-by-Step Manual Deployment
 
 1. **Submit Build to Google Cloud Build**:
    ```bash
-   gcloud builds submit --tag gcr.io/${PROJECT_ID}/alpha-evolve-primer-ui:latest .
+   gcloud builds submit --tag us-central1-docker.pkg.dev/${PROJECT_ID}/alpha-evolve-repo/alpha-evolve-primer-ui:latest .
    ```
 
 2. **Deploy Container to Cloud Run**:
    ```bash
    gcloud run deploy alpha-evolve-primer-ui \
-     --image gcr.io/${PROJECT_ID}/alpha-evolve-primer-ui:latest \
+     --image us-central1-docker.pkg.dev/${PROJECT_ID}/alpha-evolve-repo/alpha-evolve-primer-ui:latest \
      --platform managed \
      --region us-central1 \
      --port 8080 \
