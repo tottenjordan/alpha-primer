@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -12,8 +13,10 @@ from alpha_evolve.dashboard.trajectory_generator import generate_inventory_traje
 ROOT_DIR = Path(__file__).resolve().parent.parent
 
 
-def test_trajectory_generator_compiles_data() -> None:
-    bundle = generate_inventory_trajectory_dataset()
+def test_trajectory_generator_compiles_data(tmp_path: Path) -> None:
+    bundle = generate_inventory_trajectory_dataset(output_dir=tmp_path)
+    assert (tmp_path / "inventory_replenishment_trajectory.json").exists()
+    assert (tmp_path / "master_trajectories.json").exists()
     assert "platform_title" in bundle
     assert "use_cases" in bundle
     assert "inventory_replenishment" in bundle["use_cases"]
@@ -30,9 +33,11 @@ def test_trajectory_generator_compiles_data() -> None:
     assert ir["champion_summary"]["spoilage_rate_pct"] == 8.45
 
 
-def test_build_dashboard_html_safe_dom_compliance() -> None:
-    html_path = build_dashboard_html()
+def test_build_dashboard_html_safe_dom_compliance(tmp_path: Path) -> None:
+    html_path = build_dashboard_html(output_dir=tmp_path)
     assert html_path.exists()
+    assert html_path.parent == tmp_path
+    assert (tmp_path / "data.json").exists()
     content = html_path.read_text(encoding="utf-8")
 
     # Enterprise Safe DOM: zero innerHTML
@@ -52,8 +57,8 @@ def test_build_dashboard_html_safe_dom_compliance() -> None:
     assert '<script id="master-trajectory-data" type="application/json">' in content
 
 
-def test_trajectory_milestone_and_pareto_metadata() -> None:
-    bundle = generate_inventory_trajectory_dataset()
+def test_trajectory_milestone_and_pareto_metadata(tmp_path: Path) -> None:
+    bundle = generate_inventory_trajectory_dataset(output_dir=tmp_path)
     ir = bundle["use_cases"]["inventory_replenishment"]
 
     # Verify milestones (Gen 0, 8, 17, 30)
@@ -109,8 +114,8 @@ def test_trajectory_milestone_and_pareto_metadata() -> None:
     assert "ordering_cost" in ir["trajectory_generations"][30]["metrics"]
 
 
-def test_high_visibility_diff_engine_elements() -> None:
-    html_path = build_dashboard_html()
+def test_high_visibility_diff_engine_elements(tmp_path: Path) -> None:
+    html_path = build_dashboard_html(output_dir=tmp_path)
     content = html_path.read_text(encoding="utf-8")
 
     # Strict Safe DOM: zero innerHTML
@@ -152,8 +157,8 @@ def test_high_visibility_diff_engine_elements() -> None:
     assert "diff-gutter-badge" in content
 
 
-def test_evolutionary_progression_suite_and_dual_whatif() -> None:
-    html_path = build_dashboard_html()
+def test_evolutionary_progression_suite_and_dual_whatif(tmp_path: Path) -> None:
+    html_path = build_dashboard_html(output_dir=tmp_path)
     content = html_path.read_text(encoding="utf-8")
 
     # Strict Safe DOM
@@ -182,8 +187,8 @@ def test_evolutionary_progression_suite_and_dual_whatif() -> None:
     assert "drawWhatIfDualCanvas" in content
 
 
-def test_diff_engine_robustness_and_client_js_execution() -> None:
-    html_path = build_dashboard_html()
+def test_diff_engine_robustness_and_client_js_execution(tmp_path: Path) -> None:
+    html_path = build_dashboard_html(output_dir=tmp_path)
     content = html_path.read_text(encoding="utf-8")
 
     # Innovation pills in AST stepper banner
@@ -205,9 +210,9 @@ def test_diff_engine_robustness_and_client_js_execution() -> None:
     # Node.js validation of client-side lexer and LCS diff logic
     node_path = shutil.which("node")
     if node_path:
-        test_script = """
+        test_script = f"""
         const fs = require('fs');
-        const html = fs.readFileSync('dashboard/index.html', 'utf8');
+        const html = fs.readFileSync({json.dumps(str(html_path))}, 'utf8');
         const scriptMatch = html.match(/<script>\\s*([\\s\\S]*?)<\\/script>/);
         if (!scriptMatch) throw new Error('No script block found');
 

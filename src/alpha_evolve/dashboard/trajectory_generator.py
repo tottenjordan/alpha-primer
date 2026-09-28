@@ -102,8 +102,19 @@ def run_full_simulation(
     }
 
 
-def generate_inventory_trajectory_dataset() -> dict[str, Any]:
-    """Compile comprehensive 31-generation trajectory and master bundle."""
+def generate_inventory_trajectory_dataset(
+    output_dir: Path | None = None,
+    write_files: bool = True,
+) -> dict[str, Any]:
+    """Compile comprehensive 31-generation trajectory and master bundle.
+
+    Args:
+        output_dir: Optional directory to save output JSON files. Defaults to records/.
+        write_files: Whether to write the generated JSON files to disk. Defaults to True.
+
+    Returns:
+        The master trajectory bundle dictionary.
+    """
     config, demand, promo = generate_benchmark_dataset(n_skus=50, total_days=90, seed=42)
 
     # 1. Load Champion Policy if artifact exists, else fallback to existing records or baseline
@@ -112,7 +123,18 @@ def generate_inventory_trajectory_dataset() -> dict[str, Any]:
 
     if not champ_path.exists() and master_file.exists():
         # Clean checkout in CI without artifacts/ folder: reuse committed trajectory bundle
-        return json.loads(master_file.read_text(encoding="utf-8"))
+        committed_bundle: dict[str, Any] = json.loads(master_file.read_text(encoding="utf-8"))
+        if write_files and output_dir is not None:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            (output_dir / "master_trajectories.json").write_text(
+                master_file.read_text(encoding="utf-8"), encoding="utf-8"
+            )
+            rec_file = RECORDS_DIR / "inventory_replenishment_trajectory.json"
+            if rec_file.exists():
+                (output_dir / "inventory_replenishment_trajectory.json").write_text(
+                    rec_file.read_text(encoding="utf-8"), encoding="utf-8"
+                )
+        return committed_bundle
 
     if champ_path.exists():
         spec = importlib.util.spec_from_file_location("champion_module", champ_path)
@@ -720,14 +742,16 @@ def generate_inventory_trajectory_dataset() -> dict[str, Any]:
         },
     }
 
-    # Save to records/
-    RECORDS_DIR.mkdir(parents=True, exist_ok=True)
-    (RECORDS_DIR / "inventory_replenishment_trajectory.json").write_text(
-        json.dumps(use_case_data, indent=2), encoding="utf-8"
-    )
-    (RECORDS_DIR / "master_trajectories.json").write_text(
-        json.dumps(master_bundle, indent=2), encoding="utf-8"
-    )
+    # Save to records/ (or custom output_dir if specified)
+    if write_files:
+        target_dir = output_dir if output_dir is not None else RECORDS_DIR
+        target_dir.mkdir(parents=True, exist_ok=True)
+        (target_dir / "inventory_replenishment_trajectory.json").write_text(
+            json.dumps(use_case_data, indent=2), encoding="utf-8"
+        )
+        (target_dir / "master_trajectories.json").write_text(
+            json.dumps(master_bundle, indent=2), encoding="utf-8"
+        )
 
     return master_bundle
 
