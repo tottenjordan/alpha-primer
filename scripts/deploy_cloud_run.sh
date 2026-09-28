@@ -226,15 +226,17 @@ if [[ "${REGISTER_AGENT}" != "false" && -n "${ENGINE_ID}" ]]; then
   ACCESS_TOKEN=$(gcloud auth print-access-token 2>/dev/null || echo '')
   if [[ -n "${ACCESS_TOKEN}" ]]; then
     AGENT_URL="https://discoveryengine.googleapis.com/v1alpha/projects/${PROJECT_ID}/locations/global/collections/default_collection/engines/${ENGINE_ID}/assistants/default_assistant/agents?agentId=inventory-replenishment-twin"
-    AGENT_PAYLOAD=$(cat <<JSON
+    AGENT_PAYLOAD=$(cat <<'JSON'
 {
   "displayName": "Autonomous Inventory Replenishment Digital Twin",
   "description": "Provides live AlphaEvolve simulation metrics, spoilage reductions, and evolved heuristic code.",
   "agentEndpoint": {
-    "endpointUri": "${SERVICE_URL}/api/agent/replenish-query"
+    "endpointUri": "__SERVICE_URL__/api/agent/replenish-query"
   }
 }
 JSON
+)
+    AGENT_PAYLOAD="${AGENT_PAYLOAD/__SERVICE_URL__/${SERVICE_URL}}"
     AGENT_RESP_TMP=$(mktemp)
     trap 'rm -f "${AGENT_RESP_TMP}"' EXIT
 
