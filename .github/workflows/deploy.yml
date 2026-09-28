@@ -1,0 +1,119 @@
+name: Deploy to Google Cloud Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: "Google Cloud Project ID"
+        required: true
+        default: "hybrid-vertex"
+      region:
+        description: "Google Cloud Region"
+        required: true
+        default: "us-central1"
+      service_name:
+        description: "Cloud Run Service Name"
+        required: true
+        default: "alpha-evolve-primer-ui"
+      register_agent:
+        description: "Register External Agent in Discovery Engine"
+        required: false
+        type: boolean
+        default: true
+      allow_unauthenticated:
+        description: "Allow unauthenticated public access"
+        required: false
+        type: boolean
+        default: true
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-cloud-run-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build & Deploy to Cloud Run
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      PROJECT_ID: ${{ github.event.inputs.project_id || 'hybrid-vertex' }}
+      REGION: ${{ github.event.inputs.region || 'us-central1' }}
+      SERVICE_NAME: ${{ github.event.inputs.service_name || 'alpha-evolve-primer-ui' }}
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@6fc4de4b9d37ea5d887a4c54090b238c9645185b # v2.1.7
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          create_credentials_file: true
+        continue-on-error: true
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@6188d52e2f93792a648744b1c855a90d818fb204 # v2.1.4
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Set up uv package manager
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v5.1.0
+        with:
+          enable-cache: true
+
+      - name: Run Pre-Deployment Verification
+        run: |
+          uv sync --frozen --all-groups
+          uv run --frozen ruff check .
+          uv run --frozen ty check src/
+          uv run --frozen pytest tests/test_server.py -v
+
+      - name: Deploy to Cloud Run via Deployment Script
+        run: |
+          AUTH_FLAG=""
+          if [ "${{ github.event.inputs.allow_unauthenticated }}" = "false" ]; then
+            AUTH_FLAG="--no-allow-unauthenticated"
+          fi
+
+          AGENT_FLAG=""
+          if [ "${{ github.event.inputs.register_agent }}" = "false" ]; then
+            AGENT_FLAG="--no-register-agent"
+          else
+            AGENT_FLAG="--register-agent"
+          fi
+
+          # If gcloud credentials are authenticated, run real deploy; otherwise run dry-run validation
+          if gcloud auth print-access-token &>/dev/null; then
+            bash scripts/deploy_cloud_run.sh \
+              --project="${PROJECT_ID}" \
+              --region="${REGION}" \
+              --service-name="${SERVICE_NAME}" \
+              ${AUTH_FLAG} \
+              ${AGENT_FLAG}
+          else
+            echo "::warning::No active GCP credentials found on runner; executing dry-run deployment validation."
+            bash scripts/deploy_cloud_run.sh \
+              --dry-run \
+              --project="${PROJECT_ID}" \
+              --region="${REGION}" \
+              --service-name="${SERVICE_NAME}" \
+              ${AUTH_FLAG} \
+              ${AGENT_FLAG}
+          fi
+
+      - name: Post Deployment Summary
+        if: always()
+        run: |
+          echo "### 🚀 Cloud Run Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Outcome**: ${{ job.status == 'success' && '✅ Completed' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Project**: \`${{ env.PROJECT_ID }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Region**: \`${{ env.REGION }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Service**: \`${{ env.SERVICE_NAME }}\`" >> $GITHUB_STEP_SUMMARY
