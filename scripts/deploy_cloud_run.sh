@@ -146,13 +146,13 @@ if [[ "${DRY_RUN}" == "true" ]]; then
   echo "[DRY-RUN] Step 4: Health Check Verification"
   echo "  curl -f -s \${SERVICE_URL}/health"
   echo ""
-  echo "[DRY-RUN] Step 5: Gemini Enterprise External Agent Webhook Registration"
+  echo "[DRY-RUN] Step 5: Gemini Enterprise External Agent Registration (A2A)"
   echo "  curl -X POST \\"
   echo "    -H \"Authorization: Bearer \$(gcloud auth print-access-token)\" \\"
   echo "    -H \"Content-Type: application/json\" \\"
   echo "    -H \"X-Goog-User-Project: ${PROJECT_ID}\" \\"
   echo "    \"https://discoveryengine.googleapis.com/v1alpha/projects/${PROJECT_ID}/locations/global/collections/default_collection/engines/${ENGINE_ID}/assistants/default_assistant/agents?agentId=inventory-replenishment-twin\" \\"
-  echo "    -d '{\"displayName\":\"Autonomous Inventory Replenishment Digital Twin\",\"description\":\"Provides live AlphaEvolve simulation metrics, spoilage reductions, and evolved heuristic code.\",\"agentEndpoint\":{\"endpointUri\":\"\${SERVICE_URL}/api/agent/replenish-query\"}}'"
+  echo "    -d '{\"displayName\":\"Autonomous Inventory Replenishment Digital Twin\",\"description\":\"Provides live AlphaEvolve simulation metrics, spoilage reductions, and evolved heuristic code.\",\"a2aAgentDefinition\":{\"jsonAgentCard\":\"{\\\"name\\\":\\\"inventory-replenishment-twin\\\",\\\"description\\\":\\\"Autonomous Inventory Replenishment Digital Twin\\\",\\\"url\\\":\\\"\${SERVICE_URL}/api/agent/replenish-query\\\",\\\"version\\\":\\\"1.0.0\\\",\\\"protocolVersion\\\":\\\"0.3.0\\\",\\\"capabilities\\\":{},\\\"defaultInputModes\\\":[\\\"text/plain\\\",\\\"application/json\\\"],\\\"defaultOutputModes\\\":[\\\"text/plain\\\",\\\"application/json\\\"],\\\"skills\\\":[]}\"}}'"
   echo ""
   echo "[DRY-RUN] Plan verification complete. Run without --dry-run to execute."
   exit 0
@@ -226,17 +226,16 @@ if [[ "${REGISTER_AGENT}" != "false" && -n "${ENGINE_ID}" ]]; then
   ACCESS_TOKEN=$(gcloud auth print-access-token 2>/dev/null || echo '')
   if [[ -n "${ACCESS_TOKEN}" ]]; then
     AGENT_URL="https://discoveryengine.googleapis.com/v1alpha/projects/${PROJECT_ID}/locations/global/collections/default_collection/engines/${ENGINE_ID}/assistants/default_assistant/agents?agentId=inventory-replenishment-twin"
-    AGENT_PAYLOAD=$(cat <<'JSON'
+    AGENT_PAYLOAD=$(cat <<JSON
 {
   "displayName": "Autonomous Inventory Replenishment Digital Twin",
   "description": "Provides live AlphaEvolve simulation metrics, spoilage reductions, and evolved heuristic code.",
-  "agentEndpoint": {
-    "endpointUri": "__SERVICE_URL__/api/agent/replenish-query"
+  "a2aAgentDefinition": {
+    "jsonAgentCard": "{\"name\":\"inventory-replenishment-twin\",\"description\":\"Autonomous Inventory Replenishment Digital Twin\",\"url\":\"${SERVICE_URL}/api/agent/replenish-query\",\"version\":\"1.0.0\",\"protocolVersion\":\"0.3.0\",\"capabilities\":{},\"defaultInputModes\":[\"text/plain\",\"application/json\"],\"defaultOutputModes\":[\"text/plain\",\"application/json\"],\"skills\":[]}"
   }
 }
 JSON
 )
-    AGENT_PAYLOAD="${AGENT_PAYLOAD/__SERVICE_URL__/${SERVICE_URL}}"
     AGENT_RESP_TMP=$(mktemp)
     trap 'rm -f "${AGENT_RESP_TMP}"' EXIT
 
