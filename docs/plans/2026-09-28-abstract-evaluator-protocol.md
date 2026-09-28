@@ -151,10 +151,12 @@ def test_evaluator_protocol_type_check():
 
         def evaluate(self, candidate_callable: Any):
             from alpha_evolve.models import EvaluationResult
+
             return EvaluationResult()
 
         def evaluate_holdout(self, candidate_callable: Any):
             from alpha_evolve.models import EvaluationResult
+
             return EvaluationResult()
 
     dummy = DummyEvaluator()
@@ -180,6 +182,7 @@ from alpha_evolve.models import EvaluationResult
 
 class EvaluationTier(str, Enum):
     """Execution tiers for AlphaEvolve evaluation."""
+
     SYNTAX = "tier_0_syntax"
     SMOKE = "tier_1_smoke"
     VALIDATION = "tier_2_validation"
@@ -188,6 +191,7 @@ class EvaluationTier(str, Enum):
 
 class TierResult(BaseModel):
     """Result of an individual evaluation tier."""
+
     tier: EvaluationTier
     passed: bool
     metrics: dict[str, float] = Field(default_factory=dict)
@@ -233,6 +237,7 @@ class TierResult(BaseModel):
 @runtime_checkable
 class EvaluatorProtocol(Protocol):
     """Protocol defining the interface for domain evaluators."""
+
     name: str
     primary_metric: str
     higher_is_better: bool
@@ -284,7 +289,9 @@ class MockLinearEvaluator(BaseEvaluator):
     def evaluate_smoke(self, candidate_callable: Any) -> TierResult:
         res = candidate_callable(0)
         if res < 0:
-            return TierResult.failure(EvaluationTier.SMOKE, "Negative output on zero", issue="neg_val")
+            return TierResult.failure(
+                EvaluationTier.SMOKE, "Negative output on zero", issue="neg_val"
+            )
         return TierResult.success(EvaluationTier.SMOKE, {"smoke_ok": 1.0})
 
     def evaluate_validation(self, candidate_callable: Any) -> TierResult:

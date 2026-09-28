@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import abc
+import time
 from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
-from alpha_evolve.models import EvaluationResult
+from alpha_evolve.models import (
+    AlphaEvolveEvaluationInsights,
+    AlphaEvolveEvaluationScores,
+    EvaluationResult,
+)
 
 
 class EvaluationTier(StrEnum):
@@ -80,3 +86,73 @@ class EvaluatorProtocol(Protocol):
     def evaluate(self, candidate_callable: Any) -> EvaluationResult: ...
 
     def evaluate_holdout(self, candidate_callable: Any) -> EvaluationResult: ...
+
+
+class BaseEvaluator(abc.ABC):
+    """Abstract base class orchestrating tiered candidate evaluation."""
+
+    name: str = "base_evaluator"
+    primary_metric: str = "score"
+    higher_is_better: bool = True
+    target_function_name: str = "compute"
+    smoke_timeout_s: float = 2.0
+    validation_timeout_s: float = 30.0
+
+    def setup(self) -> None:
+        """Hook called before evaluation runs to precompute constants or cache datasets."""
+        return None
+
+    def teardown(self) -> None:
+        """Hook called to release resources after evolution completes."""
+        return None
+
+    @abc.abstractmethod
+    def evaluate_smoke(self, candidate_callable: Any) -> TierResult:
+        """Tier 1: Fast sanity check (<100ms) verifying types, shapes, and constraints."""
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def evaluate_validation(self, candidate_callable: Any) -> TierResult:
+        """Tier 2: Full validation rollout computing primary fitness and diagnostic insights."""
+        raise NotImplementedError
+
+    def evaluate_holdout(self, candidate_callable: Any) -> TierResult:
+        """Tier 3: Locked out-of-sample evaluation to verify generalization without overfitting."""
+        return self.evaluate_validation(candidate_callable)
+
+    def evaluate(self, candidate_callable: Any) -> EvaluationResult:
+        """Orchestrate tiered execution: Tier 1 smoke test -> Tier 2 validation rollout."""
+        start_time = time.perf_counter()
+
+        # Tier 1: Smoke Check
+        smoke_result = self.evaluate_smoke(candidate_callable)
+        if not smoke_result.passed:
+            diag = smoke_result.insights.copy()
+            diag["tier"] = EvaluationTier.SMOKE.value
+            return EvaluationResult.failure(
+                error_message=smoke_result.error_message or "Smoke test failed.",
+                insights=diag,
+            )
+
+        # Tier 2: Validation Rollout
+        validation_result = self.evaluate_validation(candidate_callable)
+        elapsed = time.perf_counter() - start_time
+
+        if not validation_result.passed:
+            diag = validation_result.insights.copy()
+            diag["tier"] = EvaluationTier.VALIDATION.value
+            return EvaluationResult.failure(
+                error_message=validation_result.error_message or "Validation rollout failed.",
+                insights=diag,
+            )
+
+        return EvaluationResult(
+            status="SUCCESS",
+            scores=AlphaEvolveEvaluationScores.from_dict(validation_result.metrics),
+            insights=AlphaEvolveEvaluationInsights.from_dict(validation_result.insights),
+            execution_time_s=elapsed,
+        )
+
+    def __call__(self, candidate_callable: Any) -> EvaluationResult:
+        """Allow evaluator instances to be passed directly as callables."""
+        return self.evaluate(candidate_callable)
