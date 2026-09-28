@@ -119,8 +119,8 @@ curl -X POST \
   -d '{
     "displayName": "Autonomous Inventory Replenishment Digital Twin",
     "description": "Provides live AlphaEvolve simulation metrics, spoilage reductions, and evolved heuristic code.",
-    "agentEndpoint": {
-      "endpointUri": "'"${SERVICE_URL}"'/api/agent/replenish-query"
+    "a2aAgentDefinition": {
+      "jsonAgentCard": "{\"name\":\"inventory-replenishment-twin\",\"description\":\"Autonomous Inventory Replenishment Digital Twin\",\"url\":\"'"${SERVICE_URL}"'/api/agent/replenish-query\",\"version\":\"1.0.0\",\"protocolVersion\":\"0.3.0\",\"capabilities\":{},\"defaultInputModes\":[\"text/plain\",\"application/json\"],\"defaultOutputModes\":[\"text/plain\",\"application/json\"],\"skills\":[]}"
     }
   }'
 ```
