@@ -4,25 +4,129 @@ from __future__ import annotations
 
 import concurrent.futures
 import logging
+import multiprocessing
+import pickle
 import time
 import traceback
 from collections.abc import Callable
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Literal
 
-from .models import AlphaEvolveEvaluationScores, EvaluationResult, ProgramCandidate
+from .models import (
+    AlphaEvolveEvaluationInsights,
+    AlphaEvolveEvaluationScores,
+    EvaluationResult,
+    ProgramCandidate,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def _execute_in_process(
+@dataclass(frozen=True)
+class SandboxConfig:
+    """Configuration for candidate execution sandboxing."""
+
+    timeout_s: float = 30.0
+    max_memory_mb: int = 2048
+    sandbox_mode: Literal["process", "subprocess", "thread"] = "process"
+
+
+def _sandbox_child_worker(
+    code: str,
+    evaluator_bytes: bytes,
+    function_name: str,
+    max_memory_mb: int,
+    result_queue: Any,
+) -> None:
+    """Isolated child process entrypoint executed under spawn context."""
+    # Apply virtual memory limit on POSIX systems
+    if max_memory_mb > 0:
+        try:
+            import resource
+
+            bytes_limit = max_memory_mb * 1024 * 1024
+            resource.setrlimit(resource.RLIMIT_AS, (bytes_limit, bytes_limit))
+        except (ImportError, ValueError, OSError):
+            pass
+
+    start_time = time.perf_counter()
+
+    # Tier 0: Syntax and compilation check
+    try:
+        compiled_code = compile(code, "<candidate_program>", "exec")
+    except SyntaxError as e:
+        res = EvaluationResult.failure(
+            f"SyntaxError in candidate code: {e}",
+            insights={"tier": "tier_0", "error_type": "SyntaxError"},
+        )
+        result_queue.put(pickle.dumps(res))
+        return
+
+    module_scope: dict[str, Any] = {}
+    try:
+        exec(compiled_code, module_scope)
+    except MemoryError:
+        res = EvaluationResult.failure(
+            f"MemoryError during candidate initialization (exceeded {max_memory_mb}MB limit).",
+            insights={"tier": "sandbox_memory", "error_type": "MemoryError"},
+        )
+        result_queue.put(pickle.dumps(res))
+        return
+    except Exception as e:
+        res = EvaluationResult.failure(
+            f"Import or initialization exception: {e}\n{traceback.format_exc()}",
+            insights={"tier": "tier_0", "error_type": type(e).__name__},
+        )
+        result_queue.put(pickle.dumps(res))
+        return
+
+    if function_name not in module_scope:
+        res = EvaluationResult.failure(
+            f"Required function '{function_name}' was not defined in candidate code.",
+            insights={"tier": "tier_0", "missing_function": function_name},
+        )
+        result_queue.put(pickle.dumps(res))
+        return
+
+    candidate_callable = module_scope[function_name]
+
+    try:
+        evaluator_fn = pickle.loads(evaluator_bytes)
+    except Exception as e:
+        res = EvaluationResult.failure(
+            f"Failed to unpickle evaluator in child process: {e}",
+            insights={"tier": "sandbox_ipc", "error": str(e)},
+        )
+        result_queue.put(pickle.dumps(res))
+        return
+
+    # Tier 1 & 2: User Evaluator Harness
+    try:
+        result = evaluator_fn(candidate_callable)
+        result.execution_time_s = time.perf_counter() - start_time
+        result_queue.put(pickle.dumps(result))
+    except MemoryError:
+        res = EvaluationResult.failure(
+            f"MemoryError during candidate evaluation (exceeded {max_memory_mb}MB limit).",
+            insights={"tier": "sandbox_memory", "error_type": "MemoryError"},
+        )
+        result_queue.put(pickle.dumps(res))
+    except Exception as e:
+        res = EvaluationResult.failure(
+            f"Evaluation exception: {e}\n{traceback.format_exc()}",
+            insights={"tier": "tier_1_2", "exception": str(e)[:300]},
+        )
+        result_queue.put(pickle.dumps(res))
+
+
+def _execute_in_thread(
     code: str,
     evaluator_fn: Callable[[Any], EvaluationResult],
     function_name: str,
 ) -> EvaluationResult:
-    """Isolate program compilation and execution inside a distinct process."""
+    """Execute evaluation in-thread (used for unpicklable closures or thread mode)."""
     start_time = time.perf_counter()
 
-    # Tier 0: Syntax and compilation check
     try:
         compiled_code = compile(code, "<candidate_program>", "exec")
     except SyntaxError as e:
@@ -48,7 +152,6 @@ def _execute_in_process(
 
     candidate_callable = module_scope[function_name]
 
-    # Tier 1 & 2: User Evaluator Harness
     try:
         result = evaluator_fn(candidate_callable)
         result.execution_time_s = time.perf_counter() - start_time
@@ -60,12 +163,99 @@ def _execute_in_process(
         )
 
 
+def _run_in_process_sandbox(
+    code: str,
+    evaluator_fn: Callable[[Any], EvaluationResult],
+    function_name: str,
+    config: SandboxConfig,
+) -> EvaluationResult:
+    """Execute candidate in a dedicated spawned child process with unblockable timeout."""
+    try:
+        evaluator_bytes = pickle.dumps(evaluator_fn)
+    except Exception as e:
+        logger.debug("Evaluator callable cannot be pickled (%s); falling back to thread.", e)
+        return _execute_in_thread(code, evaluator_fn, function_name)
+
+    ctx = multiprocessing.get_context("spawn")
+    result_queue = ctx.Queue()
+
+    proc = ctx.Process(
+        target=_sandbox_child_worker,
+        args=(
+            code,
+            evaluator_bytes,
+            function_name,
+            config.max_memory_mb,
+            result_queue,
+        ),
+    )
+    proc.start()
+    proc.join(timeout=config.timeout_s)
+
+    if proc.is_alive():
+        logger.warning(
+            "Candidate process %s exceeded timeout of %.1fs; terminating...",
+            proc.pid,
+            config.timeout_s,
+        )
+        proc.terminate()
+        proc.join(timeout=0.3)
+        if proc.is_alive():
+            proc.kill()
+            proc.join(timeout=0.3)
+
+        return EvaluationResult(
+            status="TIMEOUT",
+            scores=AlphaEvolveEvaluationScores.from_dict({"score": -1e9}),
+            error_message=f"Evaluation exceeded {config.timeout_s}s timeout limit.",
+            execution_time_s=config.timeout_s,
+            insights=AlphaEvolveEvaluationInsights.from_dict(
+                {"tier": "sandbox_timeout", "timeout_s": str(config.timeout_s)}
+            ),
+        )
+
+    # Process terminated. Verify exit code
+    exitcode = proc.exitcode
+    if exitcode is not None and exitcode != 0:
+        sig_info = f"signal {-exitcode}" if exitcode < 0 else f"exitcode {exitcode}"
+        return EvaluationResult.failure(
+            f"Candidate process terminated abnormally ({sig_info}).",
+            insights={
+                "tier": "sandbox_crash",
+                "exitcode": str(exitcode),
+            },
+        )
+
+    try:
+        if not result_queue.empty():
+            serialized_res = result_queue.get_nowait()
+            res = pickle.loads(serialized_res)
+            if isinstance(res, EvaluationResult):
+                return res
+    except Exception as e:
+        return EvaluationResult.failure(
+            f"Failed to read result from sandbox queue: {e}",
+            insights={"tier": "sandbox_ipc"},
+        )
+
+    return EvaluationResult.failure(
+        "Candidate process completed without returning an evaluation result.",
+        insights={"tier": "sandbox_empty"},
+    )
+
+
 class WorkerPool:
     """Manages concurrent evaluation of program candidates with timeouts and isolation."""
 
-    def __init__(self, max_workers: int = 4, timeout_s: float = 30.0) -> None:
+    def __init__(
+        self,
+        max_workers: int = 4,
+        timeout_s: float = 30.0,
+        sandbox_config: SandboxConfig | None = None,
+    ) -> None:
         self.max_workers = max_workers
         self.timeout_s = timeout_s
+        self.sandbox_config = sandbox_config or SandboxConfig(timeout_s=timeout_s)
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
 
     def evaluate_candidate(
@@ -74,22 +264,41 @@ class WorkerPool:
         evaluator_fn: Callable[[Any], EvaluationResult],
         function_name: str,
     ) -> EvaluationResult:
-        """Run candidate evaluation with strict wall-clock timeout."""
+        """Run candidate evaluation in an isolated sandbox with strict wall-clock timeout."""
+        if self.sandbox_config.sandbox_mode == "thread":
+            future = self.executor.submit(
+                _execute_in_thread, candidate.code, evaluator_fn, function_name
+            )
+            try:
+                return future.result(timeout=self.timeout_s)
+            except concurrent.futures.TimeoutError:
+                return EvaluationResult(
+                    status="TIMEOUT",
+                    scores=AlphaEvolveEvaluationScores.from_dict({"score": -1e9}),
+                    error_message=f"Evaluation exceeded {self.timeout_s}s timeout limit.",
+                    execution_time_s=self.timeout_s,
+                    insights=AlphaEvolveEvaluationInsights.from_dict(
+                        {"tier": "sandbox_timeout", "timeout_s": str(self.timeout_s)}
+                    ),
+                )
+            except Exception as e:
+                return EvaluationResult.failure(f"Worker execution crashed: {e}")
+
+        # Process sandbox execution
         future = self.executor.submit(
-            _execute_in_process, candidate.code, evaluator_fn, function_name
+            _run_in_process_sandbox,
+            candidate.code,
+            evaluator_fn,
+            function_name,
+            self.sandbox_config,
         )
         try:
-            return future.result(timeout=self.timeout_s)
+            return future.result(timeout=self.timeout_s + 2.0)
         except concurrent.futures.TimeoutError:
-            logger.warning(
-                "Candidate %s timed out after %.1f seconds",
-                candidate.program_id,
-                self.timeout_s,
-            )
             return EvaluationResult(
                 status="TIMEOUT",
                 scores=AlphaEvolveEvaluationScores.from_dict({"score": -1e9}),
-                error_message=f"Evaluation exceeded {self.timeout_s}s timeout limit.",
+                error_message=f"Worker supervisor exceeded {self.timeout_s}s timeout limit.",
                 execution_time_s=self.timeout_s,
             )
         except Exception as e:
@@ -97,4 +306,4 @@ class WorkerPool:
 
     def shutdown(self) -> None:
         """Shut down the worker pool."""
-        self.executor.shutdown(wait=False)
+        self.executor.shutdown(wait=False, cancel_futures=True)
