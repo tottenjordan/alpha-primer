@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 
 from .client import AlphaEvolveClient, MockAlphaEvolveClient
 from .controller import EvolutionController
+from .evaluators import BaseEvaluator
 from .models import EvaluationResult, ExperimentConfig, ProgramCandidate, RunSettings
 from .utils import export_artifact
 
@@ -24,14 +25,27 @@ class AlphaEvolveExperiment:
     def __init__(
         self,
         config: ExperimentConfig,
-        evaluator_fn: Callable[[Any], EvaluationResult],
-        target_function_name: str,
-        primary_metric: str = "cost_reduction_pct",
+        evaluator: BaseEvaluator | Callable[[Any], EvaluationResult] | None = None,
+        evaluator_fn: Callable[[Any], EvaluationResult] | None = None,
+        target_function_name: str | None = None,
+        primary_metric: str | None = None,
     ) -> None:
         self.config = config
-        self.evaluator_fn = evaluator_fn
-        self.target_function_name = target_function_name
-        self.primary_metric = primary_metric
+        resolved_evaluator = evaluator if evaluator is not None else evaluator_fn
+        if resolved_evaluator is None:
+            raise ValueError("Either 'evaluator' or 'evaluator_fn' must be provided.")
+
+        self.evaluator: BaseEvaluator | Callable[[Any], EvaluationResult] = resolved_evaluator
+        if isinstance(resolved_evaluator, BaseEvaluator):
+            self.evaluator_fn: Callable[[Any], EvaluationResult] = resolved_evaluator.evaluate
+            self.target_function_name: str = (
+                target_function_name or resolved_evaluator.target_function_name
+            )
+            self.primary_metric: str = primary_metric or resolved_evaluator.primary_metric
+        else:
+            self.evaluator_fn = resolved_evaluator
+            self.target_function_name = target_function_name or "compute"
+            self.primary_metric = primary_metric or "cost_reduction_pct"
 
     @classmethod
     def from_files(
@@ -39,9 +53,10 @@ class AlphaEvolveExperiment:
         experiment_name: str,
         instructions_path: str | Path,
         seed_program_path: str | Path,
-        evaluator_fn: Callable[[Any], EvaluationResult],
-        target_function_name: str,
-        primary_metric: str = "cost_reduction_pct",
+        evaluator: BaseEvaluator | Callable[[Any], EvaluationResult] | None = None,
+        evaluator_fn: Callable[[Any], EvaluationResult] | None = None,
+        target_function_name: str | None = None,
+        primary_metric: str | None = None,
         max_programs: int = 20,
         parallel_workers: int = 4,
         dry_run: bool | None = None,
@@ -81,6 +96,7 @@ class AlphaEvolveExperiment:
 
         return cls(
             config=config,
+            evaluator=evaluator,
             evaluator_fn=evaluator_fn,
             target_function_name=target_function_name,
             primary_metric=primary_metric,
@@ -102,6 +118,7 @@ class AlphaEvolveExperiment:
         controller = EvolutionController(
             config=self.config,
             client=client,
+            evaluator=self.evaluator,
             evaluator_fn=self.evaluator_fn,
             target_function_name=self.target_function_name,
             primary_metric=self.primary_metric,

@@ -182,7 +182,65 @@ make check
 
 ---
 
-## 4. Key Repository Map
+## 4. Authoring Custom Evaluators (`BaseEvaluator`)
+
+AlphaEvolve uses a **multi-tiered evaluation architecture** (`src/alpha_evolve/evaluators/`) to accelerate evolutionary loops by early-exiting broken candidates before running expensive simulations:
+
+1. **Tier 1 (Smoke Sanity Check, <100ms)**: Fast input/output shape, type (`np.ndarray`), numerical validity (no NaN/Inf), and domain constraint checks.
+2. **Tier 2 (Validation Rollout, 1s-30s)**: Full simulation computing primary fitness score and diagnostic feedback strings.
+3. **Tier 3 (Holdout Generalization)**: Out-of-sample evaluation on unseen test datasets to detect overfitting.
+
+### Creating a Domain Evaluator Subclass
+
+To create a new evaluator for your domain:
+1. Subclass `BaseEvaluator` from `alpha_evolve.evaluators`.
+2. Define class attributes: `name`, `primary_metric`, `higher_is_better`, and `target_function_name`.
+3. Implement `evaluate_smoke()` and `evaluate_validation()`.
+4. (Optional) Implement `setup()` to cache datasets and `evaluate_holdout()` for out-of-sample testing.
+
+```python
+from typing import Any
+from alpha_evolve.evaluators import BaseEvaluator, EvaluationTier, TierResult
+
+
+class MyCustomEvaluator(BaseEvaluator):
+    name = "my_custom_evaluator"
+    primary_metric = "cost_reduction_pct"
+    higher_is_better = True
+    target_function_name = "solve"
+
+    def evaluate_smoke(self, candidate_callable: Any) -> TierResult:
+        try:
+            out = candidate_callable(0)
+            if out < 0:
+                return TierResult.failure(EvaluationTier.SMOKE, "Output must be non-negative")
+            return TierResult.success(EvaluationTier.SMOKE, {"smoke_passed": 1.0})
+        except Exception as e:
+            return TierResult.failure(EvaluationTier.SMOKE, f"Crashed: {e}")
+
+    def evaluate_validation(self, candidate_callable: Any) -> TierResult:
+        # Run simulation and score
+        score = candidate_callable(10)
+        return TierResult.success(
+            EvaluationTier.VALIDATION,
+            metrics={"cost_reduction_pct": float(score)},
+            insights={"summary": f"Achieved score {score}"},
+        )
+```
+
+Pass the evaluator instance directly to `AlphaEvolveExperiment` or `EvolutionController`:
+```python
+experiment = AlphaEvolveExperiment.from_files(
+    experiment_name="My Optimization",
+    instructions_path="instructions.md",
+    seed_program_path="src/program.py",
+    evaluator=MyCustomEvaluator(),
+)
+```
+
+---
+
+## 5. Key Repository Map
 
 ```
 alpha-primer/
@@ -190,7 +248,7 @@ alpha-primer/
 │   ├── src/
 │   │   ├── program.py                 # Candidate policy (# EVOLVE-BLOCK)
 │   │   ├── simulator.py               # Vectorized FIFO inventory digital twin engine
-│   │   ├── evaluate.py                # 3-tier validation harness (Smoke, Validation, Holdout)
+│   │   ├── evaluate.py                # InventoryReplenishmentEvaluator (3-tier validation harness)
 │   │   └── report.py                  # Post-evolution benchmark reporting
 │   ├── tests/                         # Unit tests for simulator and evaluator
 │   ├── DATASET.md                     # Complete dataset specification (50 SKUs, 90 days)
@@ -199,6 +257,9 @@ alpha-primer/
 ├── src/alpha_evolve/                  # Core client library & orchestration runtime
 │   ├── client.py                      # Discovery Engine v1alpha REST client with ADC
 │   ├── controller.py                  # Evolutionary search loop manager
+│   ├── evaluators/                    # Abstract Evaluator Protocol & BaseEvaluator ABC
+│   │   ├── __init__.py                # Exported protocol schemas and base classes
+│   │   └── base.py                    # EvaluationTier, TierResult, EvaluatorProtocol, BaseEvaluator
 │   ├── models.py                      # Type-safe Pydantic schemas (scores, insights, configs)
 │   ├── workers.py                     # Signal-safe multi-process evaluation worker pool
 │   └── dashboard/                     # Trajectory aggregation & dashboard compiler
@@ -218,8 +279,9 @@ alpha-primer/
 
 ---
 
-## 5. Further Reading & Documentation
+## 6. Further Reading & Documentation
 
+- [**Abstract Evaluator Protocol**](notes/abstract_evaluator_protocol.md): Multi-tier evaluation design, short-circuiting architecture, lifecycle hooks, and authoring guide.
 - [**Dataset Specification**](../examples/inventory_replenishment/DATASET.md): Full breakdown of SKU distributions, Poisson demand, promo lifts, and cost parameters.
 - [**Architecture Diagrams**](architecture/README.md): Reference diagrams for the hybrid evolutionary architecture, Cloud Run integration, and digital twin loop.
 - [**AlphaEvolve REST Wire Specification**](notes/alphaevolve_api_wire_spec.md): Complete HTTP wire schemas for Discovery Engine v1alpha.

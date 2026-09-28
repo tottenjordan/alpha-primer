@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.table import Table
 
 from .client import AlphaEvolveClient, MockAlphaEvolveClient
+from .evaluators import BaseEvaluator
 from .models import (
     AlphaEvolveEvaluationSubmission,
     AlphaEvolveProgramEvaluation,
@@ -31,15 +32,29 @@ class EvolutionController:
         self,
         config: ExperimentConfig,
         client: AlphaEvolveClient | MockAlphaEvolveClient,
-        evaluator_fn: Callable[[Any], EvaluationResult],
-        target_function_name: str,
-        primary_metric: str = "cost_reduction_pct",
+        evaluator: BaseEvaluator | Callable[[Any], EvaluationResult] | None = None,
+        evaluator_fn: Callable[[Any], EvaluationResult] | None = None,
+        target_function_name: str | None = None,
+        primary_metric: str | None = None,
     ) -> None:
         self.config = config
         self.client = client
-        self.evaluator_fn = evaluator_fn
-        self.target_function_name = target_function_name
-        self.primary_metric = primary_metric
+
+        resolved_evaluator = evaluator if evaluator is not None else evaluator_fn
+        if resolved_evaluator is None:
+            raise ValueError("Either 'evaluator' or 'evaluator_fn' must be provided.")
+
+        self.evaluator: BaseEvaluator | Callable[[Any], EvaluationResult] = resolved_evaluator
+        if isinstance(resolved_evaluator, BaseEvaluator):
+            self.evaluator_fn: Callable[[Any], EvaluationResult] = resolved_evaluator.evaluate
+            self.target_function_name: str = (
+                target_function_name or resolved_evaluator.target_function_name
+            )
+            self.primary_metric: str = primary_metric or resolved_evaluator.primary_metric
+        else:
+            self.evaluator_fn = resolved_evaluator
+            self.target_function_name = target_function_name or "compute"
+            self.primary_metric = primary_metric or "cost_reduction_pct"
 
         self.worker_pool = WorkerPool(
             max_workers=config.run_settings.parallel_workers,
@@ -52,6 +67,9 @@ class EvolutionController:
 
     def run(self) -> ProgramCandidate:
         """Execute the end-to-end evolutionary search loop."""
+        if isinstance(self.evaluator, BaseEvaluator):
+            self.evaluator.setup()
+
         console.print(
             f"[bold cyan]🚀 Starting AlphaEvolve Optimization:[/bold cyan] {self.config.experiment_name}"
         )
@@ -179,6 +197,8 @@ class EvolutionController:
 
         finally:
             self.worker_pool.shutdown()
+            if isinstance(self.evaluator, BaseEvaluator):
+                self.evaluator.teardown()
 
         console.print(table)
         console.print(

@@ -18,6 +18,7 @@ Top-level index of session notes and key repository files (kept under 200 lines)
 - [ci_tooling.md](ci_tooling.md) — uv lockfile generation, internal Airlock proxies vs public PyPI index for GitHub Actions runners.
 - [cloud_resources_and_execution.md](cloud_resources_and_execution.md) — Cloud resources created during execution, serverless Discovery Engine architecture, UI/observability, and local simulation runtime.
 - [interactive_dashboard.md](interactive_dashboard.md) — Interactive executive dashboard architecture, dual-mode web serving, Safe DOM, Retina Canvas 2D, and What-If sandbox.
+- [abstract_evaluator_protocol.md](abstract_evaluator_protocol.md) — Multi-tier evaluation protocol (syntax, smoke, validation, holdout), early-exit performance, and custom domain evaluator authoring guide.
 - [google_cloud_run_hosting.md](google_cloud_run_hosting.md) — Cloud Run containerization, deployment automation, and Gemini Enterprise (Discovery Engine v1alpha) external agent registration.
 - [../architecture/README.md](../architecture/README.md) — Reference architectures and workflow diagrams (end-to-end evolutionary topology, Cloud Run integration, digital twin loop).
 

@@ -21,7 +21,9 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from alpha_evolve.experiment import AlphaEvolveExperiment
-from examples.inventory_replenishment.src.evaluate import evaluate_replenishment_policy
+from examples.inventory_replenishment.src.evaluate import (
+    InventoryReplenishmentEvaluator,
+)
 from examples.inventory_replenishment.src.program import compute_replenishment_orders
 from examples.inventory_replenishment.src.report import evaluate_on_locked_holdout
 
@@ -58,13 +60,13 @@ def main() -> None:
     instructions_path = example_dir / "instructions.md"
     seed_program_path = example_dir / "src" / "program.py"
 
+    evaluator = InventoryReplenishmentEvaluator()
+
     experiment = AlphaEvolveExperiment.from_files(
         experiment_name="Inventory Replenishment Digital Twin (BASF Reference)",
         instructions_path=instructions_path,
         seed_program_path=seed_program_path,
-        evaluator_fn=evaluate_replenishment_policy,
-        target_function_name="compute_replenishment_orders",
-        primary_metric="cost_reduction_pct",
+        evaluator=evaluator,
         max_programs=args.max_programs,
         parallel_workers=args.workers,
         dry_run=args.dry_run,
