@@ -176,3 +176,63 @@ def test_worker_pool_parallel_sandboxing() -> None:
             assert res.scores.to_dict()["score"] == 10.0 + i
     finally:
         pool.shutdown()
+
+
+def test_subprocess_sandbox_normal_execution() -> None:
+    pool = WorkerPool(
+        max_workers=2,
+        timeout_s=5.0,
+        sandbox_config=SandboxConfig(timeout_s=5.0, sandbox_mode="subprocess"),
+    )
+    try:
+        cand = ProgramCandidate(
+            program_id="test/subproc_01",
+            code="def compute(x: int) -> int:\n    return x * 5\n",
+        )
+        result = pool.evaluate_candidate(cand, _simple_evaluator, "compute")
+        assert result.status == "SUCCESS"
+        assert result.scores.to_dict()["score"] == 50.0
+    finally:
+        pool.shutdown()
+
+
+def test_subprocess_sandbox_infinite_loop_timeout_and_kill() -> None:
+    pool = WorkerPool(
+        max_workers=1,
+        timeout_s=0.5,
+        sandbox_config=SandboxConfig(timeout_s=0.5, sandbox_mode="subprocess"),
+    )
+    try:
+        cand = ProgramCandidate(
+            program_id="test/subproc_loop",
+            code="def compute(x: int) -> int:\n    while True:\n        pass\n    return x\n",
+        )
+        start = time.perf_counter()
+        result = pool.evaluate_candidate(cand, _simple_evaluator, "compute")
+        elapsed = time.perf_counter() - start
+
+        assert result.status == "TIMEOUT"
+        assert result.scores.to_dict()["score"] == -1e9
+        assert elapsed < 2.5
+    finally:
+        pool.shutdown()
+
+
+def test_subprocess_sandbox_hard_crash_isolation() -> None:
+    pool = WorkerPool(
+        max_workers=1,
+        timeout_s=5.0,
+        sandbox_config=SandboxConfig(timeout_s=5.0, sandbox_mode="subprocess"),
+    )
+    try:
+        cand = ProgramCandidate(
+            program_id="test/subproc_crash",
+            code="import os\ndef compute(x: int) -> int:\n    os._exit(42)\n",
+        )
+        result = pool.evaluate_candidate(cand, _simple_evaluator, "compute")
+        assert result.status == "FAILED"
+        assert "42" in (result.error_message or "") or "42" in result.insights.to_dict().get(
+            "exitcode", ""
+        )
+    finally:
+        pool.shutdown()
