@@ -7,7 +7,7 @@ import time
 from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from alpha_evolve.models import (
     AlphaEvolveEvaluationInsights,
@@ -35,20 +35,28 @@ class TierResult(BaseModel):
     error_message: str | None = None
     execution_time_s: float = 0.0
 
+    @field_validator("insights", mode="before")
+    @classmethod
+    def _coerce_insights(cls, v: Any) -> Any:
+        if isinstance(v, dict):
+            return {str(k): str(val) for k, val in v.items()}
+        return v
+
     @classmethod
     def success(
         cls,
         tier: EvaluationTier,
         metrics: dict[str, float] | None = None,
-        insights: dict[str, str] | None = None,
+        insights: dict[str, Any] | None = None,
         execution_time_s: float = 0.0,
     ) -> TierResult:
         """Construct a successful tier execution result."""
+        str_insights = {str(k): str(v) for k, v in (insights or {}).items()}
         return cls(
             tier=tier,
             passed=True,
             metrics=metrics or {},
-            insights=insights or {},
+            insights=str_insights,
             execution_time_s=execution_time_s,
         )
 
@@ -58,11 +66,11 @@ class TierResult(BaseModel):
         tier: EvaluationTier,
         error_message: str,
         issue: str | None = None,
-        insights: dict[str, str] | None = None,
+        insights: dict[str, Any] | None = None,
         execution_time_s: float = 0.0,
     ) -> TierResult:
         """Construct a failed tier execution result with diagnostic metadata."""
-        diag = insights.copy() if insights else {}
+        diag = {str(k): str(v) for k, v in (insights or {}).items()}
         if issue:
             diag["issue"] = issue
         return cls(
