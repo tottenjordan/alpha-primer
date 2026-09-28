@@ -75,9 +75,31 @@ def test_server_agent_replenish_query() -> None:
     code, headers, body = handle_api_request("/api/agent/replenish-query")
     assert code == 200
     assert body["status"] == "success"
+    assert body["agent_id"] == "inventory-replenishment-twin"
     assert body["use_case"] == "inventory_replenishment"
     assert "Gen 30 Champion reduces supply chain cost" in body["summary"]
+    assert (
+        "### 🌾 AlphaEvolve Autonomous Inventory Replenishment Agent" in body["grounding_markdown"]
+    )
     assert "metrics" in body
     assert body["metrics"]["cost_reduction_pct"] > 30.0
     assert len(body["key_innovations"]) == 4
     assert headers["Content-Type"] == "application/json"
+
+
+def test_server_agent_replenish_query_with_what_if_payload() -> None:
+    payload = {
+        "query": "what-if",
+        "lead_time_delay": 2.0,
+        "promo_spike": 0.3,
+    }
+    code, headers, body = handle_api_request("/api/agent/replenish-query", payload=payload)
+    assert code == 200
+    assert body["status"] == "success"
+    assert body["query_type"] == "what-if"
+    assert "what_if_stress_test" in body
+    stress = body["what_if_stress_test"]
+    assert stress["lead_time_delay_days"] == 2.0
+    assert stress["promo_demand_spike_pct"] == 30.0
+    assert stress["projected_cost_increase_pct"] > 0.0
+    assert "Champion policy absorbs shocks" in stress["resilience_recommendation"]
