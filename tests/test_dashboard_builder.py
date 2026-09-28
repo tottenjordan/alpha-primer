@@ -64,6 +64,16 @@ def test_dashboard_multi_use_case_switcher_elements(tmp_path: Path) -> None:
     assert 'id="active-use-case-title"' in content
 
 
+def test_dashboard_client_use_case_switching_logic(tmp_path: Path) -> None:
+    """Verify JavaScript includes switchUseCase function and Safe DOM re-binding."""
+    html_path = build_dashboard_html(output_dir=tmp_path)
+    content = html_path.read_text(encoding="utf-8")
+
+    assert "switchUseCase" in content
+    assert "currentUseCaseId" in content
+    assert "innerHTML" not in content  # Strict enterprise rule
+
+
 def test_build_dashboard_html_safe_dom_compliance(tmp_path: Path) -> None:
     html_path = build_dashboard_html(output_dir=tmp_path)
     assert html_path.exists()
