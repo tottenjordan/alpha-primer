@@ -139,6 +139,11 @@ Open **[http://127.0.0.1:8080](http://127.0.0.1:8080)** in your browser.
    - High-visibility AST code diff viewer powered by client-side LCS diffing and zero-dependency Python syntax highlighting.
    - Toggle between **Split** (side-by-side) and **Unified** diffs with line badges and foldable unchanged sections.
    - Use the **Milestone AST Stepper** to inspect exact code mutations between generations.
+5. **Multi-Use-Case Domain Switcher**:
+   - Seamlessly switch domains in the top navigation bar between:
+     - 📦 **Retail & Perishable Inventory**: 90-day simulation tracking inventory on hand, in transit, FIFO spoilage waste, and $(s, S)$ vs. AlphaEvolve lookahead policies.
+     - 🚚 **Dynamic Fleet Routing (VRPTW)**: 12-hour simulation tracking fleet travel costs, vehicle routing distance, time-window delivery deadlines, and greedy nearest-neighbor vs. AlphaEvolve regret-2 / 2-opt traffic-aware heuristics.
+   - Instant Safe DOM re-binding of all KPI cards, milestone ribbons, archetypes tables, and code diff AST selectors with zero page reload latency.
 
 ---
 
