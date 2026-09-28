@@ -40,6 +40,9 @@ def compute_replenishment_orders(
    Alongside numerical scores, the evaluator returns structured diagnostic **Insights** explaining whether losses arose from spoilage cohorts or stockouts.
 3. **Locked Holdout Test (Days 66–90)**: Evaluated only once after evolution finishes in [`src/report.py`](src/report.py) to prove that the discovered heuristic generalizes out-of-sample.
 
+> [!NOTE]
+> For a full specification of the 50-SKU catalog, Poisson demand generation, promo lifts, FIFO cohort dynamics, unit economics, and causal state dictionaries, see [**DATASET.md**](DATASET.md).
+
 ---
 
 ## 3. How to Run

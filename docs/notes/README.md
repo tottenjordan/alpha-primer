@@ -7,6 +7,7 @@ Top-level index of session notes and key repository files (kept under 200 lines)
 - [CODE_STANDARDS.md](../../CODE_STANDARDS.md) — Engineering guidelines, tooling standards (uv, ruff, ty, pytest), and collaboration rules.
 - [GEMINI.md](../../GEMINI.md) — Agent context and instructions referencing CODE_STANDARDS.md.
 - [USE_CASE.md](../../USE_CASE.md) — Specification for the Multi-Echelon & Perishable Inventory Replenishment Digital Twin candidate use case.
+- [DATASET.md](../../examples/inventory_replenishment/DATASET.md) — Technical dataset specification for the inventory replenishment digital twin benchmark.
 - `.env` — Local environment configuration.
 
 ## Topic Notes
