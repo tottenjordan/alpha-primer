@@ -240,7 +240,47 @@ experiment = AlphaEvolveExperiment.from_files(
 
 ---
 
-## 5. Key Repository Map
+## 5. Candidate Execution Sandboxing & Security
+
+During evolutionary search, LLMs generate arbitrary Python code mutations that are executed iteratively. To protect the host system, prevent runaway CPU loops, isolate segfaults or fatal exits, and restrict unbounded memory growth, AlphaEvolve provides **OS-level sandboxing** in `alpha_evolve.workers`:
+
+### Sandbox Modes
+
+Configured via `RunSettings.sandbox_mode` in `alpha_evolve.models`:
+
+1. **`process` (Default, Recommended for Production)**:
+   - Spawns candidate evaluation in an isolated POSIX process (`multiprocessing.get_context("spawn")`).
+   - Traps fatal terminations (`os._exit()`, `sys.exit()`, segfaults) without terminating the controller.
+   - Enforces virtual memory caps (`RLIMIT_AS`) on POSIX systems via `resource.setrlimit`.
+   - Employs escalating unblockable termination: graceful `SIGTERM`, followed by non-catchable `SIGKILL` on timeout expiration to prevent zombie CPU starvation.
+   - Gracefully falls back to thread execution for unpicklable local closures/lambdas.
+
+2. **`subprocess`**:
+   - Executes candidate evaluation in a completely clean, isolated OS process via `subprocess.Popen` running `python -m alpha_evolve.workers`.
+   - Completely resets the Python interpreter runtime, garbage collection state, and memory space.
+   - Ideal for untrusted multi-tenant execution or code with native C extensions.
+
+3. **`thread` (Lightweight / Local Debugging)**:
+   - Evaluates candidates in a `ThreadPoolExecutor` within the controller process.
+   - Minimum spawning overhead; suitable for fast unit testing or environments without process spawning support.
+
+### Configuring Sandboxing in Code
+
+```python
+from alpha_evolve.models import EvolutionConfig, RunSettings
+
+config = EvolutionConfig(
+    run_settings=RunSettings(
+        max_evaluation_time_s=30.0,  # Max seconds before SIGTERM/SIGKILL escalation
+        max_memory_mb=2048,  # Hard virtual memory limit (RLIMIT_AS) in MB
+        sandbox_mode="process",  # "process" | "subprocess" | "thread"
+    )
+)
+```
+
+---
+
+## 6. Key Repository Map
 
 ```
 alpha-primer/
@@ -261,7 +301,7 @@ alpha-primer/
 │   │   ├── __init__.py                # Exported protocol schemas and base classes
 │   │   └── base.py                    # EvaluationTier, TierResult, EvaluatorProtocol, BaseEvaluator
 │   ├── models.py                      # Type-safe Pydantic schemas (scores, insights, configs)
-│   ├── workers.py                     # Signal-safe multi-process evaluation worker pool
+│   ├── workers.py                     # True process/subprocess sandboxed worker pool
 │   └── dashboard/                     # Trajectory aggregation & dashboard compiler
 ├── dashboard/                         # Web dashboard assets
 │   ├── index.html                     # Safe DOM, Retina Canvas 2D, LCS diff engine
@@ -279,8 +319,9 @@ alpha-primer/
 
 ---
 
-## 6. Further Reading & Documentation
+## 7. Further Reading & Documentation
 
+- [**Candidate Execution Sandboxing**](notes/candidate_sandboxing.md): Process isolation architecture, OS-level `RLIMIT_AS` memory capping, and SIGKILL termination escalation.
 - [**Abstract Evaluator Protocol**](notes/abstract_evaluator_protocol.md): Multi-tier evaluation design, short-circuiting architecture, lifecycle hooks, and authoring guide.
 - [**Dataset Specification**](../examples/inventory_replenishment/DATASET.md): Full breakdown of SKU distributions, Poisson demand, promo lifts, and cost parameters.
 - [**Architecture Diagrams**](architecture/README.md): Reference diagrams for the hybrid evolutionary architecture, Cloud Run integration, and digital twin loop.
