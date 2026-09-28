@@ -754,9 +754,20 @@ def generate_inventory_trajectory_dataset(
         },
     }
 
+    target_dir = output_dir if output_dir is not None else RECORDS_DIR
+    fleet_trajectory_path = target_dir / "fleet_routing_trajectory.json"
+    if not fleet_trajectory_path.exists():
+        fleet_trajectory_path = RECORDS_DIR / "fleet_routing_trajectory.json"
+
+    if fleet_trajectory_path.exists():
+        try:
+            fleet_data = json.loads(fleet_trajectory_path.read_text(encoding="utf-8"))
+            master_bundle["use_cases"]["fleet_routing"] = fleet_data
+        except Exception:
+            pass
+
     # Save to records/ (or custom output_dir if specified)
     if write_files:
-        target_dir = output_dir if output_dir is not None else RECORDS_DIR
         target_dir.mkdir(parents=True, exist_ok=True)
         (target_dir / "inventory_replenishment_trajectory.json").write_text(
             json.dumps(use_case_data, indent=2), encoding="utf-8"

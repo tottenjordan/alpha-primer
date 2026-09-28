@@ -242,6 +242,21 @@ def generate_fleet_routing_trajectory_dataset(
         (target_dir / "fleet_routing_trajectory.json").write_text(
             json.dumps(use_case_data, indent=2), encoding="utf-8"
         )
+        master_path = target_dir / "master_trajectories.json"
+        if not master_path.exists() and (RECORDS_DIR / "master_trajectories.json").exists():
+            master_path = RECORDS_DIR / "master_trajectories.json"
+
+        if master_path.exists():
+            try:
+                master = json.loads(master_path.read_text(encoding="utf-8"))
+                if "use_cases" not in master:
+                    master["use_cases"] = {}
+                master["use_cases"]["fleet_routing"] = use_case_data
+                (target_dir / "master_trajectories.json").write_text(
+                    json.dumps(master, indent=2), encoding="utf-8"
+                )
+            except Exception:
+                pass
 
     return use_case_data
 
