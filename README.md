@@ -34,6 +34,9 @@ AlphaEvolve is Google's agentic evolutionary coding capability powered by Gemini
 
 ## Quickstart
 
+> [!TIP]
+> For a detailed walkthrough of all execution modes, digital twin replay features, Cloud Run setup, and architecture maps, see the full [**Alpha Primer User Guide**](docs/USER_GUIDE.md).
+
 ### 1. Prerequisites
 
 - Python `>=3.11`
