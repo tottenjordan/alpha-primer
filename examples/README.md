@@ -9,6 +9,7 @@ This directory contains standalone, end-to-end AlphaEvolve code samples demonstr
 | Directory | Vertical | Domain | Method / Approach | Evaluation Paradigm | Primary Metric |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | [`inventory_replenishment/`](inventory_replenishment/README.md) | Retail & Grocery | Supply Chain & Warehousing | Dynamic $(s, S)$ with FIFO Perishable Expiration | **Simulation** (Digital Twin) | Total Cost Reduction % |
+| [`fleet_routing/`](fleet_routing/README.md) | Logistics & Transport | Last-Mile Urban Delivery | VRPTW with Dynamic Traffic & Insertion Heuristics | **Simulation** (Digital Twin) | Score (Cost Reduction + SLA) |
 
 ---
 
