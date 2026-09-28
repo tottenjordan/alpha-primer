@@ -8,10 +8,14 @@ http.server.ThreadingHTTPServer fallback).
 
 from __future__ import annotations
 
+import datetime
 import json
 import os
+import queue
 from pathlib import Path
 from typing import Any
+
+from alpha_evolve.dashboard.telemetry_broker import TelemetryEvent, get_global_broker
 
 ROOT_DIR = Path(__file__).resolve().parent
 DASHBOARD_DIR = ROOT_DIR / "dashboard"
@@ -217,6 +221,31 @@ def handle_api_request(
 
         return 200, headers, response_body
 
+    if path == "/api/live/state":
+        headers["Content-Type"] = "application/json"
+        broker = get_global_broker()
+        return 200, headers, broker.get_current_state()
+
+    if path == "/api/live/candidates":
+        headers["Content-Type"] = "application/json"
+        if not payload:
+            return 400, headers, {"detail": "Missing candidate payload dictionary."}
+        broker = get_global_broker()
+        event: TelemetryEvent = {
+            "event_type": "candidate_evaluated",
+            "timestamp_utc": datetime.datetime.now(datetime.UTC).isoformat(),
+            "data": payload,
+        }
+        broker.publish(event)
+        return (
+            200,
+            headers,
+            {
+                "status": "accepted",
+                "evaluated_count": broker.get_current_state()["evaluated_count"],
+            },
+        )
+
     return 404, headers, {"detail": "Not found"}
 
 
@@ -272,6 +301,58 @@ try:
         if code != 200:
             raise HTTPException(status_code=code, detail=body.get("detail", "Error"))
         return JSONResponse(content=body)
+
+    @app.get("/api/live/state", tags=["Telemetry"])
+    def get_live_state() -> Any:
+        code, _, body = handle_api_request("/api/live/state")
+        return JSONResponse(content=body)
+
+    @app.post("/api/live/candidates", tags=["Telemetry"])
+    async def post_live_candidate(request: Request) -> Any:
+        try:
+            payload = await request.json()
+        except Exception:
+            payload = {}
+        code, _, body = handle_api_request("/api/live/candidates", payload=payload)
+        return JSONResponse(content=body, status_code=code)
+
+    @app.get("/api/stream/events", tags=["Telemetry"])
+    async def stream_events(request: Request) -> Any:
+        from fastapi.responses import StreamingResponse
+
+        broker = get_global_broker()
+        sub_queue = broker.subscribe()
+
+        async def event_generator():
+            try:
+                # Send initial state snapshot as first event
+                state = broker.get_current_state()
+                yield f"event: state_snapshot\ndata: {json.dumps(state)}\n\n"
+
+                import asyncio
+
+                while True:
+                    if await request.is_disconnected():
+                        break
+                    try:
+                        # Non-blocking get from thread queue
+                        event = sub_queue.get_nowait()
+                        yield f"event: {event['event_type']}\ndata: {json.dumps(event['data'])}\n\n"
+                    except queue.Empty:
+                        await asyncio.sleep(0.5)
+                        yield ": keep-alive\n\n"
+            finally:
+                broker.unsubscribe(sub_queue)
+
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     @app.api_route(
         "/api/agent/replenish-query", methods=["GET", "POST"], tags=["Gemini Enterprise"]
@@ -330,14 +411,48 @@ if __name__ == "__main__":
                     "/health",
                     "/api/cloud-status",
                     "/api/data",
+                    "/api/live/state",
                     "/api/agent/replenish-query",
                 ) or self.path.startswith("/api/trajectories/"):
                     self._handle_json_route()
                     return
+
+                if self.path == "/api/stream/events":
+                    # SSE stream for fallback threading HTTP server
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/event-stream")
+                    self.send_header("Cache-Control", "no-cache")
+                    self.send_header("Connection", "keep-alive")
+                    self.send_header("X-Accel-Buffering", "no")
+                    self.end_headers()
+
+                    broker = get_global_broker()
+                    sub_queue = broker.subscribe()
+                    try:
+                        state = broker.get_current_state()
+                        init_payload = f"event: state_snapshot\ndata: {json.dumps(state)}\n\n"
+                        self.wfile.write(init_payload.encode("utf-8"))
+                        self.wfile.flush()
+
+                        while True:
+                            try:
+                                event = sub_queue.get(timeout=1.0)
+                                chunk = f"event: {event['event_type']}\ndata: {json.dumps(event['data'])}\n\n"
+                                self.wfile.write(chunk.encode("utf-8"))
+                                self.wfile.flush()
+                            except queue.Empty:
+                                self.wfile.write(b": keep-alive\n\n")
+                                self.wfile.flush()
+                    except (BrokenPipeError, ConnectionResetError):
+                        pass
+                    finally:
+                        broker.unsubscribe(sub_queue)
+                    return
+
                 super().do_GET()
 
             def do_POST(self) -> None:
-                if self.path == "/api/agent/replenish-query":
+                if self.path in ("/api/agent/replenish-query", "/api/live/candidates"):
                     try:
                         content_len = int(self.headers.get("Content-Length", 0))
                     except (ValueError, TypeError):

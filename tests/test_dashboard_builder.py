@@ -229,3 +229,28 @@ def test_diff_engine_robustness_and_client_js_execution(tmp_path: Path) -> None:
             check=True,
         )
         assert proc.returncode == 0
+
+
+def test_realtime_stream_dashboard_elements(tmp_path: Path) -> None:
+    """Verify index.html contains real-time SSE components and Safe DOM live handlers."""
+    html_path = build_dashboard_html(output_dir=tmp_path)
+    content = html_path.read_text(encoding="utf-8")
+
+    # Live streaming status pill and toast notification
+    assert 'id="pill-stream-status"' in content
+    assert 'id="dot-stream-status"' in content
+    assert 'id="text-stream-status"' in content
+    assert 'id="live-toast"' in content
+    assert 'id="live-toast-text"' in content
+
+    # Server-Sent Events client connection
+    assert 'new EventSource("/api/stream/events")' in content
+    assert "connectTelemetryStream" in content
+    assert 'addEventListener("candidate_evaluated"' in content
+    assert 'addEventListener("state_snapshot"' in content
+    assert 'addEventListener("run_started"' in content
+    assert 'addEventListener("run_completed"' in content
+
+    # Dynamic trajectory updating without innerHTML
+    assert "innerHTML" not in content
+    assert "showLiveToast" in content

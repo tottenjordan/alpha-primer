@@ -159,6 +159,20 @@ def build_dashboard_html(
       border-color: rgba(16, 185, 129, 0.4);
       color: var(--accent-emerald);
       background: rgba(16, 185, 129, 0.1);
+      transition: all 0.3s ease;
+    }}
+
+    .pill.status-streaming {{
+      border-color: rgba(6, 182, 212, 0.6);
+      color: var(--accent-cyan);
+      background: rgba(6, 182, 212, 0.15);
+      animation: pulse-border 2s infinite ease-in-out;
+    }}
+
+    .pill.status-archive {{
+      border-color: rgba(148, 163, 184, 0.3);
+      color: var(--text-muted);
+      background: rgba(148, 163, 184, 0.08);
     }}
 
     .status-dot {{
@@ -167,6 +181,51 @@ def build_dashboard_html(
       border-radius: 50%;
       background: var(--accent-emerald);
       box-shadow: 0 0 6px var(--accent-emerald);
+    }}
+
+    .status-dot.pulse {{
+      background: var(--accent-cyan);
+      box-shadow: 0 0 8px var(--accent-cyan);
+      animation: pulse-dot 1.4s infinite ease-in-out;
+    }}
+
+    @keyframes pulse-dot {{
+      0%, 100% {{ transform: scale(1); opacity: 1; }}
+      50% {{ transform: scale(1.4); opacity: 0.5; }}
+    }}
+
+    @keyframes pulse-border {{
+      0%, 100% {{ border-color: rgba(6, 182, 212, 0.4); }}
+      50% {{ border-color: rgba(6, 182, 212, 0.9); }}
+    }}
+
+    /* Real-Time Candidate Toast Notification */
+    #live-toast {{
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--bg-surface);
+      border: 1px solid var(--accent-cyan);
+      border-radius: 8px;
+      padding: 12px 18px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 12px rgba(6, 182, 212, 0.2);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-primary);
+      z-index: 9999;
+      opacity: 0;
+      transform: translateY(12px);
+      transition: all 0.25s ease-out;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }}
+
+    #live-toast.show {{
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
     }}
 
     .controls-row {{
@@ -1046,9 +1105,9 @@ def build_dashboard_html(
         <h1 id="header-platform-title">AlphaEvolve Supply Chain &amp; Digital Twin Intelligence Suite</h1>
       </div>
       <div class="meta-pills">
-        <div class="pill status-live">
-          <span class="status-dot"></span>
-          <span>ADC VERIFIED</span>
+        <div class="pill status-live" id="pill-stream-status">
+          <span class="status-dot" id="dot-stream-status"></span>
+          <span id="text-stream-status">CHECKING STREAM...</span>
         </div>
         <div class="pill">
           <span>Engine: <b id="meta-engine-id">alpha-evolve-experiment-engine</b></span>
@@ -1060,6 +1119,12 @@ def build_dashboard_html(
           <span>Horizon: <b>90 Days (Causal)</b></span>
         </div>
       </div>
+    </div>
+
+    <!-- Real-time Candidate Evaluation Toast -->
+    <div id="live-toast">
+      <span class="status-dot pulse"></span>
+      <span id="live-toast-text">New Candidate Evaluated</span>
     </div>
 
     <div class="controls-row">
@@ -1436,7 +1501,7 @@ def build_dashboard_html(
       const ribbonMilestones = uc.ribbon_milestones || [];
       const costWaterfall = uc.cost_waterfall || null;
       const paretoFrontier = uc.pareto_frontier || [];
-      const maxGen = trajectories.length - 1;
+      let maxGen = Math.max(0, trajectories.length - 1);
 
       // 3. Tab Switching
       const tabBtns = document.querySelectorAll(".tab-btn");
@@ -2738,11 +2803,170 @@ def build_dashboard_html(
         }});
       }}
 
-      // 12. Initial Mount & Resize Handlers
+      // 12. Real-Time Telemetry & Server-Sent Events (SSE) Client
+      const pillStreamStatus = document.getElementById("pill-stream-status");
+      const dotStreamStatus = document.getElementById("dot-stream-status");
+      const textStreamStatus = document.getElementById("text-stream-status");
+      const liveToast = document.getElementById("live-toast");
+      const liveToastText = document.getElementById("live-toast-text");
+      let toastTimer = null;
+
+      function showLiveToast(msg) {{
+        if (!liveToast || !liveToastText) return;
+        liveToastText.textContent = msg;
+        liveToast.classList.add("show");
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {{
+          liveToast.classList.remove("show");
+        }}, 4000);
+      }}
+
+      function setStreamStatus(statusMode, labelText) {{
+        if (!pillStreamStatus || !dotStreamStatus || !textStreamStatus) return;
+        pillStreamStatus.className = "pill " + (statusMode === "streaming" ? "status-streaming" : (statusMode === "connected" ? "status-live" : "status-archive"));
+        dotStreamStatus.className = "status-dot" + (statusMode === "streaming" ? " pulse" : "");
+        textStreamStatus.textContent = labelText;
+      }}
+
+      function connectTelemetryStream() {{
+        if (typeof window.EventSource === "undefined") {{
+          setStreamStatus("archive", "ARCHIVE DATA (NO SSE)");
+          return;
+        }}
+
+        setStreamStatus("connected", "CONNECTING STREAM...");
+        let sse = null;
+        try {{
+          sse = new EventSource("/api/stream/events");
+        }} catch (err) {{
+          console.warn("Could not instantiate EventSource", err);
+          setStreamStatus("archive", "OFFLINE ARCHIVE");
+          return;
+        }}
+
+        sse.onopen = function() {{
+          setStreamStatus("streaming", "LIVE STREAMING (SSE)");
+        }};
+
+        sse.addEventListener("state_snapshot", function(e) {{
+          try {{
+            const snapshot = JSON.parse(e.data);
+            if (snapshot.status === "RUNNING") {{
+              setStreamStatus("streaming", "LIVE: " + (snapshot.experiment_name || "RUNNING") + " (" + snapshot.evaluated_count + " EVALUATED)");
+            }} else if (snapshot.status === "COMPLETED") {{
+              setStreamStatus("connected", "RUN COMPLETED (" + snapshot.evaluated_count + " EVALUATED)");
+            }} else {{
+              setStreamStatus("connected", "ADC VERIFIED (IDLE)");
+            }}
+          }} catch (err) {{
+            console.warn("Failed to parse state_snapshot", err);
+          }}
+        }});
+
+        sse.addEventListener("run_started", function(e) {{
+          try {{
+            const runData = JSON.parse(e.data);
+            setStreamStatus("streaming", "LIVE: " + (runData.experiment_name || "OPTIMIZING"));
+            showLiveToast("🚀 AlphaEvolve Run Started: " + (runData.experiment_name || "New Run"));
+          }} catch (err) {{
+            console.warn("Failed to parse run_started event", err);
+          }}
+        }});
+
+        sse.addEventListener("candidate_evaluated", function(e) {{
+          try {{
+            const cand = JSON.parse(e.data);
+            const iter = cand.iteration !== undefined ? cand.iteration : trajectories.length;
+            const scoreVal = typeof cand.score === "number" ? cand.score : 0.0;
+            const isBest = cand.is_best || false;
+
+            // Generate or synthesize daily_series if not included
+            const baseFrame = trajectories[Math.min(iter, trajectories.length - 1)] || trajectories[0];
+            const newFrame = {{
+              generation: iter,
+              event_summary: isBest
+                ? ("★ New Breakthrough Candidate (Iter " + iter + ") | Score: " + scoreVal.toFixed(2) + "%")
+                : ("Evaluated Candidate (Iter " + iter + ") | Score: " + scoreVal.toFixed(2) + "%"),
+              metrics: {{
+                total_cost: baseFrame.metrics ? baseFrame.metrics.total_cost : 45238,
+                spoilage_cost: baseFrame.metrics ? baseFrame.metrics.spoilage_cost : 16145,
+                holding_cost: baseFrame.metrics ? baseFrame.metrics.holding_cost : 14120,
+                stockout_penalty: baseFrame.metrics ? baseFrame.metrics.stockout_penalty : 14573,
+                fill_rate_pct: (cand.scores && cand.scores.fill_rate_pct) || (baseFrame.metrics ? baseFrame.metrics.fill_rate_pct : 93.49),
+                spoilage_rate_pct: (cand.scores && cand.scores.spoilage_rate_pct) || (baseFrame.metrics ? baseFrame.metrics.spoilage_rate_pct : 8.45),
+                cost_reduction_pct: scoreVal,
+                fitness_score: scoreVal
+              }},
+              daily_series: baseFrame.daily_series
+            }};
+
+            if (iter >= trajectories.length) {{
+              trajectories.push(newFrame);
+            }} else {{
+              trajectories[iter] = newFrame;
+            }}
+
+            maxGen = trajectories.length - 1;
+            if (scrubber) {{
+              scrubber.max = maxGen;
+            }}
+
+            // Dynamic Pareto point addition
+            if (!paretoFrontier.some(p => p.generation === iter)) {{
+              paretoFrontier.push({{
+                generation: iter,
+                cost_reduction_pct: scoreVal,
+                fill_rate_pct: newFrame.metrics.fill_rate_pct,
+                spoilage_rate_pct: newFrame.metrics.spoilage_rate_pct,
+                is_pareto: isBest
+              }});
+            }}
+
+            // Add ribbon node if this was a milestone breakthrough
+            if (isBest && !ribbonMilestones.some(m => m.generation === iter)) {{
+              ribbonMilestones.push({{
+                generation: iter,
+                label: "Gen " + iter,
+                badge: "★ Gen " + iter,
+                title: "Breakthrough Candidate (Iter " + iter + ")",
+                cost_reduc: scoreVal,
+                fill_rate: newFrame.metrics.fill_rate_pct,
+                innovation: "Evolved Program Candidate with +" + scoreVal.toFixed(1) + "% cost reduction"
+              }});
+              renderMilestoneRibbon();
+            }}
+
+            // Update display to latest evaluated candidate
+            updateDisplay(iter);
+
+            // Toast alert
+            showLiveToast((isBest ? "🏆 NEW BEST! " : "⚡ Evaluated: ") + "Gen " + iter + " (" + (scoreVal > 0 ? "+" : "") + scoreVal.toFixed(2) + "%)");
+          }} catch (err) {{
+            console.warn("Failed to parse candidate_evaluated event", err);
+          }}
+        }});
+
+        sse.addEventListener("run_completed", function(e) {{
+          try {{
+            const finishData = JSON.parse(e.data);
+            setStreamStatus("connected", "RUN COMPLETED (Best: " + (finishData.best_score || 0).toFixed(2) + "%)");
+            showLiveToast("🏁 Optimization Run Completed! Best Score: " + (finishData.best_score || 0).toFixed(2) + "%");
+          }} catch (err) {{
+            console.warn("Failed to parse run_completed event", err);
+          }}
+        }});
+
+        sse.onerror = function() {{
+          setStreamStatus("archive", "ARCHIVE MODE (OFFLINE)");
+        }};
+      }}
+
+      // 13. Initial Mount & Resize Handlers
       renderMilestoneRibbon();
       updateDisplay(maxGen);
       updateWhatIfSimulation();
       renderCurrentDiff();
+      connectTelemetryStream();
 
       window.addEventListener("resize", () => {{
         drawTrajectoryChart(currentGen);

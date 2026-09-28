@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import logging
 import time
 from collections.abc import Callable
@@ -11,6 +12,7 @@ from rich.console import Console
 from rich.table import Table
 
 from .client import AlphaEvolveClient, MockAlphaEvolveClient
+from .dashboard.telemetry_broker import LiveTelemetryBroker, get_global_broker
 from .evaluators import BaseEvaluator
 from .models import (
     AlphaEvolveEvaluationSubmission,
@@ -19,6 +21,7 @@ from .models import (
     ExperimentConfig,
     ProgramCandidate,
 )
+from .utils import extract_evolve_blocks
 from .workers import SandboxConfig, WorkerPool
 
 logger = logging.getLogger(__name__)
@@ -36,9 +39,13 @@ class EvolutionController:
         evaluator_fn: Callable[[Any], EvaluationResult] | None = None,
         target_function_name: str | None = None,
         primary_metric: str | None = None,
+        telemetry_broker: LiveTelemetryBroker | None = None,
     ) -> None:
         self.config = config
         self.client = client
+        self.telemetry_broker = (
+            telemetry_broker if telemetry_broker is not None else get_global_broker()
+        )
 
         resolved_evaluator = evaluator if evaluator is not None else evaluator_fn
         if resolved_evaluator is None:
@@ -88,6 +95,21 @@ class EvolutionController:
         exp_name = self.client.create_experiment(session_name, self.config)
         console.print(f"   Created Experiment: [dim]{exp_name}[/dim]")
 
+        # Broadcast run_started event
+        self.telemetry_broker.publish(
+            {
+                "event_type": "run_started",
+                "timestamp_utc": datetime.datetime.now(datetime.UTC).isoformat(),
+                "data": {
+                    "experiment_name": self.config.experiment_name,
+                    "experiment_id": exp_name,
+                    "max_programs": self.config.run_settings.max_programs,
+                    "primary_metric": self.primary_metric,
+                    "target_function_name": self.target_function_name,
+                },
+            }
+        )
+
         # Step 1: Evaluate baseline seed program
         console.print(
             "\n[bold yellow]Step 1: Evaluating Initial Seed Program Baseline...[/bold yellow]"
@@ -110,6 +132,26 @@ class EvolutionController:
         console.print(
             f"   Baseline {self.primary_metric}: [bold]{baseline_score:+.2f}%[/bold] "
             f"(Runtime: {seed_eval.execution_time_s:.2f}s)"
+        )
+
+        seed_blocks = extract_evolve_blocks(self.config.seed_code)
+        self.telemetry_broker.publish(
+            {
+                "event_type": "candidate_evaluated",
+                "timestamp_utc": datetime.datetime.now(datetime.UTC).isoformat(),
+                "data": {
+                    "iteration": 0,
+                    "program_id": seed_candidate.program_id,
+                    "status": seed_eval.status,
+                    "score": baseline_score,
+                    "scores": seed_eval.scores.to_dict(),
+                    "insights": seed_eval.insights.to_dict(),
+                    "execution_time_s": seed_eval.execution_time_s,
+                    "is_best": True,
+                    "is_baseline": True,
+                    "evolve_block": seed_blocks[0] if seed_blocks else "",
+                },
+            }
         )
 
         # Register seed program and start experiment
@@ -186,6 +228,27 @@ class EvolutionController:
                         f"{eval_res.execution_time_s:.2f}",
                     )
 
+                    cand_blocks = extract_evolve_blocks(cand.code)
+                    self.telemetry_broker.publish(
+                        {
+                            "event_type": "candidate_evaluated",
+                            "timestamp_utc": datetime.datetime.now(datetime.UTC).isoformat(),
+                            "data": {
+                                "iteration": evaluated_count - 1,
+                                "program_id": cand.program_id,
+                                "status": eval_res.status,
+                                "score": curr_score,
+                                "scores": score_map,
+                                "insights": eval_res.insights.to_dict(),
+                                "execution_time_s": eval_res.execution_time_s,
+                                "is_best": is_new_best,
+                                "best_score": self.best_score,
+                                "is_baseline": False,
+                                "evolve_block": cand_blocks[0] if cand_blocks else "",
+                            },
+                        }
+                    )
+
                     submissions.append(
                         AlphaEvolveEvaluationSubmission(
                             program=cand.program_id,
@@ -204,6 +267,21 @@ class EvolutionController:
             self.worker_pool.shutdown()
             if isinstance(self.evaluator, BaseEvaluator):
                 self.evaluator.teardown()
+
+        self.telemetry_broker.publish(
+            {
+                "event_type": "run_completed",
+                "timestamp_utc": datetime.datetime.now(datetime.UTC).isoformat(),
+                "data": {
+                    "experiment_id": exp_name,
+                    "best_score": self.best_score,
+                    "best_program_id": self.best_candidate.program_id
+                    if self.best_candidate
+                    else None,
+                    "evaluated_count": evaluated_count,
+                },
+            }
+        )
 
         console.print(table)
         console.print(

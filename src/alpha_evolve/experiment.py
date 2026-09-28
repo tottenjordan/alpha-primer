@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 
 from .client import AlphaEvolveClient, MockAlphaEvolveClient
 from .controller import EvolutionController
+from .dashboard.telemetry_broker import LiveTelemetryBroker
 from .evaluators import BaseEvaluator
 from .models import EvaluationResult, ExperimentConfig, ProgramCandidate, RunSettings
 from .utils import export_artifact
@@ -29,8 +30,10 @@ class AlphaEvolveExperiment:
         evaluator_fn: Callable[[Any], EvaluationResult] | None = None,
         target_function_name: str | None = None,
         primary_metric: str | None = None,
+        telemetry_broker: LiveTelemetryBroker | None = None,
     ) -> None:
         self.config = config
+        self.telemetry_broker = telemetry_broker
         resolved_evaluator = evaluator if evaluator is not None else evaluator_fn
         if resolved_evaluator is None:
             raise ValueError("Either 'evaluator' or 'evaluator_fn' must be provided.")
@@ -60,6 +63,7 @@ class AlphaEvolveExperiment:
         max_programs: int = 20,
         parallel_workers: int = 4,
         dry_run: bool | None = None,
+        telemetry_broker: LiveTelemetryBroker | None = None,
     ) -> AlphaEvolveExperiment:
         """Construct an experiment from files and local environment configuration."""
         load_dotenv()
@@ -100,6 +104,7 @@ class AlphaEvolveExperiment:
             evaluator_fn=evaluator_fn,
             target_function_name=target_function_name,
             primary_metric=primary_metric,
+            telemetry_broker=telemetry_broker,
         )
 
     def run(self, output_dir: str | Path = "artifacts") -> ProgramCandidate:
@@ -122,6 +127,7 @@ class AlphaEvolveExperiment:
             evaluator_fn=self.evaluator_fn,
             target_function_name=self.target_function_name,
             primary_metric=self.primary_metric,
+            telemetry_broker=self.telemetry_broker,
         )
 
         best_candidate = controller.run()

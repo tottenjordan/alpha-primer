@@ -20,6 +20,7 @@ Top-level index of session notes and key repository files (kept under 200 lines)
 - [interactive_dashboard.md](interactive_dashboard.md) — Interactive executive dashboard architecture, dual-mode web serving, Safe DOM, Retina Canvas 2D, and What-If sandbox.
 - [abstract_evaluator_protocol.md](abstract_evaluator_protocol.md) — Multi-tier evaluation protocol (syntax, smoke, validation, holdout), early-exit performance, and custom domain evaluator authoring guide.
 - [candidate_sandboxing.md](candidate_sandboxing.md) — Multi-mode process/subprocess sandboxing, POSIX memory limits (RLIMIT_AS), unblockable timeouts (SIGKILL), and crash/signal trapping.
+- [realtime_dashboard.md](realtime_dashboard.md) — Real-time candidate evaluation telemetry broker, Server-Sent Events (SSE) streaming, and live visualizer updates.
 - [google_cloud_run_hosting.md](google_cloud_run_hosting.md) — Cloud Run containerization, deployment automation, and Gemini Enterprise (Discovery Engine v1alpha) external agent registration.
 - [../architecture/README.md](../architecture/README.md) — Reference architectures and workflow diagrams (end-to-end evolutionary topology, Cloud Run integration, digital twin loop).
 

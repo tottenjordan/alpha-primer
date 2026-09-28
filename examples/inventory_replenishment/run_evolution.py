@@ -20,6 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from alpha_evolve.dashboard.telemetry_broker import get_global_broker
 from alpha_evolve.experiment import AlphaEvolveExperiment
 from examples.inventory_replenishment.src.evaluate import (
     InventoryReplenishmentEvaluator,
@@ -54,6 +55,12 @@ def main() -> None:
         default="artifacts/inventory_replenishment",
         help="Directory to save best candidate code and evaluation reports.",
     )
+    parser.add_argument(
+        "--stream-to-dashboard",
+        action="store_true",
+        default=False,
+        help="Broadcast candidate evaluations in real-time to the executive dashboard.",
+    )
     args = parser.parse_args()
 
     example_dir = Path(__file__).resolve().parent
@@ -61,6 +68,7 @@ def main() -> None:
     seed_program_path = example_dir / "src" / "program.py"
 
     evaluator = InventoryReplenishmentEvaluator()
+    broker = get_global_broker() if args.stream_to_dashboard else None
 
     experiment = AlphaEvolveExperiment.from_files(
         experiment_name="Inventory Replenishment Digital Twin (BASF Reference)",
@@ -70,6 +78,7 @@ def main() -> None:
         max_programs=args.max_programs,
         parallel_workers=args.workers,
         dry_run=args.dry_run,
+        telemetry_broker=broker,
     )
 
     best_candidate = experiment.run(output_dir=args.output_dir)
