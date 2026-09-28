@@ -47,3 +47,18 @@ def test_evaluator_catches_invalid_candidate() -> None:
     assert result.status == "FAILED"
     insights_dict = result.insights.to_dict()
     assert "tier_1_smoke" in str(insights_dict.get("tier", ""))
+
+
+def test_evaluate_on_locked_holdout() -> None:
+    """Verify holdout report execution comparing baseline against itself."""
+    from examples.fleet_routing.src.report import evaluate_on_locked_holdout
+
+    summary = evaluate_on_locked_holdout(
+        assign_and_sequence_routes,
+        assign_and_sequence_routes,
+    )
+    assert "baseline" in summary
+    assert "evolved" in summary
+    assert "cost_reduction_pct" in summary
+    assert summary["cost_reduction_pct"] == 0.0
+
