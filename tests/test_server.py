@@ -117,3 +117,42 @@ def test_server_agent_replenish_query_with_malformed_payload() -> None:
     assert body["status"] == "success"
     assert "what_if_stress_test" not in body
     assert body["metrics"]["cost_reduction_pct"] > 30.0
+
+
+def test_server_live_state_and_candidates() -> None:
+    """Verify /api/live/state and /api/live/candidates endpoints."""
+    from alpha_evolve.dashboard.telemetry_broker import get_global_broker
+
+    broker = get_global_broker()
+    broker.clear()
+
+    # Initial state should be IDLE
+    code, headers, body = handle_api_request("/api/live/state")
+    assert code == 200
+    assert headers["Content-Type"] == "application/json"
+    assert body["status"] == "IDLE"
+    assert body["evaluated_count"] == 0
+
+    # Post new candidate
+    candidate_payload = {
+        "iteration": 1,
+        "program_id": "test/programs/cand_1",
+        "score": 18.5,
+        "is_best": True,
+    }
+    code, headers, body = handle_api_request("/api/live/candidates", payload=candidate_payload)
+    assert code == 200
+    assert body["status"] == "accepted"
+    assert body["evaluated_count"] == 1
+
+    # Verify state reflects candidate
+    code, headers, body = handle_api_request("/api/live/state")
+    assert code == 200
+    assert body["evaluated_count"] == 1
+    assert body["best_score"] == 18.5
+    assert body["latest_candidate"]["iteration"] == 1
+
+    # Empty payload should return 400
+    code, headers, body = handle_api_request("/api/live/candidates", payload={})
+    assert code == 400
+    assert "Missing candidate" in body["detail"]

@@ -142,6 +142,33 @@ Open **[http://127.0.0.1:8080](http://127.0.0.1:8080)** in your browser.
 
 ---
 
+### Mode C.1: Real-Time Live Streaming Candidate Evaluations
+Stream live candidate acquisitions and evaluation metrics directly into the executive dashboard over Server-Sent Events (SSE) as an optimization run executes:
+
+**Terminal 1 — Launch Dashboard Server**:
+```bash
+uv run python server.py
+```
+Open **[http://127.0.0.1:8080](http://127.0.0.1:8080)**. The status pill in the top-right header connects to `/api/stream/events` and displays `● LIVE STREAMING (SSE)`.
+
+**Terminal 2 — Run Optimization with Telemetry Streaming**:
+```bash
+# Dry-run mock evolution streaming to dashboard
+uv run python examples/inventory_replenishment/run_evolution.py --dry-run --max-programs 20 --stream-to-dashboard
+
+# Live Cloud evolution streaming to dashboard
+uv run python examples/inventory_replenishment/run_evolution.py --max-programs 30 --workers 4 --stream-to-dashboard
+```
+
+#### Real-Time Visualizer Features
+- **Dynamic Scrubber Range**: Scrubber track and maximum counter automatically expand as each candidate finishes evaluation.
+- **Dynamic 2D Pareto Frontier**: New candidate bubbles are dynamically plotted on Retina Canvas 2D and non-dominated frontier curves recalculate live.
+- **Dynamic Milestone Ribbon**: Whenever a candidate achieves a new best fitness score, a milestone node is appended to the ribbon with instant click-to-scrub navigation.
+- **Live Toast Notifications**: Non-intrusive notifications pop in the bottom-right corner displaying candidate IDs, validation scores, and breakthrough alerts.
+- **Graceful Offline Fallback**: If the server is stopped or running in static mode, the dashboard gracefully transitions to `ARCHIVE DATA (OFFLINE)` mode while preserving all historical interactive playback.
+
+---
+
 ### Mode D: Serverless Cloud Run Deployment & Gemini Enterprise Agent Automation
 Deploy the full web dashboard and Gemini agent webhook to Google Cloud Run with automated Artifact Registry provisioning, security hardening, and optional Discovery Engine external agent registration:
 
