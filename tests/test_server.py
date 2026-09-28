@@ -53,6 +53,14 @@ def test_server_trajectories_valid() -> None:
     assert len(body["trajectory_generations"]) == 31
 
 
+def test_server_trajectories_fleet_routing() -> None:
+    code, headers, body = handle_api_request("/api/trajectories/fleet_routing")
+    assert code == 200
+    assert isinstance(body, dict)
+    assert body["use_case_id"] == "fleet_routing"
+    assert len(body["trajectory_generations"]) == 31
+
+
 def test_server_trajectories_invalid() -> None:
     code, headers, body = handle_api_request("/api/trajectories/unknown_use_case")
     assert code == 400

@@ -32,6 +32,7 @@ RECORDS_DIR = ROOT_DIR / "records"
 
 ALLOWED_USE_CASES = {
     "inventory_replenishment": "inventory_replenishment_trajectory.json",
+    "fleet_routing": "fleet_routing_trajectory.json",
 }
 
 SECURITY_HEADERS: dict[str, str] = {
