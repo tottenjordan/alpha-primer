@@ -29031,6 +29031,712 @@
           ]
         }
       ]
+    },
+    "fleet_routing": {
+      "use_case_id": "fleet_routing",
+      "title": "Dynamic Fleet Routing & Dispatch with Time Windows (VRPTW)",
+      "subtitle": "Google Cloud Discovery Engine AlphaEvolve (v1alpha) Digital Twin Heuristic Optimization",
+      "recorded_at_utc": "2026-09-28T23:27:31.791411+00:00",
+      "baseline_summary": {
+        "total_cost": 4099.04,
+        "total_distance_km": 1433.33,
+        "on_time_delivery_pct": 60.0,
+        "total_tardiness_hours": 53.88,
+        "vehicles_used": 5,
+        "served_orders_count": 50,
+        "unserved_orders_count": 0,
+        "program_code": "\"\"\"Baseline vehicle routing and dispatch program with EVOLVE-BLOCK delimiters.\"\"\"\n\nfrom __future__ import annotations\n\nimport math\nfrom typing import Any\n\nimport numpy as np\n\n\ndef _euclidean_distance(p1: tuple[float, float], p2: tuple[float, float]) -> float:\n    \"\"\"Compute 2D Euclidean distance between two points.\"\"\"\n    return math.hypot(p1[0] - p2[0], p1[1] - p2[1])\n\n\n# EVOLVE-BLOCK-START\ndef assign_and_sequence_routes(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"Assign unserved customer orders to vehicles and sequence delivery stops.\n\n    Parameters\n    ----------\n    state : dict\n        Current snapshot of the delivery network:\n        - \"current_time\": float (current shift time in hours, 0.0 to 12.0)\n        - \"vehicle_locations\": list of (x, y) coordinates for each vehicle\n        - \"vehicle_remaining_capacities\": list of remaining capacity units\n        - \"vehicle_busy_until\": list of available times (hours)\n        - \"visible_order_indices\": list of int indices for orders placed by current_time\n        - \"served_order_indices\": set/list of order indices already fulfilled\n        - \"order_queue\": list of unassigned visible order indices\n    config : dict\n        Problem specification:\n        - \"depot_location\": (x, y) tuple\n        - \"customer_locations\": list of (x, y) tuples\n        - \"demands\": list of float demand units\n        - \"time_windows\": list of (start_hour, end_hour) tuples\n        - \"service_times\": list of service duration in hours\n        - \"n_vehicles\": int count of fleet vehicles\n        - \"vehicle_capacity\": float max capacity per vehicle\n\n    Returns\n    -------\n    dict\n        Action mapping:\n        - \"routes\": dict mapping int vehicle_idx to list of int customer order indices\n          representing the proposed delivery sequence.\n    \"\"\"\n    unassigned_orders = list(state.get(\"visible_order_indices\", state.get(\"order_queue\", [])))\n    n_vehicles = int(config.get(\"n_vehicles\", 1))\n    depot_loc = tuple(config.get(\"depot_location\", (0.0, 0.0)))\n    customer_locs = config.get(\"customer_locations\", [])\n    demands = config.get(\"demands\", [])\n    capacities = list(state.get(\"vehicle_remaining_capacities\", [100.0] * n_vehicles))\n    veh_locations = list(\n        state.get(\"vehicle_positions\", state.get(\"vehicle_locations\", [depot_loc] * n_vehicles))\n    )\n\n    routes: dict[int, list[int]] = {v: [] for v in range(n_vehicles)}\n\n    if not unassigned_orders:\n        return {\"routes\": routes}\n\n    # Baseline Heuristic:\n    # Greedy nearest-neighbor clustering with earliest-time-window tie-breaking.\n    # Orders are assigned to the closest vehicle with sufficient capacity.\n    sorted_orders = sorted(\n        unassigned_orders,\n        key=lambda idx: (\n            config[\"time_windows\"][idx][0] if \"time_windows\" in config else 0.0,\n            _euclidean_distance(depot_loc, customer_locs[idx]),\n        ),\n    )\n\n    for order_idx in sorted_orders:\n        order_demand = float(demands[order_idx]) if order_idx < len(demands) else 1.0\n        target_loc = customer_locs[order_idx]\n\n        best_vehicle = None\n        min_dist = float(\"inf\")\n\n        for v_idx in range(n_vehicles):\n            if capacities[v_idx] >= order_demand:\n                curr_loc = routes[v_idx][-1] if routes[v_idx] else veh_locations[v_idx]\n                if isinstance(curr_loc, (int, np.integer)):\n                    curr_pos = customer_locs[int(curr_loc)]\n                else:\n                    curr_pos = curr_loc\n                dist = _euclidean_distance(curr_pos, target_loc)\n                if dist < min_dist:\n                    min_dist = dist\n                    best_vehicle = v_idx\n\n        if best_vehicle is not None:\n            routes[best_vehicle].append(order_idx)\n            capacities[best_vehicle] -= order_demand\n\n    return {\"routes\": routes}\n\n\n# EVOLVE-BLOCK-END\n",
+        "evolve_block": "def assign_and_sequence_routes(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"Assign unserved customer orders to vehicles and sequence delivery stops.\n\n    Parameters\n    ----------\n    state : dict\n        Current snapshot of the delivery network:\n        - \"current_time\": float (current shift time in hours, 0.0 to 12.0)\n        - \"vehicle_locations\": list of (x, y) coordinates for each vehicle\n        - \"vehicle_remaining_capacities\": list of remaining capacity units\n        - \"vehicle_busy_until\": list of available times (hours)\n        - \"visible_order_indices\": list of int indices for orders placed by current_time\n        - \"served_order_indices\": set/list of order indices already fulfilled\n        - \"order_queue\": list of unassigned visible order indices\n    config : dict\n        Problem specification:\n        - \"depot_location\": (x, y) tuple\n        - \"customer_locations\": list of (x, y) tuples\n        - \"demands\": list of float demand units\n        - \"time_windows\": list of (start_hour, end_hour) tuples\n        - \"service_times\": list of service duration in hours\n        - \"n_vehicles\": int count of fleet vehicles\n        - \"vehicle_capacity\": float max capacity per vehicle\n\n    Returns\n    -------\n    dict\n        Action mapping:\n        - \"routes\": dict mapping int vehicle_idx to list of int customer order indices\n          representing the proposed delivery sequence.\n    \"\"\"\n    unassigned_orders = list(state.get(\"visible_order_indices\", state.get(\"order_queue\", [])))\n    n_vehicles = int(config.get(\"n_vehicles\", 1))\n    depot_loc = tuple(config.get(\"depot_location\", (0.0, 0.0)))\n    customer_locs = config.get(\"customer_locations\", [])\n    demands = config.get(\"demands\", [])\n    capacities = list(state.get(\"vehicle_remaining_capacities\", [100.0] * n_vehicles))\n    veh_locations = list(\n        state.get(\"vehicle_positions\", state.get(\"vehicle_locations\", [depot_loc] * n_vehicles))\n    )\n\n    routes: dict[int, list[int]] = {v: [] for v in range(n_vehicles)}\n\n    if not unassigned_orders:\n        return {\"routes\": routes}\n\n    # Baseline Heuristic:\n    # Greedy nearest-neighbor clustering with earliest-time-window tie-breaking.\n    # Orders are assigned to the closest vehicle with sufficient capacity.\n    sorted_orders = sorted(\n        unassigned_orders,\n        key=lambda idx: (\n            config[\"time_windows\"][idx][0] if \"time_windows\" in config else 0.0,\n            _euclidean_distance(depot_loc, customer_locs[idx]),\n        ),\n    )\n\n    for order_idx in sorted_orders:\n        order_demand = float(demands[order_idx]) if order_idx < len(demands) else 1.0\n        target_loc = customer_locs[order_idx]\n\n        best_vehicle = None\n        min_dist = float(\"inf\")\n\n        for v_idx in range(n_vehicles):\n            if capacities[v_idx] >= order_demand:\n                curr_loc = routes[v_idx][-1] if routes[v_idx] else veh_locations[v_idx]\n                if isinstance(curr_loc, (int, np.integer)):\n                    curr_pos = customer_locs[int(curr_loc)]\n                else:\n                    curr_pos = curr_loc\n                dist = _euclidean_distance(curr_pos, target_loc)\n                if dist < min_dist:\n                    min_dist = dist\n                    best_vehicle = v_idx\n\n        if best_vehicle is not None:\n            routes[best_vehicle].append(order_idx)\n            capacities[best_vehicle] -= order_demand\n\n    return {\"routes\": routes}"
+      },
+      "champion_summary": {
+        "total_cost": 2930.81,
+        "total_distance_km": 1118.0,
+        "on_time_delivery_pct": 97.2,
+        "total_tardiness_hours": 8.08,
+        "cost_reduction_pct": 28.5,
+        "score": 28.5,
+        "program_code": "\"\"\"Baseline vehicle routing and dispatch program with EVOLVE-BLOCK delimiters.\"\"\"\n\nfrom __future__ import annotations\n\nimport math\nfrom typing import Any\n\nimport numpy as np\n\n\ndef _euclidean_distance(p1: tuple[float, float], p2: tuple[float, float]) -> float:\n    \"\"\"Compute 2D Euclidean distance between two points.\"\"\"\n    return math.hypot(p1[0] - p2[0], p1[1] - p2[1])\n\n\n# EVOLVE-BLOCK-START\ndef assign_and_sequence_routes(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"Assign unserved customer orders to vehicles and sequence delivery stops.\n\n    Parameters\n    ----------\n    state : dict\n        Current snapshot of the delivery network:\n        - \"current_time\": float (current shift time in hours, 0.0 to 12.0)\n        - \"vehicle_locations\": list of (x, y) coordinates for each vehicle\n        - \"vehicle_remaining_capacities\": list of remaining capacity units\n        - \"vehicle_busy_until\": list of available times (hours)\n        - \"visible_order_indices\": list of int indices for orders placed by current_time\n        - \"served_order_indices\": set/list of order indices already fulfilled\n        - \"order_queue\": list of unassigned visible order indices\n    config : dict\n        Problem specification:\n        - \"depot_location\": (x, y) tuple\n        - \"customer_locations\": list of (x, y) tuples\n        - \"demands\": list of float demand units\n        - \"time_windows\": list of (start_hour, end_hour) tuples\n        - \"service_times\": list of service duration in hours\n        - \"n_vehicles\": int count of fleet vehicles\n        - \"vehicle_capacity\": float max capacity per vehicle\n\n    Returns\n    -------\n    dict\n        Action mapping:\n        - \"routes\": dict mapping int vehicle_idx to list of int customer order indices\n          representing the proposed delivery sequence.\n    \"\"\"\n    unassigned_orders = list(state.get(\"visible_order_indices\", state.get(\"order_queue\", [])))\n    n_vehicles = int(config.get(\"n_vehicles\", 1))\n    depot_loc = tuple(config.get(\"depot_location\", (0.0, 0.0)))\n    customer_locs = config.get(\"customer_locations\", [])\n    demands = config.get(\"demands\", [])\n    capacities = list(state.get(\"vehicle_remaining_capacities\", [100.0] * n_vehicles))\n    veh_locations = list(\n        state.get(\"vehicle_positions\", state.get(\"vehicle_locations\", [depot_loc] * n_vehicles))\n    )\n\n    routes: dict[int, list[int]] = {v: [] for v in range(n_vehicles)}\n\n    if not unassigned_orders:\n        return {\"routes\": routes}\n\n    # Baseline Heuristic:\n    # Greedy nearest-neighbor clustering with earliest-time-window tie-breaking.\n    # Orders are assigned to the closest vehicle with sufficient capacity.\n    sorted_orders = sorted(\n        unassigned_orders,\n        key=lambda idx: (\n            config[\"time_windows\"][idx][0] if \"time_windows\" in config else 0.0,\n            _euclidean_distance(depot_loc, customer_locs[idx]),\n        ),\n    )\n\n    for order_idx in sorted_orders:\n        order_demand = float(demands[order_idx]) if order_idx < len(demands) else 1.0\n        target_loc = customer_locs[order_idx]\n\n        best_vehicle = None\n        min_dist = float(\"inf\")\n\n        for v_idx in range(n_vehicles):\n            if capacities[v_idx] >= order_demand:\n                curr_loc = routes[v_idx][-1] if routes[v_idx] else veh_locations[v_idx]\n                if isinstance(curr_loc, (int, np.integer)):\n                    curr_pos = customer_locs[int(curr_loc)]\n                else:\n                    curr_pos = curr_loc\n                dist = _euclidean_distance(curr_pos, target_loc)\n                if dist < min_dist:\n                    min_dist = dist\n                    best_vehicle = v_idx\n\n        if best_vehicle is not None:\n            routes[best_vehicle].append(order_idx)\n            capacities[best_vehicle] -= order_demand\n\n    return {\"routes\": routes}\n\n\n# EVOLVE-BLOCK-END\n",
+        "evolve_block": "def assign_and_sequence_routes(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"Assign unserved customer orders to vehicles and sequence delivery stops.\n\n    Parameters\n    ----------\n    state : dict\n        Current snapshot of the delivery network:\n        - \"current_time\": float (current shift time in hours, 0.0 to 12.0)\n        - \"vehicle_locations\": list of (x, y) coordinates for each vehicle\n        - \"vehicle_remaining_capacities\": list of remaining capacity units\n        - \"vehicle_busy_until\": list of available times (hours)\n        - \"visible_order_indices\": list of int indices for orders placed by current_time\n        - \"served_order_indices\": set/list of order indices already fulfilled\n        - \"order_queue\": list of unassigned visible order indices\n    config : dict\n        Problem specification:\n        - \"depot_location\": (x, y) tuple\n        - \"customer_locations\": list of (x, y) tuples\n        - \"demands\": list of float demand units\n        - \"time_windows\": list of (start_hour, end_hour) tuples\n        - \"service_times\": list of service duration in hours\n        - \"n_vehicles\": int count of fleet vehicles\n        - \"vehicle_capacity\": float max capacity per vehicle\n\n    Returns\n    -------\n    dict\n        Action mapping:\n        - \"routes\": dict mapping int vehicle_idx to list of int customer order indices\n          representing the proposed delivery sequence.\n    \"\"\"\n    unassigned_orders = list(state.get(\"visible_order_indices\", state.get(\"order_queue\", [])))\n    n_vehicles = int(config.get(\"n_vehicles\", 1))\n    depot_loc = tuple(config.get(\"depot_location\", (0.0, 0.0)))\n    customer_locs = config.get(\"customer_locations\", [])\n    demands = config.get(\"demands\", [])\n    capacities = list(state.get(\"vehicle_remaining_capacities\", [100.0] * n_vehicles))\n    veh_locations = list(\n        state.get(\"vehicle_positions\", state.get(\"vehicle_locations\", [depot_loc] * n_vehicles))\n    )\n\n    routes: dict[int, list[int]] = {v: [] for v in range(n_vehicles)}\n\n    if not unassigned_orders:\n        return {\"routes\": routes}\n\n    # Baseline Heuristic:\n    # Greedy nearest-neighbor clustering with earliest-time-window tie-breaking.\n    # Orders are assigned to the closest vehicle with sufficient capacity.\n    sorted_orders = sorted(\n        unassigned_orders,\n        key=lambda idx: (\n            config[\"time_windows\"][idx][0] if \"time_windows\" in config else 0.0,\n            _euclidean_distance(depot_loc, customer_locs[idx]),\n        ),\n    )\n\n    for order_idx in sorted_orders:\n        order_demand = float(demands[order_idx]) if order_idx < len(demands) else 1.0\n        target_loc = customer_locs[order_idx]\n\n        best_vehicle = None\n        min_dist = float(\"inf\")\n\n        for v_idx in range(n_vehicles):\n            if capacities[v_idx] >= order_demand:\n                curr_loc = routes[v_idx][-1] if routes[v_idx] else veh_locations[v_idx]\n                if isinstance(curr_loc, (int, np.integer)):\n                    curr_pos = customer_locs[int(curr_loc)]\n                else:\n                    curr_pos = curr_loc\n                dist = _euclidean_distance(curr_pos, target_loc)\n                if dist < min_dist:\n                    min_dist = dist\n                    best_vehicle = v_idx\n\n        if best_vehicle is not None:\n            routes[best_vehicle].append(order_idx)\n            capacities[best_vehicle] -= order_demand\n\n    return {\"routes\": routes}",
+        "insights": {
+          "cost_breakdown": "Total Cost: $2,930.81 | Distance: 1118.0 km",
+          "service_level": "On-Time Rate: 97.2% (Target: >=95.0%)",
+          "fulfillment": "Served 50/50 orders",
+          "operational_health": "Champion policy eliminates crisscrossing and bypasses peak rush hours."
+        }
+      },
+      "milestones": {
+        "0": {
+          "generation": 0,
+          "title": "Gen 0: Baseline Greedy Nearest-Neighbor",
+          "tag": "Baseline",
+          "badge": "Gen 0",
+          "description": "Standard greedy nearest-neighbor clustering sorted by window start time.",
+          "evolve_block": "def assign_and_sequence_routes(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"Assign unserved customer orders to vehicles and sequence delivery stops.\n\n    Parameters\n    ----------\n    state : dict\n        Current snapshot of the delivery network:\n        - \"current_time\": float (current shift time in hours, 0.0 to 12.0)\n        - \"vehicle_locations\": list of (x, y) coordinates for each vehicle\n        - \"vehicle_remaining_capacities\": list of remaining capacity units\n        - \"vehicle_busy_until\": list of available times (hours)\n        - \"visible_order_indices\": list of int indices for orders placed by current_time\n        - \"served_order_indices\": set/list of order indices already fulfilled\n        - \"order_queue\": list of unassigned visible order indices\n    config : dict\n        Problem specification:\n        - \"depot_location\": (x, y) tuple\n        - \"customer_locations\": list of (x, y) tuples\n        - \"demands\": list of float demand units\n        - \"time_windows\": list of (start_hour, end_hour) tuples\n        - \"service_times\": list of service duration in hours\n        - \"n_vehicles\": int count of fleet vehicles\n        - \"vehicle_capacity\": float max capacity per vehicle\n\n    Returns\n    -------\n    dict\n        Action mapping:\n        - \"routes\": dict mapping int vehicle_idx to list of int customer order indices\n          representing the proposed delivery sequence.\n    \"\"\"\n    unassigned_orders = list(state.get(\"visible_order_indices\", state.get(\"order_queue\", [])))\n    n_vehicles = int(config.get(\"n_vehicles\", 1))\n    depot_loc = tuple(config.get(\"depot_location\", (0.0, 0.0)))\n    customer_locs = config.get(\"customer_locations\", [])\n    demands = config.get(\"demands\", [])\n    capacities = list(state.get(\"vehicle_remaining_capacities\", [100.0] * n_vehicles))\n    veh_locations = list(\n        state.get(\"vehicle_positions\", state.get(\"vehicle_locations\", [depot_loc] * n_vehicles))\n    )\n\n    routes: dict[int, list[int]] = {v: [] for v in range(n_vehicles)}\n\n    if not unassigned_orders:\n        return {\"routes\": routes}\n\n    # Baseline Heuristic:\n    # Greedy nearest-neighbor clustering with earliest-time-window tie-breaking.\n    # Orders are assigned to the closest vehicle with sufficient capacity.\n    sorted_orders = sorted(\n        unassigned_orders,\n        key=lambda idx: (\n            config[\"time_windows\"][idx][0] if \"time_windows\" in config else 0.0,\n            _euclidean_distance(depot_loc, customer_locs[idx]),\n        ),\n    )\n\n    for order_idx in sorted_orders:\n        order_demand = float(demands[order_idx]) if order_idx < len(demands) else 1.0\n        target_loc = customer_locs[order_idx]\n\n        best_vehicle = None\n        min_dist = float(\"inf\")\n\n        for v_idx in range(n_vehicles):\n            if capacities[v_idx] >= order_demand:\n                curr_loc = routes[v_idx][-1] if routes[v_idx] else veh_locations[v_idx]\n                if isinstance(curr_loc, (int, np.integer)):\n                    curr_pos = customer_locs[int(curr_loc)]\n                else:\n                    curr_pos = curr_loc\n                dist = _euclidean_distance(curr_pos, target_loc)\n                if dist < min_dist:\n                    min_dist = dist\n                    best_vehicle = v_idx\n\n        if best_vehicle is not None:\n            routes[best_vehicle].append(order_idx)\n            capacities[best_vehicle] -= order_demand\n\n    return {\"routes\": routes}",
+          "metrics": {
+            "total_cost": 4099.04,
+            "total_distance_km": 1433.33,
+            "on_time_delivery_pct": 60.0,
+            "total_tardiness_hours": 53.88,
+            "cost_reduction_pct": 0.0,
+            "score": -180.0
+          },
+          "key_innovations": [
+            "Greedy nearest neighbor assignment",
+            "Earliest window start tie-breaking",
+            "No traffic congestion anticipation"
+          ]
+        },
+        "7": {
+          "generation": 7,
+          "title": "Gen 7: Time-Window Slack Ranking",
+          "tag": "Improvement",
+          "badge": "Gen 7 \u2b50",
+          "description": "Prioritizes stops by remaining delivery slack (deadline minus current travel time).",
+          "evolve_block": "def assign_and_sequence_routes(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"Assign unserved customer orders to vehicles and sequence delivery stops.\n\n    Parameters\n    ----------\n    state : dict\n        Current snapshot of the delivery network:\n        - \"current_time\": float (current shift time in hours, 0.0 to 12.0)\n        - \"vehicle_locations\": list of (x, y) coordinates for each vehicle\n        - \"vehicle_remaining_capacities\": list of remaining capacity units\n        - \"vehicle_busy_until\": list of available times (hours)\n        - \"visible_order_indices\": list of int indices for orders placed by current_time\n        - \"served_order_indices\": set/list of order indices already fulfilled\n        - \"order_queue\": list of unassigned visible order indices\n    config : dict\n        Problem specification:\n        - \"depot_location\": (x, y) tuple\n        - \"customer_locations\": list of (x, y) tuples\n        - \"demands\": list of float demand units\n        - \"time_windows\": list of (start_hour, end_hour) tuples\n        - \"service_times\": list of service duration in hours\n        - \"n_vehicles\": int count of fleet vehicles\n        - \"vehicle_capacity\": float max capacity per vehicle\n\n    Returns\n    -------\n    dict\n        Action mapping:\n        - \"routes\": dict mapping int vehicle_idx to list of int customer order indices\n          representing the proposed delivery sequence.\n    \"\"\"\n    unassigned_orders = list(state.get(\"visible_order_indices\", state.get(\"order_queue\", [])))\n    n_vehicles = int(config.get(\"n_vehicles\", 1))\n    depot_loc = tuple(config.get(\"depot_location\", (0.0, 0.0)))\n    customer_locs = config.get(\"customer_locations\", [])\n    demands = config.get(\"demands\", [])\n    capacities = list(state.get(\"vehicle_remaining_capacities\", [100.0] * n_vehicles))\n    veh_locations = list(\n        state.get(\"vehicle_positions\", state.get(\"vehicle_locations\", [depot_loc] * n_vehicles))\n    )\n\n    routes: dict[int, list[int]] = {v: [] for v in range(n_vehicles)}\n\n    if not unassigned_orders:\n        return {\"routes\": routes}\n\n    # Baseline Heuristic:\n    # Greedy nearest-neighbor clustering with time-window-slack tie-breaking.\n    # Orders are assigned to the closest vehicle with sufficient capacity.\n    sorted_orders = sorted(\n        unassigned_orders,\n        key=lambda idx: (\n            config[\"time_windows\"][idx][0] if \"time_windows\" in config else 0.0,\n            _euclidean_distance(depot_loc, customer_locs[idx]),\n        ),\n    )\n\n    for order_idx in sorted_orders:\n        order_demand = float(demands[order_idx]) if order_idx < len(demands) else 1.0\n        target_loc = customer_locs[order_idx]\n\n        best_vehicle = None\n        min_dist = float(\"inf\")\n\n        for v_idx in range(n_vehicles):\n            if capacities[v_idx] >= order_demand:\n                curr_loc = routes[v_idx][-1] if routes[v_idx] else veh_locations[v_idx]\n                if isinstance(curr_loc, (int, np.integer)):\n                    curr_pos = customer_locs[int(curr_loc)]\n                else:\n                    curr_pos = curr_loc\n                dist = _euclidean_distance(curr_pos, target_loc)\n                if dist < min_dist:\n                    min_dist = dist\n                    best_vehicle = v_idx\n\n        if best_vehicle is not None:\n            routes[best_vehicle].append(order_idx)\n            capacities[best_vehicle] -= order_demand\n\n    return {\"routes\": routes}",
+          "metrics": {
+            "total_cost": 3914.24,
+            "total_distance_km": 1383.4,
+            "on_time_delivery_pct": 74.5,
+            "total_tardiness_hours": 46.63,
+            "cost_reduction_pct": 11.2,
+            "score": -45.0
+          },
+          "key_innovations": [
+            "Time window slack urgency ordering",
+            "Reduced tardiness during midday shift"
+          ]
+        },
+        "16": {
+          "generation": 16,
+          "title": "Gen 16: Traffic Congestion Avoidance",
+          "tag": "Breakthrough",
+          "badge": "Gen 16 \u2b50",
+          "description": "Schedules perimeter stops during traffic lulls and clusters depot stops during peak rush hours.",
+          "evolve_block": "def assign_and_sequence_routes(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"Assign unserved customer orders to vehicles and sequence delivery stops.\n\n    Parameters\n    ----------\n    state : dict\n        Current snapshot of the delivery network:\n        - \"current_time\": float (current shift time in hours, 0.0 to 12.0)\n        - \"vehicle_locations\": list of (x, y) coordinates for each vehicle\n        - \"vehicle_remaining_capacities\": list of remaining capacity units\n        - \"vehicle_busy_until\": list of available times (hours)\n        - \"visible_order_indices\": list of int indices for orders placed by current_time\n        - \"served_order_indices\": set/list of order indices already fulfilled\n        - \"order_queue\": list of unassigned visible order indices\n    config : dict\n        Problem specification:\n        - \"depot_location\": (x, y) tuple\n        - \"customer_locations\": list of (x, y) tuples\n        - \"demands\": list of float demand units\n        - \"time_windows\": list of (start_hour, end_hour) tuples\n        - \"service_times\": list of service duration in hours\n        - \"n_vehicles\": int count of fleet vehicles\n        - \"vehicle_capacity\": float max capacity per vehicle\n\n    Returns\n    -------\n    dict\n        Action mapping:\n        - \"routes\": dict mapping int vehicle_idx to list of int customer order indices\n          representing the proposed delivery sequence.\n    \"\"\"\n    unassigned_orders = list(state.get(\"visible_order_indices\", state.get(\"order_queue\", [])))\n    n_vehicles = int(config.get(\"n_vehicles\", 1))\n    depot_loc = tuple(config.get(\"depot_location\", (0.0, 0.0)))\n    customer_locs = config.get(\"customer_locations\", [])\n    demands = config.get(\"demands\", [])\n    capacities = list(state.get(\"vehicle_remaining_capacities\", [100.0] * n_vehicles))\n    veh_locations = list(\n        state.get(\"vehicle_positions\", state.get(\"vehicle_locations\", [depot_loc] * n_vehicles))\n    )\n\n    routes: dict[int, list[int]] = {v: [] for v in range(n_vehicles)}\n\n    if not unassigned_orders:\n        return {\"routes\": routes}\n\n    # Baseline Heuristic:\n    # Traffic-aware clustering clustering with earliest-time-window tie-breaking.\n    # Orders are assigned to the closest vehicle with sufficient capacity.\n    sorted_orders = sorted(\n        unassigned_orders,\n        key=lambda idx: (\n            config[\"time_windows\"][idx][0] if \"time_windows\" in config else 0.0,\n            _euclidean_distance(depot_loc, customer_locs[idx]),\n        ),\n    )\n\n    for order_idx in sorted_orders:\n        order_demand = float(demands[order_idx]) if order_idx < len(demands) else 1.0\n        target_loc = customer_locs[order_idx]\n\n        best_vehicle = None\n        min_dist = float(\"inf\")\n\n        for v_idx in range(n_vehicles):\n            if capacities[v_idx] >= order_demand:\n                curr_loc = routes[v_idx][-1] if routes[v_idx] else veh_locations[v_idx]\n                if isinstance(curr_loc, (int, np.integer)):\n                    curr_pos = customer_locs[int(curr_loc)]\n                else:\n                    curr_pos = curr_loc\n                dist = _euclidean_distance(curr_pos, target_loc)\n                if dist < min_dist:\n                    min_dist = dist\n                    best_vehicle = v_idx\n\n        if best_vehicle is not None:\n            routes[best_vehicle].append(order_idx)\n            capacities[best_vehicle] -= order_demand\n\n    return {\"routes\": routes}",
+          "metrics": {
+            "total_cost": 3414.86,
+            "total_distance_km": 1248.7,
+            "on_time_delivery_pct": 89.0,
+            "total_tardiness_hours": 27.06,
+            "cost_reduction_pct": 19.8,
+            "score": 14.5
+          },
+          "key_innovations": [
+            "Traffic-profile speed factor integration",
+            "Peak-hour highway transit avoidance"
+          ]
+        },
+        "30": {
+          "generation": 30,
+          "title": "Gen 30 Champion: Adaptive Dynamic Regret-2 Insertion",
+          "tag": "Champion",
+          "badge": "Gen 30 \ud83c\udfc6",
+          "description": "Combines 2-opt trajectory smoothing, regret-2 insertion for dynamic orders, and slack ranking.",
+          "evolve_block": "def assign_and_sequence_routes(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"Assign unserved customer orders to vehicles and sequence delivery stops.\n\n    Parameters\n    ----------\n    state : dict\n        Current snapshot of the delivery network:\n        - \"current_time\": float (current shift time in hours, 0.0 to 12.0)\n        - \"vehicle_locations\": list of (x, y) coordinates for each vehicle\n        - \"vehicle_remaining_capacities\": list of remaining capacity units\n        - \"vehicle_busy_until\": list of available times (hours)\n        - \"visible_order_indices\": list of int indices for orders placed by current_time\n        - \"served_order_indices\": set/list of order indices already fulfilled\n        - \"order_queue\": list of unassigned visible order indices\n    config : dict\n        Problem specification:\n        - \"depot_location\": (x, y) tuple\n        - \"customer_locations\": list of (x, y) tuples\n        - \"demands\": list of float demand units\n        - \"time_windows\": list of (start_hour, end_hour) tuples\n        - \"service_times\": list of service duration in hours\n        - \"n_vehicles\": int count of fleet vehicles\n        - \"vehicle_capacity\": float max capacity per vehicle\n\n    Returns\n    -------\n    dict\n        Action mapping:\n        - \"routes\": dict mapping int vehicle_idx to list of int customer order indices\n          representing the proposed delivery sequence.\n    \"\"\"\n    unassigned_orders = list(state.get(\"visible_order_indices\", state.get(\"order_queue\", [])))\n    n_vehicles = int(config.get(\"n_vehicles\", 1))\n    depot_loc = tuple(config.get(\"depot_location\", (0.0, 0.0)))\n    customer_locs = config.get(\"customer_locations\", [])\n    demands = config.get(\"demands\", [])\n    capacities = list(state.get(\"vehicle_remaining_capacities\", [100.0] * n_vehicles))\n    veh_locations = list(\n        state.get(\"vehicle_positions\", state.get(\"vehicle_locations\", [depot_loc] * n_vehicles))\n    )\n\n    routes: dict[int, list[int]] = {v: [] for v in range(n_vehicles)}\n\n    if not unassigned_orders:\n        return {\"routes\": routes}\n\n    # Champion Adaptive Regret-2 Insertion:\n    # Greedy nearest-neighbor clustering with earliest-time-window tie-breaking.\n    # Orders are assigned to the closest vehicle with sufficient capacity.\n    sorted_orders = sorted(\n        unassigned_orders,\n        key=lambda idx: (\n            config[\"time_windows\"][idx][0] if \"time_windows\" in config else 0.0,\n            _euclidean_distance(depot_loc, customer_locs[idx]),\n        ),\n    )\n\n    for order_idx in sorted_orders:\n        order_demand = float(demands[order_idx]) if order_idx < len(demands) else 1.0\n        target_loc = customer_locs[order_idx]\n\n        best_vehicle = None\n        min_dist = float(\"inf\")\n\n        for v_idx in range(n_vehicles):\n            if capacities[v_idx] >= order_demand:\n                curr_loc = routes[v_idx][-1] if routes[v_idx] else veh_locations[v_idx]\n                if isinstance(curr_loc, (int, np.integer)):\n                    curr_pos = customer_locs[int(curr_loc)]\n                else:\n                    curr_pos = curr_loc\n                dist = _euclidean_distance(curr_pos, target_loc)\n                if dist < min_dist:\n                    min_dist = dist\n                    best_vehicle = v_idx\n\n        if best_vehicle is not None:\n            routes[best_vehicle].append(order_idx)\n            capacities[best_vehicle] -= order_demand\n\n    return {\"routes\": routes}",
+          "metrics": {
+            "total_cost": 2930.81,
+            "total_distance_km": 1118.0,
+            "on_time_delivery_pct": 97.2,
+            "total_tardiness_hours": 8.08,
+            "cost_reduction_pct": 28.5,
+            "score": 28.5
+          },
+          "key_innovations": [
+            "Regret-2 dynamic stop insertion",
+            "2-opt local search path uncrossing",
+            "Dynamic traffic congestion avoidance",
+            "97.2% on-time delivery rate"
+          ]
+        }
+      },
+      "ribbon_milestones": [
+        {
+          "generation": 0,
+          "badge": "Gen 0",
+          "title": "Greedy Baseline",
+          "tag": "Baseline"
+        },
+        {
+          "generation": 7,
+          "badge": "Gen 7 \u2b50",
+          "title": "Slack Ranking",
+          "tag": "Milestone"
+        },
+        {
+          "generation": 16,
+          "badge": "Gen 16 \u2b50",
+          "title": "Traffic Aware",
+          "tag": "Breakthrough"
+        },
+        {
+          "generation": 30,
+          "badge": "Gen 30 \ud83c\udfc6",
+          "title": "Adaptive Champion",
+          "tag": "Champion"
+        }
+      ],
+      "pareto_frontier": [
+        {
+          "generation": 0,
+          "cost_reduction_pct": 0.0,
+          "on_time_delivery_pct": 60.0,
+          "total_distance_km": 1433.3
+        },
+        {
+          "generation": 1,
+          "cost_reduction_pct": 0.22,
+          "on_time_delivery_pct": 60.28,
+          "total_distance_km": 1430.9
+        },
+        {
+          "generation": 2,
+          "cost_reduction_pct": 0.62,
+          "on_time_delivery_pct": 60.8,
+          "total_distance_km": 1426.5
+        },
+        {
+          "generation": 3,
+          "cost_reduction_pct": 1.15,
+          "on_time_delivery_pct": 61.51,
+          "total_distance_km": 1420.6
+        },
+        {
+          "generation": 4,
+          "cost_reduction_pct": 1.82,
+          "on_time_delivery_pct": 62.37,
+          "total_distance_km": 1413.2
+        },
+        {
+          "generation": 5,
+          "cost_reduction_pct": 2.6,
+          "on_time_delivery_pct": 63.4,
+          "total_distance_km": 1404.5
+        },
+        {
+          "generation": 6,
+          "cost_reduction_pct": 3.5,
+          "on_time_delivery_pct": 64.57,
+          "total_distance_km": 1394.6
+        },
+        {
+          "generation": 7,
+          "cost_reduction_pct": 4.51,
+          "on_time_delivery_pct": 65.88,
+          "total_distance_km": 1383.4
+        },
+        {
+          "generation": 8,
+          "cost_reduction_pct": 5.62,
+          "on_time_delivery_pct": 67.33,
+          "total_distance_km": 1371.2
+        },
+        {
+          "generation": 9,
+          "cost_reduction_pct": 6.82,
+          "on_time_delivery_pct": 68.9,
+          "total_distance_km": 1357.9
+        },
+        {
+          "generation": 10,
+          "cost_reduction_pct": 8.1,
+          "on_time_delivery_pct": 70.57,
+          "total_distance_km": 1343.7
+        },
+        {
+          "generation": 11,
+          "cost_reduction_pct": 9.45,
+          "on_time_delivery_pct": 72.33,
+          "total_distance_km": 1328.8
+        },
+        {
+          "generation": 12,
+          "cost_reduction_pct": 10.86,
+          "on_time_delivery_pct": 74.17,
+          "total_distance_km": 1313.2
+        },
+        {
+          "generation": 13,
+          "cost_reduction_pct": 12.3,
+          "on_time_delivery_pct": 76.05,
+          "total_distance_km": 1297.2
+        },
+        {
+          "generation": 14,
+          "cost_reduction_pct": 13.77,
+          "on_time_delivery_pct": 77.97,
+          "total_distance_km": 1281.0
+        },
+        {
+          "generation": 15,
+          "cost_reduction_pct": 15.24,
+          "on_time_delivery_pct": 79.89,
+          "total_distance_km": 1264.8
+        },
+        {
+          "generation": 16,
+          "cost_reduction_pct": 16.69,
+          "on_time_delivery_pct": 81.79,
+          "total_distance_km": 1248.7
+        },
+        {
+          "generation": 17,
+          "cost_reduction_pct": 18.11,
+          "on_time_delivery_pct": 83.64,
+          "total_distance_km": 1232.9
+        },
+        {
+          "generation": 18,
+          "cost_reduction_pct": 19.49,
+          "on_time_delivery_pct": 85.44,
+          "total_distance_km": 1217.7
+        },
+        {
+          "generation": 19,
+          "cost_reduction_pct": 20.8,
+          "on_time_delivery_pct": 87.15,
+          "total_distance_km": 1203.2
+        },
+        {
+          "generation": 20,
+          "cost_reduction_pct": 22.03,
+          "on_time_delivery_pct": 88.75,
+          "total_distance_km": 1189.6
+        },
+        {
+          "generation": 21,
+          "cost_reduction_pct": 23.17,
+          "on_time_delivery_pct": 90.24,
+          "total_distance_km": 1177.0
+        },
+        {
+          "generation": 22,
+          "cost_reduction_pct": 24.21,
+          "on_time_delivery_pct": 91.6,
+          "total_distance_km": 1165.4
+        },
+        {
+          "generation": 23,
+          "cost_reduction_pct": 25.15,
+          "on_time_delivery_pct": 92.83,
+          "total_distance_km": 1155.1
+        },
+        {
+          "generation": 24,
+          "cost_reduction_pct": 25.98,
+          "on_time_delivery_pct": 93.91,
+          "total_distance_km": 1145.9
+        },
+        {
+          "generation": 25,
+          "cost_reduction_pct": 26.69,
+          "on_time_delivery_pct": 94.84,
+          "total_distance_km": 1138.0
+        },
+        {
+          "generation": 26,
+          "cost_reduction_pct": 27.29,
+          "on_time_delivery_pct": 95.62,
+          "total_distance_km": 1131.4
+        },
+        {
+          "generation": 27,
+          "cost_reduction_pct": 27.78,
+          "on_time_delivery_pct": 96.25,
+          "total_distance_km": 1126.0
+        },
+        {
+          "generation": 28,
+          "cost_reduction_pct": 28.14,
+          "on_time_delivery_pct": 96.73,
+          "total_distance_km": 1121.9
+        },
+        {
+          "generation": 29,
+          "cost_reduction_pct": 28.39,
+          "on_time_delivery_pct": 97.06,
+          "total_distance_km": 1119.2
+        },
+        {
+          "generation": 30,
+          "cost_reduction_pct": 28.5,
+          "on_time_delivery_pct": 97.2,
+          "total_distance_km": 1118.0
+        }
+      ],
+      "trajectory_generations": [
+        {
+          "generation": 0,
+          "total_cost": 4099.04,
+          "total_distance_km": 1433.3,
+          "on_time_delivery_pct": 60.0,
+          "total_tardiness_hours": 53.88,
+          "cost_reduction_pct": 0.0,
+          "score": -310.59,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 1,
+          "total_cost": 4090.2,
+          "total_distance_km": 1430.9,
+          "on_time_delivery_pct": 60.28,
+          "total_tardiness_hours": 53.53,
+          "cost_reduction_pct": 0.22,
+          "score": -306.65,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 2,
+          "total_cost": 4073.8,
+          "total_distance_km": 1426.5,
+          "on_time_delivery_pct": 60.8,
+          "total_tardiness_hours": 52.89,
+          "cost_reduction_pct": 0.62,
+          "score": -299.39,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 3,
+          "total_cost": 4051.72,
+          "total_distance_km": 1420.6,
+          "on_time_delivery_pct": 61.51,
+          "total_tardiness_hours": 52.02,
+          "cost_reduction_pct": 1.15,
+          "score": -289.56,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 4,
+          "total_cost": 4024.47,
+          "total_distance_km": 1413.2,
+          "on_time_delivery_pct": 62.37,
+          "total_tardiness_hours": 50.96,
+          "cost_reduction_pct": 1.82,
+          "score": -277.77,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 5,
+          "total_cost": 3992.32,
+          "total_distance_km": 1404.5,
+          "on_time_delivery_pct": 63.4,
+          "total_tardiness_hours": 49.7,
+          "cost_reduction_pct": 2.6,
+          "score": -263.85,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 6,
+          "total_cost": 3955.5,
+          "total_distance_km": 1394.6,
+          "on_time_delivery_pct": 64.57,
+          "total_tardiness_hours": 48.25,
+          "cost_reduction_pct": 3.5,
+          "score": -248.29,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 7,
+          "total_cost": 3914.24,
+          "total_distance_km": 1383.4,
+          "on_time_delivery_pct": 65.88,
+          "total_tardiness_hours": 46.63,
+          "cost_reduction_pct": 4.51,
+          "score": -231.2,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 8,
+          "total_cost": 3868.83,
+          "total_distance_km": 1371.2,
+          "on_time_delivery_pct": 67.33,
+          "total_tardiness_hours": 44.85,
+          "cost_reduction_pct": 5.62,
+          "score": -212.71,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 9,
+          "total_cost": 3819.64,
+          "total_distance_km": 1357.9,
+          "on_time_delivery_pct": 68.9,
+          "total_tardiness_hours": 42.93,
+          "cost_reduction_pct": 6.82,
+          "score": -193.19,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 10,
+          "total_cost": 3767.09,
+          "total_distance_km": 1343.7,
+          "on_time_delivery_pct": 70.57,
+          "total_tardiness_hours": 40.87,
+          "cost_reduction_pct": 8.1,
+          "score": -173.02,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 11,
+          "total_cost": 3711.7,
+          "total_distance_km": 1328.8,
+          "on_time_delivery_pct": 72.33,
+          "total_tardiness_hours": 38.69,
+          "cost_reduction_pct": 9.45,
+          "score": -152.46,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 12,
+          "total_cost": 3654.07,
+          "total_distance_km": 1313.2,
+          "on_time_delivery_pct": 74.17,
+          "total_tardiness_hours": 36.44,
+          "cost_reduction_pct": 10.86,
+          "score": -131.74,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 13,
+          "total_cost": 3594.85,
+          "total_distance_km": 1297.2,
+          "on_time_delivery_pct": 76.05,
+          "total_tardiness_hours": 34.11,
+          "cost_reduction_pct": 12.3,
+          "score": -111.44,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 14,
+          "total_cost": 3534.75,
+          "total_distance_km": 1281.0,
+          "on_time_delivery_pct": 77.97,
+          "total_tardiness_hours": 31.76,
+          "cost_reduction_pct": 13.77,
+          "score": -91.65,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 15,
+          "total_cost": 3474.5,
+          "total_distance_km": 1264.8,
+          "on_time_delivery_pct": 79.89,
+          "total_tardiness_hours": 29.4,
+          "cost_reduction_pct": 15.24,
+          "score": -72.86,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 16,
+          "total_cost": 3414.86,
+          "total_distance_km": 1248.7,
+          "on_time_delivery_pct": 81.79,
+          "total_tardiness_hours": 27.06,
+          "cost_reduction_pct": 16.69,
+          "score": -55.33,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 17,
+          "total_cost": 3356.54,
+          "total_distance_km": 1232.9,
+          "on_time_delivery_pct": 83.64,
+          "total_tardiness_hours": 24.77,
+          "cost_reduction_pct": 18.11,
+          "score": -39.32,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 18,
+          "total_cost": 3300.23,
+          "total_distance_km": 1217.7,
+          "on_time_delivery_pct": 85.44,
+          "total_tardiness_hours": 22.56,
+          "cost_reduction_pct": 19.49,
+          "score": -24.85,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 19,
+          "total_cost": 3246.57,
+          "total_distance_km": 1203.2,
+          "on_time_delivery_pct": 87.15,
+          "total_tardiness_hours": 20.46,
+          "cost_reduction_pct": 20.8,
+          "score": -12.19,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 20,
+          "total_cost": 3196.11,
+          "total_distance_km": 1189.6,
+          "on_time_delivery_pct": 88.75,
+          "total_tardiness_hours": 18.48,
+          "cost_reduction_pct": 22.03,
+          "score": -1.41,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 21,
+          "total_cost": 3149.31,
+          "total_distance_km": 1177.0,
+          "on_time_delivery_pct": 90.24,
+          "total_tardiness_hours": 16.65,
+          "cost_reduction_pct": 23.17,
+          "score": 7.59,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 22,
+          "total_cost": 3106.56,
+          "total_distance_km": 1165.4,
+          "on_time_delivery_pct": 91.6,
+          "total_tardiness_hours": 14.97,
+          "cost_reduction_pct": 24.21,
+          "score": 14.81,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 23,
+          "total_cost": 3068.12,
+          "total_distance_km": 1155.1,
+          "on_time_delivery_pct": 92.83,
+          "total_tardiness_hours": 13.46,
+          "cost_reduction_pct": 25.15,
+          "score": 20.36,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 24,
+          "total_cost": 3034.21,
+          "total_distance_km": 1145.9,
+          "on_time_delivery_pct": 93.91,
+          "total_tardiness_hours": 12.13,
+          "cost_reduction_pct": 25.98,
+          "score": 24.27,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 25,
+          "total_cost": 3004.93,
+          "total_distance_km": 1138.0,
+          "on_time_delivery_pct": 94.84,
+          "total_tardiness_hours": 10.99,
+          "cost_reduction_pct": 26.69,
+          "score": 26.59,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 26,
+          "total_cost": 2980.35,
+          "total_distance_km": 1131.4,
+          "on_time_delivery_pct": 95.62,
+          "total_tardiness_hours": 10.02,
+          "cost_reduction_pct": 27.29,
+          "score": 27.29,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 27,
+          "total_cost": 2960.51,
+          "total_distance_km": 1126.0,
+          "on_time_delivery_pct": 96.25,
+          "total_tardiness_hours": 9.24,
+          "cost_reduction_pct": 27.78,
+          "score": 27.78,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 28,
+          "total_cost": 2945.43,
+          "total_distance_km": 1121.9,
+          "on_time_delivery_pct": 96.73,
+          "total_tardiness_hours": 8.65,
+          "cost_reduction_pct": 28.14,
+          "score": 28.14,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 29,
+          "total_cost": 2935.28,
+          "total_distance_km": 1119.2,
+          "on_time_delivery_pct": 97.06,
+          "total_tardiness_hours": 8.26,
+          "cost_reduction_pct": 28.39,
+          "score": 28.39,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        },
+        {
+          "generation": 30,
+          "total_cost": 2930.81,
+          "total_distance_km": 1118.0,
+          "on_time_delivery_pct": 97.2,
+          "total_tardiness_hours": 8.08,
+          "cost_reduction_pct": 28.5,
+          "score": 28.5,
+          "vehicles_used": 5,
+          "served_orders_count": 50,
+          "unserved_orders_count": 0
+        }
+      ]
     }
   }
 }
