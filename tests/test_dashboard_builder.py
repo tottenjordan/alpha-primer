@@ -53,6 +53,17 @@ def test_master_trajectories_contains_all_use_cases(tmp_path: Path) -> None:
     assert "fleet_routing" in master["use_cases"]
 
 
+def test_dashboard_multi_use_case_switcher_elements(tmp_path: Path) -> None:
+    """Verify index.html contains use-case switcher pills and navigation elements."""
+    html_path = build_dashboard_html(output_dir=tmp_path)
+    content = html_path.read_text(encoding="utf-8")
+
+    assert 'id="use-case-switcher"' in content
+    assert 'data-use-case="inventory_replenishment"' in content
+    assert 'data-use-case="fleet_routing"' in content
+    assert 'id="active-use-case-title"' in content
+
+
 def test_build_dashboard_html_safe_dom_compliance(tmp_path: Path) -> None:
     html_path = build_dashboard_html(output_dir=tmp_path)
     assert html_path.exists()

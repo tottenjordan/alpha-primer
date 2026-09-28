@@ -228,6 +228,71 @@ def build_dashboard_html(
       pointer-events: auto;
     }}
 
+    /* Multi-Use-Case Domain Switcher */
+    .use-case-bar {{
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 12px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      margin-top: 10px;
+      margin-bottom: 4px;
+      flex-wrap: wrap;
+    }}
+
+    .use-case-label {{
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+      white-space: nowrap;
+    }}
+
+    .use-case-switcher {{
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }}
+
+    .use-case-btn {{
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.15s ease;
+    }}
+
+    .use-case-btn:hover {{
+      color: var(--text-primary);
+      border-color: var(--accent-cyan);
+    }}
+
+    .use-case-btn.active {{
+      background: rgba(6, 182, 212, 0.15);
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+      box-shadow: 0 0 10px rgba(6, 182, 212, 0.2);
+    }}
+
+    .active-use-case-title {{
+      font-size: 12.5px;
+      color: var(--text-muted);
+      margin-left: auto;
+      font-family: var(--font-mono);
+    }}
+
     .controls-row {{
       display: flex;
       justify-content: space-between;
@@ -1116,9 +1181,23 @@ def build_dashboard_html(
           <span>Model: <b>gemini-3.5-flash</b></span>
         </div>
         <div class="pill">
-          <span>Horizon: <b>90 Days (Causal)</b></span>
+          <span>Horizon: <b id="meta-horizon">90 Days (Causal)</b></span>
         </div>
       </div>
+    </div>
+
+    <!-- Multi-Use-Case Domain Switcher -->
+    <div class="use-case-bar">
+      <span class="use-case-label">DOMAIN DIGITAL TWIN:</span>
+      <div class="use-case-switcher" id="use-case-switcher">
+        <button class="use-case-btn active" data-use-case="inventory_replenishment" id="btn-uc-inventory">
+          📦 Retail &amp; Perishable Inventory
+        </button>
+        <button class="use-case-btn" data-use-case="fleet_routing" id="btn-uc-fleet">
+          🚚 Dynamic Fleet Routing (VRPTW)
+        </button>
+      </div>
+      <div class="active-use-case-title" id="active-use-case-title">Autonomous Multi-Echelon &amp; Perishable Inventory Replenishment</div>
     </div>
 
     <!-- Real-time Candidate Evaluation Toast -->
