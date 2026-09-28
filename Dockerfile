@@ -14,7 +14,7 @@ ENV UV_COMPILE_BYTECODE=1 \
 COPY pyproject.toml uv.lock ./
 
 # Install production dependencies only using frozen lockfile
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --no-default-groups --no-install-project
 
 # Production runtime image
 FROM python:3.12-slim
