@@ -346,6 +346,16 @@ alpha-primer/
 │   ├── DATASET.md                     # Complete dataset specification (50 SKUs, 90 days)
 │   ├── README.md                      # Use case summary and problem formulation
 │   └── run_evolution.py               # CLI entrypoint for local or cloud evolution
+├── examples/fleet_routing/            # Dynamic Fleet Routing & Dispatch Digital Twin
+│   ├── src/
+│   │   ├── program.py                 # Greedy route dispatch policy (# EVOLVE-BLOCK)
+│   │   ├── simulator.py               # Spatial digital twin with dynamic traffic & causal isolation
+│   │   ├── evaluate.py                # VehicleRoutingEvaluator (3-tier validation harness)
+│   │   └── report.py                  # Post-evolution holdout analytics and reporting
+│   ├── tests/                         # Unit tests for routing simulator and evaluator
+│   ├── README.md                      # Urban fleet routing problem formulation and results
+│   ├── instructions.md                # Domain prompt context for Gemini Enterprise
+│   └── run_evolution.py               # CLI entrypoint for fleet routing evolution
 ├── src/alpha_evolve/                  # Core client library & orchestration runtime
 │   ├── client.py                      # Discovery Engine v1alpha REST client with ADC
 │   ├── controller.py                  # Evolutionary search loop manager

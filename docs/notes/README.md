@@ -22,6 +22,7 @@ Top-level index of session notes and key repository files (kept under 200 lines)
 - [candidate_sandboxing.md](candidate_sandboxing.md) — Multi-mode process/subprocess sandboxing, POSIX memory limits (RLIMIT_AS), unblockable timeouts (SIGKILL), and crash/signal trapping.
 - [realtime_dashboard.md](realtime_dashboard.md) — Real-time candidate evaluation telemetry broker, Server-Sent Events (SSE) streaming, and live visualizer updates.
 - [google_cloud_run_hosting.md](google_cloud_run_hosting.md) — Cloud Run containerization, deployment automation, and Gemini Enterprise (Discovery Engine v1alpha) external agent registration.
+- [fleet_routing_use_case.md](fleet_routing_use_case.md) — Dynamic Fleet Routing & Dispatch with Time Windows (VRPTW) use case architecture, spatial digital twin, and evaluation harness.
 - [../architecture/README.md](../architecture/README.md) — Reference architectures and workflow diagrams (end-to-end evolutionary topology, Cloud Run integration, digital twin loop).
 
 
