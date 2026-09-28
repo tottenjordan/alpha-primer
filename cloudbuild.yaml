@@ -1,0 +1,65 @@
+# Google Cloud Build Pipeline for AlphaEvolve Supply Chain Suite
+# Builds non-root hardened container and deploys to Google Cloud Run
+# Substitutions allow dynamic overriding:
+#   _SERVICE_NAME: Cloud Run service name (default: alpha-evolve-primer-ui)
+#   _REGION: GCP deployment region (default: us-central1)
+#   _ALLOW_UNAUTHENTICATED: public vs private ingress (default: --allow-unauthenticated)
+
+steps:
+  # Step 1: Build the container image using Docker buildx and cache
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-image'
+    args:
+      - 'build'
+      - '--file=Dockerfile'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/alpha-evolve-repo/${_SERVICE_NAME}:$COMMIT_SHA'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/alpha-evolve-repo/${_SERVICE_NAME}:latest'
+      - '.'
+
+  # Step 2: Push the versioned commit SHA tag to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-sha-tag'
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/alpha-evolve-repo/${_SERVICE_NAME}:$COMMIT_SHA'
+
+  # Step 3: Push the latest tag to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-latest-tag'
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/alpha-evolve-repo/${_SERVICE_NAME}:latest'
+
+  # Step 4: Deploy the container image to Google Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+    id: 'deploy-cloud-run'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_SERVICE_NAME}'
+      - '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/alpha-evolve-repo/${_SERVICE_NAME}:$COMMIT_SHA'
+      - '--region=${_REGION}'
+      - '--platform=managed'
+      - '--port=8080'
+      - '--memory=512Mi'
+      - '--cpu=1'
+      - '--concurrency=80'
+      - '--min-instances=0'
+      - '--max-instances=5'
+      - '--timeout=60s'
+      - '${_ALLOW_UNAUTHENTICATED}'
+
+substitutions:
+  _SERVICE_NAME: 'alpha-evolve-primer-ui'
+  _REGION: 'us-central1'
+  _ALLOW_UNAUTHENTICATED: '--allow-unauthenticated'
+
+images:
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/alpha-evolve-repo/${_SERVICE_NAME}:$COMMIT_SHA'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/alpha-evolve-repo/${_SERVICE_NAME}:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
