@@ -244,7 +244,13 @@ class FleetRoutingDigitalTwin:
             if len(state["visible_order_indices"]) > 0:
                 try:
                     decision = policy_callable(state, cfg_dict)
-                    routes = decision.get("routes", [])
+                    raw_routes = decision.get("routes", [])
+                    if isinstance(raw_routes, dict):
+                        routes = [raw_routes.get(v, []) for v in range(self.config.n_vehicles)]
+                    elif isinstance(raw_routes, list):
+                        routes = raw_routes
+                    else:
+                        routes = []
                 except Exception:
                     routes = []
 
