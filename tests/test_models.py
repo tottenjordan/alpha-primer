@@ -70,3 +70,13 @@ def test_experiment_config() -> None:
     )
     assert cfg.project_id == "test-project"
     assert cfg.run_settings.mock_mode is True
+
+
+def test_run_settings_sandboxing_defaults_and_custom() -> None:
+    settings = RunSettings()
+    assert settings.sandbox_mode == "process"
+    assert settings.max_memory_mb == 2048
+
+    custom = RunSettings(sandbox_mode="subprocess", max_memory_mb=1024)
+    assert custom.sandbox_mode == "subprocess"
+    assert custom.max_memory_mb == 1024

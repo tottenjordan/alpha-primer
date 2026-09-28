@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -147,6 +147,14 @@ class RunSettings(BaseModel):
     mock_mode: bool = Field(
         default=False,
         description="Whether to run in offline mock mode without connecting to GCP.",
+    )
+    max_memory_mb: int = Field(
+        default=2048,
+        description="Maximum virtual memory (MB) allowed per evaluation sandbox.",
+    )
+    sandbox_mode: Literal["process", "subprocess", "thread"] = Field(
+        default="process",
+        description="Isolation backend for candidate execution ('process', 'subprocess', or 'thread').",
     )
 
 
