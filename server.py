@@ -145,8 +145,15 @@ def handle_api_request(
 
         # Check for dynamic what-if simulation query in payload
         query_type = payload.get("query", "summary")
-        lead_time_delay = float(payload.get("lead_time_delay", 0.0))
-        promo_spike = float(payload.get("promo_spike", 0.0))
+        try:
+            lead_time_delay = float(payload.get("lead_time_delay") or 0.0)
+        except (ValueError, TypeError):
+            lead_time_delay = 0.0
+
+        try:
+            promo_spike = float(payload.get("promo_spike") or 0.0)
+        except (ValueError, TypeError):
+            promo_spike = 0.0
 
         # Dynamic stress response if parameters provided
         simulated_cost_impact = 0.0
@@ -331,7 +338,16 @@ if __name__ == "__main__":
 
             def do_POST(self) -> None:
                 if self.path == "/api/agent/replenish-query":
-                    content_len = int(self.headers.get("Content-Length", 0))
+                    try:
+                        content_len = int(self.headers.get("Content-Length", 0))
+                    except (ValueError, TypeError):
+                        content_len = 0
+
+                    if content_len > 1_048_576:  # 1MB max payload limit
+                        self.send_response(413)
+                        self.end_headers()
+                        return
+
                     payload = {}
                     if content_len > 0:
                         try:

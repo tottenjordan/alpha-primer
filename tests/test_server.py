@@ -103,3 +103,17 @@ def test_server_agent_replenish_query_with_what_if_payload() -> None:
     assert stress["promo_demand_spike_pct"] == 30.0
     assert stress["projected_cost_increase_pct"] > 0.0
     assert "Champion policy absorbs shocks" in stress["resilience_recommendation"]
+
+
+def test_server_agent_replenish_query_with_malformed_payload() -> None:
+    # Verify non-numeric or malformed payload does not crash server (defensive float casting)
+    payload = {
+        "query": "malformed_test",
+        "lead_time_delay": "not-a-number",
+        "promo_spike": None,
+    }
+    code, headers, body = handle_api_request("/api/agent/replenish-query", payload=payload)
+    assert code == 200
+    assert body["status"] == "success"
+    assert "what_if_stress_test" not in body
+    assert body["metrics"]["cost_reduction_pct"] > 30.0

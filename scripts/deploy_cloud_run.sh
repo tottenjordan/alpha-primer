@@ -235,9 +235,10 @@ if [[ "${REGISTER_AGENT}" != "false" && -n "${ENGINE_ID}" ]]; then
   }
 }
 JSON
-    )
+    AGENT_RESP_TMP=$(mktemp)
+    trap 'rm -f "${AGENT_RESP_TMP}"' EXIT
 
-    HTTP_STATUS=$(curl -s -o /tmp/agent_reg_resp.json -w "%{http_code}" \
+    HTTP_STATUS=$(curl -s -o "${AGENT_RESP_TMP}" -w "%{http_code}" \
       -X POST \
       -H "Authorization: Bearer ${ACCESS_TOKEN}" \
       -H "Content-Type: application/json" \
@@ -251,9 +252,10 @@ JSON
       echo "ℹ️  Agent 'inventory-replenishment-twin' already exists in Discovery Engine (HTTP 409)."
     else
       echo "⚠️  Discovery Engine agent registration returned HTTP ${HTTP_STATUS} (Optional step). Details:"
-      cat /tmp/agent_reg_resp.json 2>/dev/null || true
+      cat "${AGENT_RESP_TMP}" 2>/dev/null || true
       echo ""
     fi
+    rm -f "${AGENT_RESP_TMP}"
   else
     echo "⚠️  Could not obtain gcloud access token. Skipping Discovery Engine agent registration."
   fi
