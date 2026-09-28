@@ -19,15 +19,29 @@ RECORDS_DIR = ROOT_DIR / "records"
 DASHBOARD_DIR = ROOT_DIR / "dashboard"
 
 
-def build_dashboard_html() -> Path:
-    """Compile records/master_trajectories.json into self-contained dashboard/index.html."""
-    master_path = RECORDS_DIR / "master_trajectories.json"
-    if not master_path.exists():
-        raise FileNotFoundError(f"Missing {master_path}. Run trajectory_generator.py first.")
+def build_dashboard_html(
+    master_path: Path | None = None,
+    output_dir: Path | None = None,
+) -> Path:
+    """Compile records/master_trajectories.json into self-contained dashboard/index.html.
 
-    master_data = json.loads(master_path.read_text(encoding="utf-8"))
-    DASHBOARD_DIR.mkdir(parents=True, exist_ok=True)
-    (DASHBOARD_DIR / "data.json").write_text(json.dumps(master_data, indent=2), encoding="utf-8")
+    Args:
+        master_path: Optional path to master_trajectories.json. Defaults to records/master_trajectories.json.
+        output_dir: Optional directory to save output files. Defaults to dashboard/.
+
+    Returns:
+        Path to the generated index.html file.
+    """
+    actual_master_path = (
+        master_path if master_path is not None else (RECORDS_DIR / "master_trajectories.json")
+    )
+    if not actual_master_path.exists():
+        raise FileNotFoundError(f"Missing {actual_master_path}. Run trajectory_generator.py first.")
+
+    master_data = json.loads(actual_master_path.read_text(encoding="utf-8"))
+    target_dir = output_dir if output_dir is not None else DASHBOARD_DIR
+    target_dir.mkdir(parents=True, exist_ok=True)
+    (target_dir / "data.json").write_text(json.dumps(master_data, indent=2), encoding="utf-8")
 
     embedded_json = json.dumps(master_data)
 
@@ -2742,7 +2756,7 @@ def build_dashboard_html() -> Path:
 </html>
 """
 
-    out_file = DASHBOARD_DIR / "index.html"
+    out_file = target_dir / "index.html"
     out_file.write_text(html_content, encoding="utf-8")
     return out_file
 

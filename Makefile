@@ -1,21 +1,28 @@
-.PHONY: dev lint format typecheck test check clean
+.PHONY: dev lint format format-check typecheck test check clean build-dashboard
 
 dev:
-	uv sync --all-groups
+	uv sync --frozen --all-groups
 
 lint:
-	uv run ruff check .
+	uv run --frozen ruff check .
 
 format:
-	uv run ruff format .
+	uv run --frozen ruff format .
+
+format-check:
+	uv run --frozen ruff format --check .
 
 typecheck:
-	uv run ty check src/
+	uv run --frozen ty check src/
 
 test:
-	uv run pytest -v
+	uv run --frozen pytest -v
 
-check: lint format typecheck test
+check: lint format-check typecheck test
+
+build-dashboard:
+	uv run --frozen python -m alpha_evolve.dashboard.trajectory_generator
+	uv run --frozen python -m alpha_evolve.dashboard.build_dashboard
 
 clean:
 	rm -rf .pytest_cache .ruff_cache htmlcov .coverage
