@@ -14,9 +14,7 @@ def _euclidean_distance(p1: tuple[float, float], p2: tuple[float, float]) -> flo
 
 
 # EVOLVE-BLOCK-START
-def assign_and_sequence_routes(
-    state: dict[str, Any], config: dict[str, Any]
-) -> dict[str, Any]:
+def assign_and_sequence_routes(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
     """Assign unserved customer orders to vehicles and sequence delivery stops.
 
     Parameters
@@ -53,7 +51,9 @@ def assign_and_sequence_routes(
     customer_locs = config.get("customer_locations", [])
     demands = config.get("demands", [])
     capacities = list(state.get("vehicle_remaining_capacities", [100.0] * n_vehicles))
-    veh_locations = list(state.get("vehicle_positions", state.get("vehicle_locations", [depot_loc] * n_vehicles)))
+    veh_locations = list(
+        state.get("vehicle_positions", state.get("vehicle_locations", [depot_loc] * n_vehicles))
+    )
 
     routes: dict[int, list[int]] = {v: [] for v in range(n_vehicles)}
 
@@ -80,11 +80,7 @@ def assign_and_sequence_routes(
 
         for v_idx in range(n_vehicles):
             if capacities[v_idx] >= order_demand:
-                curr_loc = (
-                    routes[v_idx][-1]
-                    if routes[v_idx]
-                    else veh_locations[v_idx]
-                )
+                curr_loc = routes[v_idx][-1] if routes[v_idx] else veh_locations[v_idx]
                 if isinstance(curr_loc, (int, np.integer)):
                     curr_pos = customer_locs[int(curr_loc)]
                 else:
@@ -99,4 +95,6 @@ def assign_and_sequence_routes(
             capacities[best_vehicle] -= order_demand
 
     return {"routes": routes}
+
+
 # EVOLVE-BLOCK-END

@@ -125,9 +125,7 @@ def generate_routing_benchmark_dataset(
         order_times[i] = o_time
 
         # Time windows: delivery window starts after order time
-        earliest_start = float(
-            np.round(o_time + rng.uniform(0.5, 3.0), 2)
-        )
+        earliest_start = float(np.round(o_time + rng.uniform(0.5, 3.0), 2))
         earliest_start = min(earliest_start, 9.0)
         window_width = float(np.round(rng.uniform(2.0, 4.5), 2))
         latest_deadline = min(12.0, earliest_start + window_width)
@@ -190,9 +188,7 @@ class FleetRoutingDigitalTwin:
         visible_indices = np.where(visible_mask)[0]
 
         if vehicle_positions is None:
-            vehicle_positions = np.tile(
-                self.config.depot_location, (self.config.n_vehicles, 1)
-            )
+            vehicle_positions = np.tile(self.config.depot_location, (self.config.n_vehicles, 1))
 
         if vehicle_capacities is None:
             vehicle_capacities = np.full(
@@ -224,9 +220,7 @@ class FleetRoutingDigitalTwin:
         tardiness_hours = np.zeros(self.config.n_customers, dtype=np.float64)
         wait_hours = np.zeros(self.config.n_customers, dtype=np.float64)
 
-        vehicle_locations = np.tile(
-            self.config.depot_location, (self.config.n_vehicles, 1)
-        )
+        vehicle_locations = np.tile(self.config.depot_location, (self.config.n_vehicles, 1))
         vehicle_available_times = np.zeros(self.config.n_vehicles, dtype=np.float64)
         vehicle_odometers = np.zeros(self.config.n_vehicles, dtype=np.float64)
         vehicle_used = np.zeros(self.config.n_vehicles, dtype=bool)
@@ -263,8 +257,7 @@ class FleetRoutingDigitalTwin:
                     valid_stops = [
                         idx
                         for idx in route
-                        if idx in state["visible_order_indices"]
-                        and not served_mask[idx]
+                        if idx in state["visible_order_indices"] and not served_mask[idx]
                     ]
 
                     # Verify capacity constraint
@@ -317,14 +310,10 @@ class FleetRoutingDigitalTwin:
                         curr_pos = stop_loc
 
                     # Return to depot
-                    return_dist = self.calculate_distance(
-                        curr_pos, self.config.depot_location
-                    )
+                    return_dist = self.calculate_distance(curr_pos, self.config.depot_location)
                     vehicle_odometers[v_idx] += return_dist
                     traffic = self.traffic_congestion_factor(v_time)
-                    return_time = return_dist / max(
-                        10.0, self.config.base_speed_kmh / traffic
-                    )
+                    return_time = return_dist / max(10.0, self.config.base_speed_kmh / traffic)
                     v_time += return_time
 
                     # Update vehicle state for next round
@@ -350,16 +339,14 @@ class FleetRoutingDigitalTwin:
         )
 
         on_time_count = sum(
-            1 for i in range(self.config.n_customers) if served_mask[i] and tardiness_hours[i] <= 0.05
+            1
+            for i in range(self.config.n_customers)
+            if served_mask[i] and tardiness_hours[i] <= 0.05
         )
-        on_time_pct = (
-            (on_time_count / served_count * 100.0) if served_count > 0 else 0.0
-        )
+        on_time_pct = (on_time_count / served_count * 100.0) if served_count > 0 else 0.0
 
         max_capacity_pool = (
-            active_vehicles * self.config.vehicle_capacity
-            if active_vehicles > 0
-            else 1.0
+            active_vehicles * self.config.vehicle_capacity if active_vehicles > 0 else 1.0
         )
         utilization_pct = min(
             100.0,

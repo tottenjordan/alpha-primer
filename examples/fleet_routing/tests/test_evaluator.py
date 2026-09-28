@@ -61,4 +61,3 @@ def test_evaluate_on_locked_holdout() -> None:
     assert "evolved" in summary
     assert "cost_reduction_pct" in summary
     assert summary["cost_reduction_pct"] == 0.0
-

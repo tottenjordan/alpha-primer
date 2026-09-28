@@ -23,9 +23,7 @@ AlphaEvolve evolves the constructive dispatch policy inside [`src/program.py`](s
 
 ```python
 # EVOLVE-BLOCK-START
-def assign_and_sequence_routes(
-    state: dict[str, Any], config: dict[str, Any]
-) -> dict[str, Any]: ...
+def assign_and_sequence_routes(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]: ...
 
 
 # EVOLVE-BLOCK-END

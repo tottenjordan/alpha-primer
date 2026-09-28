@@ -90,7 +90,9 @@ def generate_fleet_routing_trajectory_dataset(
             "tag": "Improvement",
             "badge": "Gen 7 ⭐",
             "description": "Prioritizes stops by remaining delivery slack (deadline minus current travel time).",
-            "evolve_block": baseline_evolve_block.replace("earliest-time-window", "time-window-slack"),
+            "evolve_block": baseline_evolve_block.replace(
+                "earliest-time-window", "time-window-slack"
+            ),
             "metrics": {
                 "total_cost": round(_interpolate(gen0_cost, gen30_cost, 7), 2),
                 "total_distance_km": round(_interpolate(gen0_distance, gen30_distance, 7), 1),
@@ -110,12 +112,16 @@ def generate_fleet_routing_trajectory_dataset(
             "tag": "Breakthrough",
             "badge": "Gen 16 ⭐",
             "description": "Schedules perimeter stops during traffic lulls and clusters depot stops during peak rush hours.",
-            "evolve_block": baseline_evolve_block.replace("Greedy nearest-neighbor", "Traffic-aware clustering"),
+            "evolve_block": baseline_evolve_block.replace(
+                "Greedy nearest-neighbor", "Traffic-aware clustering"
+            ),
             "metrics": {
                 "total_cost": round(_interpolate(gen0_cost, gen30_cost, 16), 2),
                 "total_distance_km": round(_interpolate(gen0_distance, gen30_distance, 16), 1),
                 "on_time_delivery_pct": 89.0,
-                "total_tardiness_hours": round(_interpolate(gen0_tardiness, gen30_tardiness, 16), 2),
+                "total_tardiness_hours": round(
+                    _interpolate(gen0_tardiness, gen30_tardiness, 16), 2
+                ),
                 "cost_reduction_pct": 19.8,
                 "score": 14.5,
             },
@@ -130,7 +136,9 @@ def generate_fleet_routing_trajectory_dataset(
             "tag": "Champion",
             "badge": "Gen 30 🏆",
             "description": "Combines 2-opt trajectory smoothing, regret-2 insertion for dynamic orders, and slack ranking.",
-            "evolve_block": baseline_evolve_block.replace("Baseline Heuristic", "Champion Adaptive Regret-2 Insertion"),
+            "evolve_block": baseline_evolve_block.replace(
+                "Baseline Heuristic", "Champion Adaptive Regret-2 Insertion"
+            ),
             "metrics": {
                 "total_cost": gen30_cost,
                 "total_distance_km": gen30_distance,
