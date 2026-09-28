@@ -10,7 +10,6 @@ import warnings
 from typing import Any
 
 import google.auth
-import google.auth.transport.requests
 import httpx
 
 from .models import (
@@ -67,7 +66,9 @@ class AlphaEvolveClient:
                     self._credentials, _ = google.auth.default(
                         scopes=["https://www.googleapis.com/auth/cloud-platform"]
                     )
-                self._auth_request = google.auth.transport.requests.Request()
+                from google.auth.transport import requests as auth_requests
+
+                self._auth_request = auth_requests.Request()
             if not self._credentials.valid:
                 self._credentials.refresh(self._auth_request)
             return str(self._credentials.token)
