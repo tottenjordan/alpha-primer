@@ -162,3 +162,22 @@ def test_experiment_with_base_evaluator(tmp_path: Any) -> None:
     assert (out_dir / "best_evaluation_summary.json").exists()
     assert evaluator.setup_called
     assert evaluator.teardown_called
+
+
+def test_controller_wires_sandbox_config() -> None:
+    config = _make_config()
+    config.run_settings.sandbox_mode = "process"
+    config.run_settings.max_memory_mb = 1024
+    config.run_settings.max_evaluation_time_s = 12.0
+    client = MockAlphaEvolveClient(seed_code=config.seed_code)
+    evaluator = DummyLifecycleEvaluator()
+
+    controller = EvolutionController(
+        config=config,
+        client=client,
+        evaluator=evaluator,
+    )
+
+    assert controller.worker_pool.sandbox_config.sandbox_mode == "process"
+    assert controller.worker_pool.sandbox_config.max_memory_mb == 1024
+    assert controller.worker_pool.sandbox_config.timeout_s == 12.0

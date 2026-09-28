@@ -19,7 +19,7 @@ from .models import (
     ExperimentConfig,
     ProgramCandidate,
 )
-from .workers import WorkerPool
+from .workers import SandboxConfig, WorkerPool
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -59,6 +59,11 @@ class EvolutionController:
         self.worker_pool = WorkerPool(
             max_workers=config.run_settings.parallel_workers,
             timeout_s=config.run_settings.max_evaluation_time_s,
+            sandbox_config=SandboxConfig(
+                timeout_s=config.run_settings.max_evaluation_time_s,
+                max_memory_mb=config.run_settings.max_memory_mb,
+                sandbox_mode=config.run_settings.sandbox_mode,
+            ),
         )
 
         self.candidates_history: list[ProgramCandidate] = []
