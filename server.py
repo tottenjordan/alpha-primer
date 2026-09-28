@@ -12,12 +12,20 @@ import datetime
 import json
 import os
 import queue
+import sys
 from pathlib import Path
 from typing import Any
 
-from alpha_evolve.dashboard.telemetry_broker import TelemetryEvent, get_global_broker
-
 ROOT_DIR = Path(__file__).resolve().parent
+SRC_DIR = ROOT_DIR / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+from alpha_evolve.dashboard.telemetry_broker import (  # noqa: E402
+    TelemetryEvent,
+    get_global_broker,
+)
+
 DASHBOARD_DIR = ROOT_DIR / "dashboard"
 ASSETS_DIR = DASHBOARD_DIR / "assets"
 RECORDS_DIR = ROOT_DIR / "records"

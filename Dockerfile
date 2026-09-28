@@ -25,6 +25,7 @@ ENV PORT=8080 \
     HOST=0.0.0.0 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    PYTHONPATH="/app/src" \
     PATH="/app/.venv/bin:$PATH"
 
 # Copy virtualenv and runtime assets
