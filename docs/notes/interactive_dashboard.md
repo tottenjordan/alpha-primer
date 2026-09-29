@@ -19,6 +19,11 @@ Documenting the interactive executive suite for the Multi-Echelon Perishable Inv
    - Executive scrubber instantly updates KPIs, 90-day inventory dynamics, and spoilage indicators across 3 causal phases (Warmup 0..29, Validation 30..65, Holdout 66..89).
 5. **Interactive What-If Sandbox**:
    - Client-side in-browser simulation (<2ms latency) allowing live adjustment of supplier lead time delay, promotional demand spikes, and spoilage/stockout penalty multipliers across 3 SKU archetypes.
+6. **Multi-Use-Case Domain Switcher**:
+   - Dynamic client-side switching engine (`switchUseCase(useCaseId)`) supporting both:
+     - *Retail & Perishable Inventory Replenishment* (`inventory_replenishment`)
+     - *Dynamic Fleet Routing & Dispatch with Time Windows (VRPTW)* (`fleet_routing`)
+   - Rebinds KPI metrics, titles, horizon metadata, archetypes table, interactive milestone ribbons, and code diff AST dropdowns instantly with zero page reloads and 100% Safe DOM compliance.
 
 ## Running the Dashboard
 

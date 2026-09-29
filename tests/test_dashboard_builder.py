@@ -33,6 +33,47 @@ def test_trajectory_generator_compiles_data(tmp_path: Path) -> None:
     assert ir["champion_summary"]["spoilage_rate_pct"] == 8.45
 
 
+def test_master_trajectories_contains_all_use_cases(tmp_path: Path) -> None:
+    """Verify master_trajectories.json bundles both inventory_replenishment and fleet_routing."""
+    from alpha_evolve.dashboard.fleet_routing_trajectory_generator import (
+        generate_fleet_routing_trajectory_dataset,
+    )
+    from alpha_evolve.dashboard.trajectory_generator import generate_inventory_trajectory_dataset
+
+    # Generate both into tmp_path
+    generate_inventory_trajectory_dataset(output_dir=tmp_path)
+    generate_fleet_routing_trajectory_dataset(output_dir=tmp_path)
+
+    # Master bundle must contain both use cases
+    master_path = tmp_path / "master_trajectories.json"
+    assert master_path.exists()
+    master = json.loads(master_path.read_text(encoding="utf-8"))
+    assert "use_cases" in master
+    assert "inventory_replenishment" in master["use_cases"]
+    assert "fleet_routing" in master["use_cases"]
+
+
+def test_dashboard_multi_use_case_switcher_elements(tmp_path: Path) -> None:
+    """Verify index.html contains use-case switcher pills and navigation elements."""
+    html_path = build_dashboard_html(output_dir=tmp_path)
+    content = html_path.read_text(encoding="utf-8")
+
+    assert 'id="use-case-switcher"' in content
+    assert 'data-use-case="inventory_replenishment"' in content
+    assert 'data-use-case="fleet_routing"' in content
+    assert 'id="active-use-case-title"' in content
+
+
+def test_dashboard_client_use_case_switching_logic(tmp_path: Path) -> None:
+    """Verify JavaScript includes switchUseCase function and Safe DOM re-binding."""
+    html_path = build_dashboard_html(output_dir=tmp_path)
+    content = html_path.read_text(encoding="utf-8")
+
+    assert "switchUseCase" in content
+    assert "currentUseCaseId" in content
+    assert "innerHTML" not in content  # Strict enterprise rule
+
+
 def test_build_dashboard_html_safe_dom_compliance(tmp_path: Path) -> None:
     html_path = build_dashboard_html(output_dir=tmp_path)
     assert html_path.exists()

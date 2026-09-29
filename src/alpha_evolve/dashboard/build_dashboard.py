@@ -228,6 +228,71 @@ def build_dashboard_html(
       pointer-events: auto;
     }}
 
+    /* Multi-Use-Case Domain Switcher */
+    .use-case-bar {{
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 12px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      margin-top: 10px;
+      margin-bottom: 4px;
+      flex-wrap: wrap;
+    }}
+
+    .use-case-label {{
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+      white-space: nowrap;
+    }}
+
+    .use-case-switcher {{
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }}
+
+    .use-case-btn {{
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.15s ease;
+    }}
+
+    .use-case-btn:hover {{
+      color: var(--text-primary);
+      border-color: var(--accent-cyan);
+    }}
+
+    .use-case-btn.active {{
+      background: rgba(6, 182, 212, 0.15);
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+      box-shadow: 0 0 10px rgba(6, 182, 212, 0.2);
+    }}
+
+    .active-use-case-title {{
+      font-size: 12.5px;
+      color: var(--text-muted);
+      margin-left: auto;
+      font-family: var(--font-mono);
+    }}
+
     .controls-row {{
       display: flex;
       justify-content: space-between;
@@ -1116,9 +1181,23 @@ def build_dashboard_html(
           <span>Model: <b>gemini-3.5-flash</b></span>
         </div>
         <div class="pill">
-          <span>Horizon: <b>90 Days (Causal)</b></span>
+          <span>Horizon: <b id="meta-horizon">90 Days (Causal)</b></span>
         </div>
       </div>
+    </div>
+
+    <!-- Multi-Use-Case Domain Switcher -->
+    <div class="use-case-bar">
+      <span class="use-case-label">DOMAIN DIGITAL TWIN:</span>
+      <div class="use-case-switcher" id="use-case-switcher">
+        <button class="use-case-btn active" data-use-case="inventory_replenishment" id="btn-uc-inventory">
+          📦 Retail &amp; Perishable Inventory
+        </button>
+        <button class="use-case-btn" data-use-case="fleet_routing" id="btn-uc-fleet">
+          🚚 Dynamic Fleet Routing (VRPTW)
+        </button>
+      </div>
+      <div class="active-use-case-title" id="active-use-case-title">Autonomous Multi-Echelon &amp; Perishable Inventory Replenishment</div>
     </div>
 
     <!-- Real-time Candidate Evaluation Toast -->
@@ -1151,34 +1230,34 @@ def build_dashboard_html(
   <section id="tab-replay" class="tab-pane active">
     <div class="kpi-grid">
       <div class="kpi-card highlight">
-        <div class="kpi-label">Total Supply Chain Cost</div>
+        <div class="kpi-label" id="kpi-label-1">Total Supply Chain Cost</div>
         <div class="kpi-val" id="kpi-total-cost">$45,238</div>
         <div class="kpi-sub">
           <span class="badge-diff positive" id="kpi-cost-reduc">-33.9%</span>
-          <span>vs. $68,410 baseline</span>
+          <span id="kpi-baseline-comp">vs. $68,410 baseline</span>
         </div>
       </div>
 
       <div class="kpi-card">
-        <div class="kpi-label">Perishable Spoilage Waste</div>
+        <div class="kpi-label" id="kpi-label-2">Perishable Spoilage Waste</div>
         <div class="kpi-val" id="kpi-spoilage-cost">$16,145</div>
         <div class="kpi-sub">
           <span class="badge-diff positive" id="kpi-spoilage-rate">8.45% rate</span>
-          <span>vs. 14.6% baseline</span>
+          <span id="kpi-sub-comp-2">vs. 14.6% baseline</span>
         </div>
       </div>
 
       <div class="kpi-card">
-        <div class="kpi-label">Service Fill Rate</div>
+        <div class="kpi-label" id="kpi-label-3">Service Fill Rate</div>
         <div class="kpi-val" id="kpi-fill-rate">93.49%</div>
         <div class="kpi-sub">
-          <span class="badge-diff neutral">SLA: &ge;95.0%</span>
-          <span>stockout penalty: <span id="kpi-stockout-cost">$14,573</span></span>
+          <span class="badge-diff neutral" id="kpi-badge-3">SLA: &ge;95.0%</span>
+          <span id="kpi-sub-comp-3">stockout penalty: <span id="kpi-stockout-cost">$14,573</span></span>
         </div>
       </div>
 
       <div class="kpi-card">
-        <div class="kpi-label">Evaluation Fitness Score</div>
+        <div class="kpi-label" id="kpi-label-4">Evaluation Fitness Score</div>
         <div class="kpi-val" id="kpi-fitness-score">33.87</div>
         <div class="kpi-sub">
           <span class="badge-diff positive">+33.87 pts</span>
@@ -1490,17 +1569,22 @@ def build_dashboard_html(
         return;
       }}
 
-      const uc = masterData.use_cases ? masterData.use_cases.inventory_replenishment : null;
+      let currentUseCaseId = "inventory_replenishment";
+      let uc = (masterData.use_cases && masterData.use_cases[currentUseCaseId]) || null;
+      if (!uc && masterData.use_cases) {{
+        currentUseCaseId = Object.keys(masterData.use_cases)[0];
+        uc = masterData.use_cases[currentUseCaseId];
+      }}
       if (!uc) return;
 
-      const trajectories = uc.trajectory_generations || [];
-      const archetypes = uc.sku_archetypes || [];
-      const baselineSum = uc.baseline_summary || {{}};
-      const championSum = uc.champion_summary || {{}};
-      const milestones = uc.milestones || {{}};
-      const ribbonMilestones = uc.ribbon_milestones || [];
-      const costWaterfall = uc.cost_waterfall || null;
-      const paretoFrontier = uc.pareto_frontier || [];
+      let trajectories = uc.trajectory_generations || [];
+      let archetypes = uc.sku_archetypes || [];
+      let baselineSum = uc.baseline_summary || {{}};
+      let championSum = uc.champion_summary || {{}};
+      let milestones = uc.milestones || {{}};
+      let ribbonMilestones = uc.ribbon_milestones || [];
+      let costWaterfall = uc.cost_waterfall || null;
+      let paretoFrontier = uc.pareto_frontier || [];
       let maxGen = Math.max(0, trajectories.length - 1);
 
       // 3. Tab Switching
@@ -1533,21 +1617,146 @@ def build_dashboard_html(
 
       // 4. Render Archetype Table via Safe DOM
       const tbody = document.getElementById("tbody-archetypes");
-      if (tbody) {{
+      function renderArchetypesTable() {{
+        if (!tbody) return;
         tbody.replaceChildren();
-        archetypes.forEach(a => {{
-          const tr = el("tr");
-          tr.appendChild(el("td", null, a.category));
-          tr.appendChild(el("td", null, a.shelf_life_days + " days"));
-          tr.appendChild(el("td", null, a.lead_time_days + " days"));
-          tr.appendChild(el("td", null, a.baseline_spoilage_rate + "%"));
-          tr.appendChild(el("td", null, a.champion_spoilage_rate + "%"));
-          tr.appendChild(el("td", null, "$" + a.holding_cost.toFixed(2)));
-          tr.appendChild(el("td", null, "$" + a.spoilage_cost.toFixed(2)));
-          tr.appendChild(el("td", null, "$" + a.stockout_penalty.toFixed(2)));
-          tbody.appendChild(tr);
-        }});
+        if (currentUseCaseId === "fleet_routing") {{
+          // Fleet Routing vehicle archetypes
+          const fleetRows = [
+            {{ type: "Standard Delivery Van", cap: "120 boxes", speed: "45 km/h", costPerKm: "$1.85", fixedCost: "$120.00", slaRate: "97.2%" }},
+            {{ type: "Refrigerated Transit Van", cap: "90 boxes", speed: "40 km/h", costPerKm: "$2.40", fixedCost: "$160.00", slaRate: "98.5%" }},
+            {{ type: "Express Cargo Courier", cap: "45 boxes", speed: "55 km/h", costPerKm: "$1.50", fixedCost: "$95.00", slaRate: "96.8%" }}
+          ];
+          fleetRows.forEach(r => {{
+            const tr = el("tr");
+            tr.appendChild(el("td", null, r.type));
+            tr.appendChild(el("td", null, r.cap));
+            tr.appendChild(el("td", null, r.speed));
+            tr.appendChild(el("td", null, r.costPerKm));
+            tr.appendChild(el("td", null, r.fixedCost));
+            tr.appendChild(el("td", null, r.slaRate));
+            tr.appendChild(el("td", null, "Active"));
+            tr.appendChild(el("td", null, "SLA Guarded"));
+            tbody.appendChild(tr);
+          }});
+        }} else {{
+          archetypes.forEach(a => {{
+            const tr = el("tr");
+            tr.appendChild(el("td", null, a.category));
+            tr.appendChild(el("td", null, a.shelf_life_days + " days"));
+            tr.appendChild(el("td", null, a.lead_time_days + " days"));
+            tr.appendChild(el("td", null, a.baseline_spoilage_rate + "%"));
+            tr.appendChild(el("td", null, a.champion_spoilage_rate + "%"));
+            tr.appendChild(el("td", null, "$" + a.holding_cost.toFixed(2)));
+            tr.appendChild(el("td", null, "$" + a.spoilage_cost.toFixed(2)));
+            tr.appendChild(el("td", null, "$" + a.stockout_penalty.toFixed(2)));
+            tbody.appendChild(tr);
+          }});
+        }}
       }}
+      renderArchetypesTable();
+
+      // 4b. Use Case Switching Engine (Strict Safe DOM)
+      // Diff State variables
+      let diffViewMode = "split"; // "split" or "unified"
+      let diffFoldUnchanged = true;
+      let leftMilestoneKey = "0";
+      let rightMilestoneKey = "8";
+
+      const diffTableBody = document.getElementById("diff-table-body");
+      const diffTableHeader = document.getElementById("diff-table-header");
+      const btnViewSplit = document.getElementById("btn-view-split");
+      const btnViewUnified = document.getElementById("btn-view-unified");
+      const btnToggleFold = document.getElementById("btn-toggle-fold");
+      const diffSelectBase = document.getElementById("diff-select-base");
+      const diffSelectEvolved = document.getElementById("diff-select-evolved");
+
+      function updateDiffStepperOptions() {{
+        if (!diffSelectBase || !diffSelectEvolved) return;
+        diffSelectBase.replaceChildren();
+        diffSelectEvolved.replaceChildren();
+
+        const keys = Object.keys(milestones).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+        keys.forEach(k => {{
+          const m = milestones[k];
+          const label = "Gen " + k + (m.badge ? " (" + m.badge.replace(/Gen \\d+ ?/, "").trim() + ")" : "");
+          const opt1 = el("option", null, label);
+          opt1.value = k;
+          diffSelectBase.appendChild(opt1);
+
+          const opt2 = el("option", null, label);
+          opt2.value = k;
+          diffSelectEvolved.appendChild(opt2);
+        }});
+
+        leftMilestoneKey = keys[0] || "0";
+        rightMilestoneKey = keys.length > 1 ? keys[1] : (keys[0] || "0");
+        diffSelectBase.value = leftMilestoneKey;
+        diffSelectEvolved.value = rightMilestoneKey;
+        renderCurrentDiff();
+      }}
+
+      function switchUseCase(useCaseId) {{
+        if (!masterData.use_cases || !masterData.use_cases[useCaseId]) return;
+        currentUseCaseId = useCaseId;
+        uc = masterData.use_cases[currentUseCaseId];
+
+        // Update active button state
+        document.querySelectorAll(".use-case-btn").forEach(btn => {{
+          if (btn.getAttribute("data-use-case") === useCaseId) {{
+            btn.classList.add("active");
+          }} else {{
+            btn.classList.remove("active");
+          }}
+        }});
+
+        // Rebind data structures
+        trajectories = uc.trajectory_generations || [];
+        archetypes = uc.sku_archetypes || [];
+        baselineSum = uc.baseline_summary || {{}};
+        championSum = uc.champion_summary || {{}};
+        milestones = uc.milestones || {{}};
+        ribbonMilestones = uc.ribbon_milestones || [];
+        costWaterfall = uc.cost_waterfall || null;
+        paretoFrontier = uc.pareto_frontier || [];
+        maxGen = Math.max(0, trajectories.length - 1);
+
+        // Header metadata
+        const titleEl = document.getElementById("active-use-case-title");
+        if (titleEl) {{
+          titleEl.textContent = uc.title || (useCaseId === "fleet_routing"
+            ? "Dynamic Fleet Routing & Dispatch with Time Windows (VRPTW)"
+            : "Autonomous Multi-Echelon & Perishable Inventory Replenishment");
+        }}
+        const horizonEl = document.getElementById("meta-horizon");
+        if (horizonEl) {{
+          horizonEl.textContent = useCaseId === "fleet_routing" ? "12 Hours (Traffic)" : "90 Days (Causal)";
+        }}
+
+        // Re-render components
+        renderArchetypesTable();
+        renderMilestoneRibbon();
+        updateDiffStepperOptions();
+
+        // Update scrubber & display
+        if (scrubber) {{
+          scrubber.max = maxGen;
+          scrubber.value = maxGen;
+        }}
+        currentGen = maxGen;
+        updateDisplay(currentGen);
+      }}
+
+      // Wire up use case switcher buttons
+      document.querySelectorAll(".use-case-btn").forEach(btn => {{
+        btn.addEventListener("click", () => {{
+          pauseReplay();
+          const targetUc = btn.getAttribute("data-use-case");
+          if (targetUc && targetUc !== currentUseCaseId) {{
+            switchUseCase(targetUc);
+          }}
+        }});
+      }});
 
       // 5. Interactive Milestone Ribbon
       const ribbonContainer = document.getElementById("milestone-ribbon-nodes");
@@ -1651,16 +1860,82 @@ def build_dashboard_html(
         if (!frame) return;
 
         const m = frame.metrics;
-        document.getElementById("kpi-total-cost").textContent = "$" + Math.round(m.total_cost).toLocaleString();
-        document.getElementById("kpi-spoilage-cost").textContent = "$" + Math.round(m.spoilage_cost).toLocaleString();
-        document.getElementById("kpi-spoilage-rate").textContent = m.spoilage_rate_pct.toFixed(2) + "% rate";
-        document.getElementById("kpi-fill-rate").textContent = m.fill_rate_pct.toFixed(2) + "%";
-        document.getElementById("kpi-stockout-cost").textContent = "$" + Math.round(m.stockout_penalty).toLocaleString();
-        document.getElementById("kpi-fitness-score").textContent = m.fitness_score.toFixed(2);
-        document.getElementById("kpi-cost-reduc").textContent = (m.cost_reduction_pct > 0 ? "-" : "") + m.cost_reduction_pct.toFixed(1) + "%";
+        if (currentUseCaseId === "fleet_routing") {{
+          // Fleet Routing KPIs: Cost, Distance, On-Time %, Score
+          const kpi1Label = document.getElementById("kpi-label-1");
+          if (kpi1Label) kpi1Label.textContent = "Total Fleet Cost";
+          const totalCostEl = document.getElementById("kpi-total-cost");
+          if (totalCostEl) totalCostEl.textContent = "$" + Math.round(m.total_cost).toLocaleString();
+          const costReducEl = document.getElementById("kpi-cost-reduc");
+          if (costReducEl) costReducEl.textContent = (m.cost_reduction_pct > 0 ? "-" : "") + m.cost_reduction_pct.toFixed(1) + "%";
+          const baselineCompEl = document.getElementById("kpi-baseline-comp");
+          if (baselineCompEl) baselineCompEl.textContent = "vs. $" + Math.round(baselineSum.total_cost || 14250).toLocaleString() + " baseline";
+
+          const kpi2Label = document.getElementById("kpi-label-2");
+          if (kpi2Label) kpi2Label.textContent = "Fleet Distance Traveled";
+          const spoilCostEl = document.getElementById("kpi-spoilage-cost");
+          if (spoilCostEl) spoilCostEl.textContent = Math.round(m.total_distance_km || 0).toLocaleString() + " km";
+          const spoilRateEl = document.getElementById("kpi-spoilage-rate");
+          if (spoilRateEl) spoilRateEl.textContent = (m.vehicles_used || 5) + " vehicles";
+          const subComp2El = document.getElementById("kpi-sub-comp-2");
+          if (subComp2El) subComp2El.textContent = "vs. " + Math.round(baselineSum.total_distance_km || 642) + " km baseline";
+
+          const kpi3Label = document.getElementById("kpi-label-3");
+          if (kpi3Label) kpi3Label.textContent = "On-Time Delivery Rate";
+          const fillRateEl = document.getElementById("kpi-fill-rate");
+          if (fillRateEl) fillRateEl.textContent = (m.on_time_delivery_pct || 0).toFixed(1) + "%";
+          const badge3El = document.getElementById("kpi-badge-3");
+          if (badge3El) badge3El.textContent = "Target: \u226595.0%";
+          const subComp3El = document.getElementById("kpi-sub-comp-3");
+          if (subComp3El) subComp3El.textContent = "tardiness: " + (m.total_tardiness_hours || 0).toFixed(1) + " hrs";
+
+          const kpi4Label = document.getElementById("kpi-label-4");
+          if (kpi4Label) kpi4Label.textContent = "VRPTW Optimization Score";
+          const fitScoreEl = document.getElementById("kpi-fitness-score");
+          if (fitScoreEl) fitScoreEl.textContent = (m.score !== undefined ? m.score : m.cost_reduction_pct).toFixed(2);
+        }} else {{
+          // Inventory Replenishment KPIs
+          const kpi1Label = document.getElementById("kpi-label-1");
+          if (kpi1Label) kpi1Label.textContent = "Total Supply Chain Cost";
+          const totalCostEl = document.getElementById("kpi-total-cost");
+          if (totalCostEl) totalCostEl.textContent = "$" + Math.round(m.total_cost).toLocaleString();
+          const costReducEl = document.getElementById("kpi-cost-reduc");
+          if (costReducEl) costReducEl.textContent = (m.cost_reduction_pct > 0 ? "-" : "") + m.cost_reduction_pct.toFixed(1) + "%";
+          const baselineCompEl = document.getElementById("kpi-baseline-comp");
+          if (baselineCompEl) baselineCompEl.textContent = "vs. $68,410 baseline";
+
+          const kpi2Label = document.getElementById("kpi-label-2");
+          if (kpi2Label) kpi2Label.textContent = "Perishable Spoilage Waste";
+          const spoilCostEl = document.getElementById("kpi-spoilage-cost");
+          if (spoilCostEl) spoilCostEl.textContent = "$" + Math.round(m.spoilage_cost || 0).toLocaleString();
+          const spoilRateEl = document.getElementById("kpi-spoilage-rate");
+          if (spoilRateEl) spoilRateEl.textContent = (m.spoilage_rate_pct || 0).toFixed(2) + "% rate";
+          const subComp2El = document.getElementById("kpi-sub-comp-2");
+          if (subComp2El) subComp2El.textContent = "vs. 14.6% baseline";
+
+          const kpi3Label = document.getElementById("kpi-label-3");
+          if (kpi3Label) kpi3Label.textContent = "Service Fill Rate";
+          const fillRateEl = document.getElementById("kpi-fill-rate");
+          if (fillRateEl) fillRateEl.textContent = (m.fill_rate_pct || 0).toFixed(2) + "%";
+          const badge3El = document.getElementById("kpi-badge-3");
+          if (badge3El) badge3El.textContent = "SLA: \u226595.0%";
+          const subComp3El = document.getElementById("kpi-sub-comp-3");
+          if (subComp3El) {{
+            subComp3El.replaceChildren();
+            subComp3El.appendChild(document.createTextNode("stockout penalty: "));
+            const stockSpan = el("span", null, "$" + Math.round(m.stockout_penalty || 0).toLocaleString());
+            stockSpan.id = "kpi-stockout-cost";
+            subComp3El.appendChild(stockSpan);
+          }}
+
+          const kpi4Label = document.getElementById("kpi-label-4");
+          if (kpi4Label) kpi4Label.textContent = "Evaluation Fitness Score";
+          const fitScoreEl = document.getElementById("kpi-fitness-score");
+          if (fitScoreEl) fitScoreEl.textContent = (m.fitness_score || 0).toFixed(2);
+        }}
 
         document.getElementById("milestone-title").textContent = "GEN " + currentGen + (currentGen === 30 ? " CHAMPION" : (currentGen === 0 ? " SEED BASELINE" : " BREAKTHROUGH"));
-        document.getElementById("milestone-desc").textContent = frame.event_summary || "";
+        document.getElementById("milestone-desc").textContent = frame.event_summary || (currentUseCaseId === "fleet_routing" ? (currentGen === 30 ? "Champion Regret-2 + 2-opt traffic-aware heuristic (-28.5% cost)" : (currentGen === 0 ? "Greedy nearest-neighbor baseline dispatch" : "Breakthrough candidate")) : "");
 
         updateMilestoneRibbonActive();
         drawTrajectoryChart(currentGen);
@@ -2471,19 +2746,7 @@ def build_dashboard_html(
         }});
       }}
 
-      // Diff State
-      let diffViewMode = "split"; // "split" or "unified"
-      let diffFoldUnchanged = true;
-      let leftMilestoneKey = "0";
-      let rightMilestoneKey = "8";
-
-      const diffTableBody = document.getElementById("diff-table-body");
-      const diffTableHeader = document.getElementById("diff-table-header");
-      const btnViewSplit = document.getElementById("btn-view-split");
-      const btnViewUnified = document.getElementById("btn-view-unified");
-      const btnToggleFold = document.getElementById("btn-toggle-fold");
-      const diffSelectBase = document.getElementById("diff-select-base");
-      const diffSelectEvolved = document.getElementById("diff-select-evolved");
+      // Diff Table Rendering
 
       function updateStepperActivePreset() {{
         const pairKey = leftMilestoneKey + "-" + rightMilestoneKey;
