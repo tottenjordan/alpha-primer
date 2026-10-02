@@ -415,3 +415,49 @@ def test_web_app_development_design_and_multi_domain_standards(tmp_path: Path) -
     assert 'id="tooltip-convergence"' in content
     assert 'id="thead-archetypes-row"' in content
     assert "updateDomainControls" in content
+
+
+def test_fleet_routing_spatial_topology_and_canvas_rendering(tmp_path: Path) -> None:
+    """Verify Fleet Routing exports 50-customer spatial topology, 2-opt uncrossing snapshots, and UI hooks."""
+    from alpha_evolve.dashboard.fleet_routing_trajectory_generator import (
+        generate_fleet_routing_trajectory_dataset,
+    )
+
+    fr = generate_fleet_routing_trajectory_dataset(output_dir=tmp_path)
+
+    # 1. Verify spatial_topology schema (50 customers, (50, 50) depot, 4 quadrants)
+    topo = fr["spatial_topology"]
+    assert topo["grid_bounds_km"] == [0.0, 100.0, 0.0, 100.0]
+    assert topo["depot"]["x_km"] == 50.0 and topo["depot"]["y_km"] == 50.0
+    assert len(topo["cluster_centers"]) == 4
+    assert len(topo["customers"]) == 50
+
+    static_customers = [c for c in topo["customers"] if not c["is_dynamic"]]
+    dynamic_customers = [c for c in topo["customers"] if c["is_dynamic"]]
+    assert len(static_customers) == 30
+    assert len(dynamic_customers) == 20
+
+    # 2. Verify dispatch_snapshots ("0", "7", "16", "30") and 2-opt uncrossing progression
+    snaps = fr["dispatch_snapshots"]
+    for key in ("0", "7", "16", "30"):
+        assert key in snaps
+        snap = snaps[key]
+        assert len(snap["tours"]) > 0
+        total_stops = sum(len(t["stops"]) for t in snap["tours"])
+        assert total_stops == 50
+        assert len(snap["stop_outcomes"]) == 50
+
+    assert snaps["0"]["summary"]["intra_route_crossings"] > 0
+    assert snaps["16"]["summary"]["intra_route_crossings"] == 0
+    assert snaps["30"]["summary"]["intra_route_crossings"] == 0
+    assert snaps["30"]["summary"]["late_stops_count"] < snaps["0"]["summary"]["late_stops_count"]
+    assert snaps["30"]["summary"]["total_cost"] < snaps["0"]["summary"]["total_cost"]
+
+    # 3. Verify compiled dashboard HTML contains spatial topology renderer and filter controls
+    html_path = build_dashboard_html(output_dir=tmp_path)
+    content = html_path.read_text(encoding="utf-8")
+    assert 'id="fleet-map-controls"' in content
+    assert 'data-fleet-filter="wave0"' in content
+    assert 'data-fleet-filter="dynamic"' in content
+    assert 'data-fleet-filter="late"' in content
+    assert "drawFleetSpatialCanvas" in content

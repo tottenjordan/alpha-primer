@@ -1,6 +1,6 @@
 {
   "platform_title": "AlphaEvolve Supply Chain & Digital Twin Intelligence Suite",
-  "generated_at_utc": "2026-10-02T12:56:16.845882+00:00",
+  "generated_at_utc": "2026-10-02T16:54:14.590404+00:00",
   "engine_info": {
     "project_id": "934903580331",
     "engine_id": "alpha-evolve-experiment-engine",
@@ -14,10 +14,4041 @@
       "use_case_id": "fleet_routing",
       "title": "Dynamic Fleet Routing & Dispatch with Time Windows (VRPTW)",
       "subtitle": "Google Cloud Discovery Engine AlphaEvolve (v1alpha) Digital Twin Heuristic Optimization",
-      "recorded_at_utc": "2026-10-02T12:56:16.845817+00:00",
+      "recorded_at_utc": "2026-10-02T16:54:14.590324+00:00",
       "horizon_days": 30,
       "num_skus": 50,
       "total_generations": 30,
+      "spatial_topology": {
+        "grid_bounds_km": [
+          0.0,
+          100.0,
+          0.0,
+          100.0
+        ],
+        "depot": {
+          "x_km": 50.0,
+          "y_km": 50.0,
+          "label": "Central Hub"
+        },
+        "cluster_centers": [
+          {
+            "id": 0,
+            "label": "NW Sector",
+            "x_km": 25.0,
+            "y_km": 75.0
+          },
+          {
+            "id": 1,
+            "label": "NE Sector",
+            "x_km": 75.0,
+            "y_km": 75.0
+          },
+          {
+            "id": 2,
+            "label": "SW Sector",
+            "x_km": 25.0,
+            "y_km": 25.0
+          },
+          {
+            "id": 3,
+            "label": "SE Sector",
+            "x_km": 75.0,
+            "y_km": 25.0
+          }
+        ],
+        "customers": [
+          {
+            "id": 0,
+            "x_km": 80.63,
+            "y_km": 32.05,
+            "demand": 4.0,
+            "tw_start": 2.94,
+            "tw_end": 6.84,
+            "tw_width": 3.9,
+            "service_time": 0.26,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "SE"
+          },
+          {
+            "id": 1,
+            "x_km": 81.6,
+            "y_km": 80.83,
+            "demand": 4.0,
+            "tw_start": 6.64,
+            "tw_end": 9.21,
+            "tw_width": 2.57,
+            "service_time": 0.21,
+            "arrival_hour": 5.03,
+            "is_dynamic": true,
+            "wave_index": 3,
+            "quadrant": "NE"
+          },
+          {
+            "id": 2,
+            "x_km": 74.63,
+            "y_km": 73.61,
+            "demand": 7.0,
+            "tw_start": 2.93,
+            "tw_end": 7.16,
+            "tw_width": 4.23,
+            "service_time": 0.26,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "NE"
+          },
+          {
+            "id": 3,
+            "x_km": 27.74,
+            "y_km": 78.1,
+            "demand": 4.0,
+            "tw_start": 7.52,
+            "tw_end": 10.33,
+            "tw_width": 2.81,
+            "service_time": 0.17,
+            "arrival_hour": 4.6,
+            "is_dynamic": true,
+            "wave_index": 3,
+            "quadrant": "NW"
+          },
+          {
+            "id": 4,
+            "x_km": 74.15,
+            "y_km": 68.7,
+            "demand": 2.0,
+            "tw_start": 2.17,
+            "tw_end": 5.26,
+            "tw_width": 3.09,
+            "service_time": 0.27,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "NE"
+          },
+          {
+            "id": 5,
+            "x_km": 20.01,
+            "y_km": 26.74,
+            "demand": 3.0,
+            "tw_start": 1.22,
+            "tw_end": 4.93,
+            "tw_width": 3.71,
+            "service_time": 0.13,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "SW"
+          },
+          {
+            "id": 6,
+            "x_km": 77.17,
+            "y_km": 79.73,
+            "demand": 1.0,
+            "tw_start": 6.44,
+            "tw_end": 9.86,
+            "tw_width": 3.42,
+            "service_time": 0.13,
+            "arrival_hour": 4.79,
+            "is_dynamic": true,
+            "wave_index": 3,
+            "quadrant": "NE"
+          },
+          {
+            "id": 7,
+            "x_km": 32.26,
+            "y_km": 62.38,
+            "demand": 6.0,
+            "tw_start": 5.87,
+            "tw_end": 9.27,
+            "tw_width": 3.4,
+            "service_time": 0.16,
+            "arrival_hour": 3.99,
+            "is_dynamic": true,
+            "wave_index": 2,
+            "quadrant": "NW"
+          },
+          {
+            "id": 8,
+            "x_km": 31.43,
+            "y_km": 73.57,
+            "demand": 4.0,
+            "tw_start": 2.44,
+            "tw_end": 5.14,
+            "tw_width": 2.7,
+            "service_time": 0.16,
+            "arrival_hour": 1.79,
+            "is_dynamic": true,
+            "wave_index": 1,
+            "quadrant": "NW"
+          },
+          {
+            "id": 9,
+            "x_km": 26.19,
+            "y_km": 29.69,
+            "demand": 5.0,
+            "tw_start": 2.54,
+            "tw_end": 4.96,
+            "tw_width": 2.42,
+            "service_time": 0.1,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "SW"
+          },
+          {
+            "id": 10,
+            "x_km": 78.65,
+            "y_km": 71.48,
+            "demand": 6.0,
+            "tw_start": 0.88,
+            "tw_end": 4.62,
+            "tw_width": 3.74,
+            "service_time": 0.19,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "NE"
+          },
+          {
+            "id": 11,
+            "x_km": 24.4,
+            "y_km": 12.34,
+            "demand": 3.0,
+            "tw_start": 0.8,
+            "tw_end": 5.2,
+            "tw_width": 4.4,
+            "service_time": 0.28,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "SW"
+          },
+          {
+            "id": 12,
+            "x_km": 34.74,
+            "y_km": 72.33,
+            "demand": 3.0,
+            "tw_start": 4.15,
+            "tw_end": 6.39,
+            "tw_width": 2.24,
+            "service_time": 0.28,
+            "arrival_hour": 2.97,
+            "is_dynamic": true,
+            "wave_index": 2,
+            "quadrant": "NW"
+          },
+          {
+            "id": 13,
+            "x_km": 78.26,
+            "y_km": 26.78,
+            "demand": 2.0,
+            "tw_start": 2.64,
+            "tw_end": 6.54,
+            "tw_width": 3.9,
+            "service_time": 0.24,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "SE"
+          },
+          {
+            "id": 14,
+            "x_km": 37.01,
+            "y_km": 73.2,
+            "demand": 6.0,
+            "tw_start": 1.54,
+            "tw_end": 3.64,
+            "tw_width": 2.1,
+            "service_time": 0.2,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "NW"
+          },
+          {
+            "id": 15,
+            "x_km": 85.97,
+            "y_km": 16.08,
+            "demand": 2.0,
+            "tw_start": 2.81,
+            "tw_end": 6.26,
+            "tw_width": 3.45,
+            "service_time": 0.17,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "SE"
+          },
+          {
+            "id": 16,
+            "x_km": 13.97,
+            "y_km": 67.38,
+            "demand": 1.0,
+            "tw_start": 2.68,
+            "tw_end": 5.91,
+            "tw_width": 3.23,
+            "service_time": 0.29,
+            "arrival_hour": 0.96,
+            "is_dynamic": true,
+            "wave_index": 1,
+            "quadrant": "NW"
+          },
+          {
+            "id": 17,
+            "x_km": 77.01,
+            "y_km": 18.9,
+            "demand": 4.0,
+            "tw_start": 1.6,
+            "tw_end": 3.65,
+            "tw_width": 2.05,
+            "service_time": 0.27,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "SE"
+          },
+          {
+            "id": 18,
+            "x_km": 17.62,
+            "y_km": 54.86,
+            "demand": 3.0,
+            "tw_start": 4.2,
+            "tw_end": 8.02,
+            "tw_width": 3.82,
+            "service_time": 0.25,
+            "arrival_hour": 2.05,
+            "is_dynamic": true,
+            "wave_index": 2,
+            "quadrant": "NW"
+          },
+          {
+            "id": 19,
+            "x_km": 21.26,
+            "y_km": 16.11,
+            "demand": 2.0,
+            "tw_start": 1.43,
+            "tw_end": 5.5,
+            "tw_width": 4.07,
+            "service_time": 0.26,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "SW"
+          },
+          {
+            "id": 20,
+            "x_km": 31.99,
+            "y_km": 27.89,
+            "demand": 5.0,
+            "tw_start": 2.84,
+            "tw_end": 5.25,
+            "tw_width": 2.41,
+            "service_time": 0.11,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "SW"
+          },
+          {
+            "id": 21,
+            "x_km": 65.42,
+            "y_km": 26.29,
+            "demand": 1.0,
+            "tw_start": 7.21,
+            "tw_end": 10.0,
+            "tw_width": 2.79,
+            "service_time": 0.25,
+            "arrival_hour": 5.41,
+            "is_dynamic": true,
+            "wave_index": 3,
+            "quadrant": "SE"
+          },
+          {
+            "id": 22,
+            "x_km": 83.3,
+            "y_km": 28.22,
+            "demand": 6.0,
+            "tw_start": 2.84,
+            "tw_end": 5.44,
+            "tw_width": 2.6,
+            "service_time": 0.12,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "SE"
+          },
+          {
+            "id": 23,
+            "x_km": 18.8,
+            "y_km": 21.13,
+            "demand": 6.0,
+            "tw_start": 2.69,
+            "tw_end": 5.18,
+            "tw_width": 2.49,
+            "service_time": 0.16,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "SW"
+          },
+          {
+            "id": 24,
+            "x_km": 24.96,
+            "y_km": 73.77,
+            "demand": 8.0,
+            "tw_start": 1.07,
+            "tw_end": 3.4,
+            "tw_width": 2.33,
+            "service_time": 0.24,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "NW"
+          },
+          {
+            "id": 25,
+            "x_km": 18.68,
+            "y_km": 65.86,
+            "demand": 5.0,
+            "tw_start": 2.51,
+            "tw_end": 6.3,
+            "tw_width": 3.79,
+            "service_time": 0.25,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "NW"
+          },
+          {
+            "id": 26,
+            "x_km": 28.66,
+            "y_km": 71.37,
+            "demand": 1.0,
+            "tw_start": 1.72,
+            "tw_end": 5.38,
+            "tw_width": 3.66,
+            "service_time": 0.29,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "NW"
+          },
+          {
+            "id": 27,
+            "x_km": 73.32,
+            "y_km": 76.82,
+            "demand": 8.0,
+            "tw_start": 1.93,
+            "tw_end": 4.98,
+            "tw_width": 3.05,
+            "service_time": 0.29,
+            "arrival_hour": 1.08,
+            "is_dynamic": true,
+            "wave_index": 1,
+            "quadrant": "NE"
+          },
+          {
+            "id": 28,
+            "x_km": 22.84,
+            "y_km": 14.02,
+            "demand": 8.0,
+            "tw_start": 1.37,
+            "tw_end": 5.44,
+            "tw_width": 4.07,
+            "service_time": 0.26,
+            "arrival_hour": 0.6,
+            "is_dynamic": true,
+            "wave_index": 1,
+            "quadrant": "SW"
+          },
+          {
+            "id": 29,
+            "x_km": 17.03,
+            "y_km": 71.03,
+            "demand": 5.0,
+            "tw_start": 1.56,
+            "tw_end": 5.19,
+            "tw_width": 3.63,
+            "service_time": 0.27,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "NW"
+          },
+          {
+            "id": 30,
+            "x_km": 65.34,
+            "y_km": 16.77,
+            "demand": 2.0,
+            "tw_start": 1.75,
+            "tw_end": 5.24,
+            "tw_width": 3.49,
+            "service_time": 0.13,
+            "arrival_hour": 1.08,
+            "is_dynamic": true,
+            "wave_index": 1,
+            "quadrant": "SE"
+          },
+          {
+            "id": 31,
+            "x_km": 32.93,
+            "y_km": 17.95,
+            "demand": 8.0,
+            "tw_start": 1.21,
+            "tw_end": 3.59,
+            "tw_width": 2.38,
+            "service_time": 0.12,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "SW"
+          },
+          {
+            "id": 32,
+            "x_km": 73.0,
+            "y_km": 76.74,
+            "demand": 7.0,
+            "tw_start": 2.2,
+            "tw_end": 5.18,
+            "tw_width": 2.98,
+            "service_time": 0.16,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "NE"
+          },
+          {
+            "id": 33,
+            "x_km": 25.0,
+            "y_km": 19.59,
+            "demand": 5.0,
+            "tw_start": 1.09,
+            "tw_end": 3.71,
+            "tw_width": 2.62,
+            "service_time": 0.21,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "SW"
+          },
+          {
+            "id": 34,
+            "x_km": 19.28,
+            "y_km": 16.66,
+            "demand": 1.0,
+            "tw_start": 2.81,
+            "tw_end": 5.06,
+            "tw_width": 2.25,
+            "service_time": 0.27,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "SW"
+          },
+          {
+            "id": 35,
+            "x_km": 93.16,
+            "y_km": 77.18,
+            "demand": 7.0,
+            "tw_start": 6.48,
+            "tw_end": 8.82,
+            "tw_width": 2.34,
+            "service_time": 0.21,
+            "arrival_hour": 4.03,
+            "is_dynamic": true,
+            "wave_index": 3,
+            "quadrant": "NE"
+          },
+          {
+            "id": 36,
+            "x_km": 55.75,
+            "y_km": 73.22,
+            "demand": 7.0,
+            "tw_start": 2.82,
+            "tw_end": 6.01,
+            "tw_width": 3.19,
+            "service_time": 0.18,
+            "arrival_hour": 1.97,
+            "is_dynamic": true,
+            "wave_index": 1,
+            "quadrant": "NE"
+          },
+          {
+            "id": 37,
+            "x_km": 31.48,
+            "y_km": 72.54,
+            "demand": 3.0,
+            "tw_start": 2.21,
+            "tw_end": 4.95,
+            "tw_width": 2.74,
+            "service_time": 0.29,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "NW"
+          },
+          {
+            "id": 38,
+            "x_km": 48.28,
+            "y_km": 34.55,
+            "demand": 4.0,
+            "tw_start": 6.6,
+            "tw_end": 9.93,
+            "tw_width": 3.33,
+            "service_time": 0.23,
+            "arrival_hour": 4.09,
+            "is_dynamic": true,
+            "wave_index": 3,
+            "quadrant": "SW"
+          },
+          {
+            "id": 39,
+            "x_km": 82.42,
+            "y_km": 16.16,
+            "demand": 5.0,
+            "tw_start": 3.27,
+            "tw_end": 5.51,
+            "tw_width": 2.24,
+            "service_time": 0.25,
+            "arrival_hour": 1.23,
+            "is_dynamic": true,
+            "wave_index": 1,
+            "quadrant": "SE"
+          },
+          {
+            "id": 40,
+            "x_km": 63.21,
+            "y_km": 24.5,
+            "demand": 8.0,
+            "tw_start": 6.23,
+            "tw_end": 10.22,
+            "tw_width": 3.99,
+            "service_time": 0.29,
+            "arrival_hour": 3.77,
+            "is_dynamic": true,
+            "wave_index": 2,
+            "quadrant": "SE"
+          },
+          {
+            "id": 41,
+            "x_km": 65.88,
+            "y_km": 69.97,
+            "demand": 5.0,
+            "tw_start": 1.91,
+            "tw_end": 5.34,
+            "tw_width": 3.43,
+            "service_time": 0.19,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "NE"
+          },
+          {
+            "id": 42,
+            "x_km": 75.54,
+            "y_km": 28.1,
+            "demand": 5.0,
+            "tw_start": 2.83,
+            "tw_end": 5.13,
+            "tw_width": 2.3,
+            "service_time": 0.12,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "SE"
+          },
+          {
+            "id": 43,
+            "x_km": 27.76,
+            "y_km": 81.35,
+            "demand": 8.0,
+            "tw_start": 5.09,
+            "tw_end": 9.0,
+            "tw_width": 3.91,
+            "service_time": 0.15,
+            "arrival_hour": 2.34,
+            "is_dynamic": true,
+            "wave_index": 2,
+            "quadrant": "NW"
+          },
+          {
+            "id": 44,
+            "x_km": 73.89,
+            "y_km": 73.86,
+            "demand": 8.0,
+            "tw_start": 4.37,
+            "tw_end": 8.19,
+            "tw_width": 3.82,
+            "service_time": 0.21,
+            "arrival_hour": 2.91,
+            "is_dynamic": true,
+            "wave_index": 2,
+            "quadrant": "NE"
+          },
+          {
+            "id": 45,
+            "x_km": 75.23,
+            "y_km": 48.14,
+            "demand": 2.0,
+            "tw_start": 2.97,
+            "tw_end": 6.76,
+            "tw_width": 3.79,
+            "service_time": 0.29,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "SE"
+          },
+          {
+            "id": 46,
+            "x_km": 23.46,
+            "y_km": 59.97,
+            "demand": 7.0,
+            "tw_start": 2.22,
+            "tw_end": 4.25,
+            "tw_width": 2.03,
+            "service_time": 0.19,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "NW"
+          },
+          {
+            "id": 47,
+            "x_km": 31.58,
+            "y_km": 46.27,
+            "demand": 3.0,
+            "tw_start": 2.8,
+            "tw_end": 6.75,
+            "tw_width": 3.95,
+            "service_time": 0.12,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "SW"
+          },
+          {
+            "id": 48,
+            "x_km": 84.13,
+            "y_km": 30.55,
+            "demand": 4.0,
+            "tw_start": 4.09,
+            "tw_end": 7.75,
+            "tw_width": 3.66,
+            "service_time": 0.23,
+            "arrival_hour": 1.09,
+            "is_dynamic": true,
+            "wave_index": 1,
+            "quadrant": "SE"
+          },
+          {
+            "id": 49,
+            "x_km": 78.98,
+            "y_km": 19.71,
+            "demand": 8.0,
+            "tw_start": 2.44,
+            "tw_end": 4.94,
+            "tw_width": 2.5,
+            "service_time": 0.28,
+            "arrival_hour": 0.0,
+            "is_dynamic": false,
+            "wave_index": 0,
+            "quadrant": "SE"
+          }
+        ]
+      },
+      "dispatch_snapshots": {
+        "0": {
+          "generation": 0,
+          "label": "Gen 0: Greedy Nearest-Vehicle",
+          "summary": {
+            "total_cost": 4099.04,
+            "total_distance_km": 1433.33,
+            "on_time_delivery_pct": 60.0,
+            "total_tardiness_hours": 53.88,
+            "total_wait_hours": 4.06,
+            "late_stops_count": 20,
+            "intra_route_crossings": 19,
+            "inter_route_crossings": 58,
+            "vehicles_used": 5
+          },
+          "tours": [
+            {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "dispatch_hour": 0.0,
+              "return_hour": 6.45,
+              "distance_km": 162.97,
+              "load_units": 38.0,
+              "capacity_pct": 84.4,
+              "stops": [
+                11,
+                33,
+                31,
+                5,
+                19,
+                9,
+                23,
+                34,
+                20
+              ]
+            },
+            {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "dispatch_hour": 0.0,
+              "return_hour": 4.76,
+              "distance_km": 102.81,
+              "load_units": 27.0,
+              "capacity_pct": 60.0,
+              "stops": [
+                10,
+                41,
+                4,
+                32,
+                2
+              ]
+            },
+            {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "dispatch_hour": 0.0,
+              "return_hour": 6.09,
+              "distance_km": 138.97,
+              "load_units": 35.0,
+              "capacity_pct": 77.8,
+              "stops": [
+                24,
+                14,
+                29,
+                26,
+                37,
+                46,
+                25
+              ]
+            },
+            {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "dispatch_hour": 0.0,
+              "return_hour": 6.69,
+              "distance_km": 134.23,
+              "load_units": 33.0,
+              "capacity_pct": 73.3,
+              "stops": [
+                17,
+                49,
+                13,
+                15,
+                42,
+                22,
+                0,
+                45
+              ]
+            },
+            {
+              "vehicle_id": 4,
+              "wave_index": 0,
+              "dispatch_hour": 0.0,
+              "return_hour": 3.62,
+              "distance_km": 37.58,
+              "load_units": 3.0,
+              "capacity_pct": 6.7,
+              "stops": [
+                47
+              ]
+            },
+            {
+              "vehicle_id": 0,
+              "wave_index": 1,
+              "dispatch_hour": 6.45,
+              "return_hour": 9.38,
+              "distance_km": 90.15,
+              "load_units": 8.0,
+              "capacity_pct": 17.8,
+              "stops": [
+                28
+              ]
+            },
+            {
+              "vehicle_id": 1,
+              "wave_index": 1,
+              "dispatch_hour": 4.76,
+              "return_hour": 8.43,
+              "distance_km": 107.46,
+              "load_units": 11.0,
+              "capacity_pct": 24.4,
+              "stops": [
+                30,
+                39,
+                48
+              ]
+            },
+            {
+              "vehicle_id": 2,
+              "wave_index": 1,
+              "dispatch_hour": 6.09,
+              "return_hour": 8.81,
+              "distance_km": 77.4,
+              "load_units": 15.0,
+              "capacity_pct": 33.3,
+              "stops": [
+                27,
+                36
+              ]
+            },
+            {
+              "vehicle_id": 3,
+              "wave_index": 1,
+              "dispatch_hour": 6.69,
+              "return_hour": 10.0,
+              "distance_km": 88.53,
+              "load_units": 5.0,
+              "capacity_pct": 11.1,
+              "stops": [
+                8,
+                16
+              ]
+            },
+            {
+              "vehicle_id": 0,
+              "wave_index": 2,
+              "dispatch_hour": 9.38,
+              "return_hour": 13.82,
+              "distance_km": 120.99,
+              "load_units": 20.0,
+              "capacity_pct": 44.4,
+              "stops": [
+                12,
+                18,
+                43,
+                7
+              ]
+            },
+            {
+              "vehicle_id": 1,
+              "wave_index": 2,
+              "dispatch_hour": 8.43,
+              "return_hour": 11.06,
+              "distance_km": 67.53,
+              "load_units": 8.0,
+              "capacity_pct": 17.8,
+              "stops": [
+                44
+              ]
+            },
+            {
+              "vehicle_id": 2,
+              "wave_index": 2,
+              "dispatch_hour": 8.81,
+              "return_hour": 11.13,
+              "distance_km": 57.44,
+              "load_units": 8.0,
+              "capacity_pct": 17.8,
+              "stops": [
+                40
+              ]
+            },
+            {
+              "vehicle_id": 0,
+              "wave_index": 3,
+              "dispatch_hour": 13.82,
+              "return_hour": 18.04,
+              "distance_km": 112.75,
+              "load_units": 12.0,
+              "capacity_pct": 26.7,
+              "stops": [
+                6,
+                35,
+                1
+              ]
+            },
+            {
+              "vehicle_id": 1,
+              "wave_index": 3,
+              "dispatch_hour": 11.06,
+              "return_hour": 13.18,
+              "distance_km": 62.84,
+              "load_units": 5.0,
+              "capacity_pct": 11.1,
+              "stops": [
+                38,
+                21
+              ]
+            },
+            {
+              "vehicle_id": 2,
+              "wave_index": 3,
+              "dispatch_hour": 11.13,
+              "return_hour": 13.19,
+              "distance_km": 71.69,
+              "load_units": 4.0,
+              "capacity_pct": 8.9,
+              "stops": [
+                3
+              ]
+            }
+          ],
+          "crossings": [
+            {
+              "x_km": 28.79,
+              "y_km": 18.8,
+              "vehicle_id": 0
+            },
+            {
+              "x_km": 29.7,
+              "y_km": 20.14,
+              "vehicle_id": 0
+            },
+            {
+              "x_km": 24.1,
+              "y_km": 23.95,
+              "vehicle_id": 0
+            },
+            {
+              "x_km": 22.3,
+              "y_km": 25.19,
+              "vehicle_id": 0
+            },
+            {
+              "x_km": 26.04,
+              "y_km": 22.64,
+              "vehicle_id": 0
+            },
+            {
+              "x_km": 20.44,
+              "y_km": 23.04,
+              "vehicle_id": 0
+            },
+            {
+              "x_km": 21.01,
+              "y_km": 18.19,
+              "vehicle_id": 0
+            },
+            {
+              "x_km": 22.48,
+              "y_km": 19.49,
+              "vehicle_id": 0
+            },
+            {
+              "x_km": 73.83,
+              "y_km": 70.91,
+              "vehicle_id": 1
+            },
+            {
+              "x_km": 71.52,
+              "y_km": 70.63,
+              "vehicle_id": 1
+            },
+            {
+              "x_km": 70.14,
+              "y_km": 69.31,
+              "vehicle_id": 1
+            },
+            {
+              "x_km": 73.59,
+              "y_km": 72.62,
+              "vehicle_id": 1
+            },
+            {
+              "x_km": 26.74,
+              "y_km": 72.09,
+              "vehicle_id": 2
+            },
+            {
+              "x_km": 27.53,
+              "y_km": 71.34,
+              "vehicle_id": 2
+            },
+            {
+              "x_km": 29.51,
+              "y_km": 69.45,
+              "vehicle_id": 2
+            },
+            {
+              "x_km": 25.13,
+              "y_km": 62.59,
+              "vehicle_id": 2
+            },
+            {
+              "x_km": 78.47,
+              "y_km": 24.73,
+              "vehicle_id": 3
+            },
+            {
+              "x_km": 30.85,
+              "y_km": 68.35,
+              "vehicle_id": 0
+            },
+            {
+              "x_km": 80.01,
+              "y_km": 79.28,
+              "vehicle_id": 0
+            }
+          ],
+          "stop_outcomes": {
+            "11": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 0,
+              "arrival_hour": 1.14,
+              "start_service_hour": 1.14,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 4.06,
+              "status": "on_time"
+            },
+            "33": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 1,
+              "arrival_hour": 1.64,
+              "start_service_hour": 1.64,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.07,
+              "status": "on_time"
+            },
+            "31": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 2,
+              "arrival_hour": 2.12,
+              "start_service_hour": 2.12,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.47,
+              "status": "on_time"
+            },
+            "5": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 3,
+              "arrival_hour": 2.8,
+              "start_service_hour": 2.8,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.13,
+              "status": "on_time"
+            },
+            "19": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 4,
+              "arrival_hour": 3.33,
+              "start_service_hour": 3.33,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.17,
+              "status": "on_time"
+            },
+            "9": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 5,
+              "arrival_hour": 4.12,
+              "start_service_hour": 4.12,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.84,
+              "status": "on_time"
+            },
+            "23": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 6,
+              "arrival_hour": 4.59,
+              "start_service_hour": 4.59,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.59,
+              "status": "on_time"
+            },
+            "34": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 7,
+              "arrival_hour": 4.88,
+              "start_service_hour": 4.88,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.18,
+              "status": "at_risk"
+            },
+            "20": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 8,
+              "arrival_hour": 5.62,
+              "start_service_hour": 5.62,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.37,
+              "slack_hours": -0.37,
+              "status": "late"
+            },
+            "10": {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "stop_seq": 0,
+              "arrival_hour": 0.9,
+              "start_service_hour": 0.9,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 3.72,
+              "status": "on_time"
+            },
+            "41": {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "stop_seq": 1,
+              "arrival_hour": 1.45,
+              "start_service_hour": 1.91,
+              "wait_hours": 0.46,
+              "tardiness_hours": 0.0,
+              "slack_hours": 3.43,
+              "status": "on_time"
+            },
+            "4": {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "stop_seq": 2,
+              "arrival_hour": 2.39,
+              "start_service_hour": 2.39,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.87,
+              "status": "on_time"
+            },
+            "32": {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "stop_seq": 3,
+              "arrival_hour": 2.96,
+              "start_service_hour": 2.96,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.22,
+              "status": "on_time"
+            },
+            "2": {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "stop_seq": 4,
+              "arrival_hour": 3.26,
+              "start_service_hour": 3.26,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 3.9,
+              "status": "on_time"
+            },
+            "24": {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "stop_seq": 0,
+              "arrival_hour": 0.86,
+              "start_service_hour": 1.07,
+              "wait_hours": 0.21,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.33,
+              "status": "on_time"
+            },
+            "14": {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "stop_seq": 1,
+              "arrival_hour": 1.67,
+              "start_service_hour": 1.67,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.97,
+              "status": "on_time"
+            },
+            "29": {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "stop_seq": 2,
+              "arrival_hour": 2.55,
+              "start_service_hour": 2.55,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.64,
+              "status": "on_time"
+            },
+            "26": {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "stop_seq": 3,
+              "arrival_hour": 3.25,
+              "start_service_hour": 3.25,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.13,
+              "status": "on_time"
+            },
+            "37": {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "stop_seq": 4,
+              "arrival_hour": 3.65,
+              "start_service_hour": 3.65,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.3,
+              "status": "on_time"
+            },
+            "46": {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "stop_seq": 5,
+              "arrival_hour": 4.46,
+              "start_service_hour": 4.46,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.21,
+              "slack_hours": -0.21,
+              "status": "late"
+            },
+            "25": {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "stop_seq": 6,
+              "arrival_hour": 4.88,
+              "start_service_hour": 4.88,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.42,
+              "status": "on_time"
+            },
+            "17": {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "stop_seq": 0,
+              "arrival_hour": 1.03,
+              "start_service_hour": 1.6,
+              "wait_hours": 0.57,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.05,
+              "status": "on_time"
+            },
+            "49": {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "stop_seq": 1,
+              "arrival_hour": 1.94,
+              "start_service_hour": 2.44,
+              "wait_hours": 0.5,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.5,
+              "status": "on_time"
+            },
+            "13": {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "stop_seq": 2,
+              "arrival_hour": 2.98,
+              "start_service_hour": 2.98,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 3.56,
+              "status": "on_time"
+            },
+            "15": {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "stop_seq": 3,
+              "arrival_hour": 3.72,
+              "start_service_hour": 3.72,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.54,
+              "status": "on_time"
+            },
+            "42": {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "stop_seq": 4,
+              "arrival_hour": 4.44,
+              "start_service_hour": 4.44,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.69,
+              "status": "on_time"
+            },
+            "22": {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "stop_seq": 5,
+              "arrival_hour": 4.8,
+              "start_service_hour": 4.8,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.64,
+              "status": "on_time"
+            },
+            "0": {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "stop_seq": 6,
+              "arrival_hour": 5.06,
+              "start_service_hour": 5.06,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.78,
+              "status": "on_time"
+            },
+            "45": {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "stop_seq": 7,
+              "arrival_hour": 5.77,
+              "start_service_hour": 5.77,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.99,
+              "status": "on_time"
+            },
+            "47": {
+              "vehicle_id": 4,
+              "wave_index": 0,
+              "stop_seq": 0,
+              "arrival_hour": 0.47,
+              "start_service_hour": 2.8,
+              "wait_hours": 2.33,
+              "tardiness_hours": 0.0,
+              "slack_hours": 3.95,
+              "status": "on_time"
+            },
+            "28": {
+              "vehicle_id": 0,
+              "wave_index": 1,
+              "stop_seq": 0,
+              "arrival_hour": 7.6,
+              "start_service_hour": 7.6,
+              "wait_hours": 0.0,
+              "tardiness_hours": 2.16,
+              "slack_hours": -2.16,
+              "status": "late"
+            },
+            "30": {
+              "vehicle_id": 1,
+              "wave_index": 1,
+              "stop_seq": 0,
+              "arrival_hour": 5.85,
+              "start_service_hour": 5.85,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.61,
+              "slack_hours": -0.61,
+              "status": "late"
+            },
+            "39": {
+              "vehicle_id": 1,
+              "wave_index": 1,
+              "stop_seq": 1,
+              "arrival_hour": 6.4,
+              "start_service_hour": 6.4,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.89,
+              "slack_hours": -0.89,
+              "status": "late"
+            },
+            "48": {
+              "vehicle_id": 1,
+              "wave_index": 1,
+              "stop_seq": 2,
+              "arrival_hour": 7.04,
+              "start_service_hour": 7.04,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.71,
+              "status": "on_time"
+            },
+            "27": {
+              "vehicle_id": 2,
+              "wave_index": 1,
+              "stop_seq": 0,
+              "arrival_hour": 6.98,
+              "start_service_hour": 6.98,
+              "wait_hours": 0.0,
+              "tardiness_hours": 2.0,
+              "slack_hours": -2.0,
+              "status": "late"
+            },
+            "36": {
+              "vehicle_id": 2,
+              "wave_index": 1,
+              "stop_seq": 1,
+              "arrival_hour": 7.81,
+              "start_service_hour": 7.81,
+              "wait_hours": 0.0,
+              "tardiness_hours": 1.8,
+              "slack_hours": -1.8,
+              "status": "late"
+            },
+            "8": {
+              "vehicle_id": 3,
+              "wave_index": 1,
+              "stop_seq": 0,
+              "arrival_hour": 7.49,
+              "start_service_hour": 7.49,
+              "wait_hours": 0.0,
+              "tardiness_hours": 2.35,
+              "slack_hours": -2.35,
+              "status": "late"
+            },
+            "16": {
+              "vehicle_id": 3,
+              "wave_index": 1,
+              "stop_seq": 1,
+              "arrival_hour": 8.24,
+              "start_service_hour": 8.24,
+              "wait_hours": 0.0,
+              "tardiness_hours": 2.33,
+              "slack_hours": -2.33,
+              "status": "late"
+            },
+            "12": {
+              "vehicle_id": 0,
+              "wave_index": 2,
+              "stop_seq": 0,
+              "arrival_hour": 10.38,
+              "start_service_hour": 10.38,
+              "wait_hours": 0.0,
+              "tardiness_hours": 3.99,
+              "slack_hours": -3.99,
+              "status": "late"
+            },
+            "18": {
+              "vehicle_id": 0,
+              "wave_index": 2,
+              "stop_seq": 1,
+              "arrival_hour": 11.4,
+              "start_service_hour": 11.4,
+              "wait_hours": 0.0,
+              "tardiness_hours": 3.38,
+              "slack_hours": -3.38,
+              "status": "late"
+            },
+            "43": {
+              "vehicle_id": 0,
+              "wave_index": 2,
+              "stop_seq": 2,
+              "arrival_hour": 12.37,
+              "start_service_hour": 12.37,
+              "wait_hours": 0.0,
+              "tardiness_hours": 3.37,
+              "slack_hours": -3.37,
+              "status": "late"
+            },
+            "7": {
+              "vehicle_id": 0,
+              "wave_index": 2,
+              "stop_seq": 3,
+              "arrival_hour": 13.02,
+              "start_service_hour": 13.02,
+              "wait_hours": 0.0,
+              "tardiness_hours": 3.75,
+              "slack_hours": -3.75,
+              "status": "late"
+            },
+            "44": {
+              "vehicle_id": 1,
+              "wave_index": 2,
+              "stop_seq": 0,
+              "arrival_hour": 9.66,
+              "start_service_hour": 9.66,
+              "wait_hours": 0.0,
+              "tardiness_hours": 1.47,
+              "slack_hours": -1.47,
+              "status": "late"
+            },
+            "40": {
+              "vehicle_id": 2,
+              "wave_index": 2,
+              "stop_seq": 0,
+              "arrival_hour": 9.88,
+              "start_service_hour": 9.88,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.34,
+              "status": "at_risk"
+            },
+            "6": {
+              "vehicle_id": 0,
+              "wave_index": 3,
+              "stop_seq": 0,
+              "arrival_hour": 15.16,
+              "start_service_hour": 15.16,
+              "wait_hours": 0.0,
+              "tardiness_hours": 5.3,
+              "slack_hours": -5.3,
+              "status": "late"
+            },
+            "35": {
+              "vehicle_id": 0,
+              "wave_index": 3,
+              "stop_seq": 1,
+              "arrival_hour": 15.89,
+              "start_service_hour": 15.89,
+              "wait_hours": 0.0,
+              "tardiness_hours": 7.07,
+              "slack_hours": -7.07,
+              "status": "late"
+            },
+            "1": {
+              "vehicle_id": 0,
+              "wave_index": 3,
+              "stop_seq": 2,
+              "arrival_hour": 16.51,
+              "start_service_hour": 16.51,
+              "wait_hours": 0.0,
+              "tardiness_hours": 7.3,
+              "slack_hours": -7.3,
+              "status": "late"
+            },
+            "38": {
+              "vehicle_id": 1,
+              "wave_index": 3,
+              "stop_seq": 0,
+              "arrival_hour": 11.49,
+              "start_service_hour": 11.49,
+              "wait_hours": 0.0,
+              "tardiness_hours": 1.56,
+              "slack_hours": -1.56,
+              "status": "late"
+            },
+            "21": {
+              "vehicle_id": 1,
+              "wave_index": 3,
+              "stop_seq": 1,
+              "arrival_hour": 12.2,
+              "start_service_hour": 12.2,
+              "wait_hours": 0.0,
+              "tardiness_hours": 2.2,
+              "slack_hours": -2.2,
+              "status": "late"
+            },
+            "3": {
+              "vehicle_id": 2,
+              "wave_index": 3,
+              "stop_seq": 0,
+              "arrival_hour": 12.11,
+              "start_service_hour": 12.11,
+              "wait_hours": 0.0,
+              "tardiness_hours": 1.78,
+              "slack_hours": -1.78,
+              "status": "late"
+            }
+          }
+        },
+        "7": {
+          "generation": 7,
+          "label": "Gen 7: Sector + Slack Ranking",
+          "summary": {
+            "total_cost": 3940.46,
+            "total_distance_km": 1473.44,
+            "on_time_delivery_pct": 66.0,
+            "total_tardiness_hours": 46.37,
+            "total_wait_hours": 4.9,
+            "late_stops_count": 17,
+            "intra_route_crossings": 19,
+            "inter_route_crossings": 53,
+            "vehicles_used": 5
+          },
+          "tours": [
+            {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "dispatch_hour": 0.0,
+              "return_hour": 6.48,
+              "distance_km": 153.11,
+              "load_units": 35.0,
+              "capacity_pct": 77.8,
+              "stops": [
+                24,
+                14,
+                46,
+                37,
+                29,
+                26,
+                25
+              ]
+            },
+            {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "dispatch_hour": 0.0,
+              "return_hour": 5.2,
+              "distance_km": 103.62,
+              "load_units": 27.0,
+              "capacity_pct": 60.0,
+              "stops": [
+                10,
+                32,
+                4,
+                41,
+                2
+              ]
+            },
+            {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "dispatch_hour": 0.0,
+              "return_hour": 6.91,
+              "distance_km": 167.33,
+              "load_units": 38.0,
+              "capacity_pct": 84.4,
+              "stops": [
+                31,
+                33,
+                5,
+                9,
+                34,
+                23,
+                11,
+                20,
+                19
+              ]
+            },
+            {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "dispatch_hour": 0.0,
+              "return_hour": 3.62,
+              "distance_km": 37.58,
+              "load_units": 3.0,
+              "capacity_pct": 6.7,
+              "stops": [
+                47
+              ]
+            },
+            {
+              "vehicle_id": 4,
+              "wave_index": 0,
+              "dispatch_hour": 0.0,
+              "return_hour": 7.4,
+              "distance_km": 159.8,
+              "load_units": 33.0,
+              "capacity_pct": 73.3,
+              "stops": [
+                17,
+                49,
+                42,
+                22,
+                15,
+                13,
+                45,
+                0
+              ]
+            },
+            {
+              "vehicle_id": 0,
+              "wave_index": 1,
+              "dispatch_hour": 6.48,
+              "return_hour": 9.7,
+              "distance_km": 88.53,
+              "load_units": 5.0,
+              "capacity_pct": 11.1,
+              "stops": [
+                8,
+                16
+              ]
+            },
+            {
+              "vehicle_id": 1,
+              "wave_index": 1,
+              "dispatch_hour": 5.2,
+              "return_hour": 7.78,
+              "distance_km": 77.4,
+              "load_units": 15.0,
+              "capacity_pct": 33.3,
+              "stops": [
+                27,
+                36
+              ]
+            },
+            {
+              "vehicle_id": 2,
+              "wave_index": 1,
+              "dispatch_hour": 6.91,
+              "return_hour": 10.05,
+              "distance_km": 90.15,
+              "load_units": 8.0,
+              "capacity_pct": 17.8,
+              "stops": [
+                28
+              ]
+            },
+            {
+              "vehicle_id": 3,
+              "wave_index": 1,
+              "dispatch_hour": 3.62,
+              "return_hour": 7.4,
+              "distance_km": 107.46,
+              "load_units": 11.0,
+              "capacity_pct": 24.4,
+              "stops": [
+                30,
+                39,
+                48
+              ]
+            },
+            {
+              "vehicle_id": 0,
+              "wave_index": 2,
+              "dispatch_hour": 9.7,
+              "return_hour": 14.11,
+              "distance_km": 120.99,
+              "load_units": 20.0,
+              "capacity_pct": 44.4,
+              "stops": [
+                12,
+                18,
+                43,
+                7
+              ]
+            },
+            {
+              "vehicle_id": 1,
+              "wave_index": 2,
+              "dispatch_hour": 7.78,
+              "return_hour": 10.37,
+              "distance_km": 67.53,
+              "load_units": 8.0,
+              "capacity_pct": 17.8,
+              "stops": [
+                44
+              ]
+            },
+            {
+              "vehicle_id": 2,
+              "wave_index": 2,
+              "dispatch_hour": 10.05,
+              "return_hour": 12.08,
+              "distance_km": 57.44,
+              "load_units": 8.0,
+              "capacity_pct": 17.8,
+              "stops": [
+                40
+              ]
+            },
+            {
+              "vehicle_id": 0,
+              "wave_index": 3,
+              "dispatch_hour": 14.11,
+              "return_hour": 16.84,
+              "distance_km": 71.69,
+              "load_units": 4.0,
+              "capacity_pct": 8.9,
+              "stops": [
+                3
+              ]
+            },
+            {
+              "vehicle_id": 1,
+              "wave_index": 3,
+              "dispatch_hour": 10.37,
+              "return_hour": 14.12,
+              "distance_km": 107.97,
+              "load_units": 12.0,
+              "capacity_pct": 26.7,
+              "stops": [
+                35,
+                1,
+                6
+              ]
+            },
+            {
+              "vehicle_id": 2,
+              "wave_index": 3,
+              "dispatch_hour": 12.08,
+              "return_hour": 14.33,
+              "distance_km": 62.84,
+              "load_units": 5.0,
+              "capacity_pct": 11.1,
+              "stops": [
+                38,
+                21
+              ]
+            }
+          ],
+          "crossings": [
+            {
+              "x_km": 31.37,
+              "y_km": 67.69,
+              "vehicle_id": 0
+            },
+            {
+              "x_km": 29.51,
+              "y_km": 69.45,
+              "vehicle_id": 0
+            },
+            {
+              "x_km": 26.78,
+              "y_km": 72.05,
+              "vehicle_id": 0
+            },
+            {
+              "x_km": 27.53,
+              "y_km": 71.34,
+              "vehicle_id": 0
+            },
+            {
+              "x_km": 27.92,
+              "y_km": 70.96,
+              "vehicle_id": 0
+            },
+            {
+              "x_km": 25.8,
+              "y_km": 62.25,
+              "vehicle_id": 0
+            },
+            {
+              "x_km": 25.13,
+              "y_km": 62.59,
+              "vehicle_id": 0
+            },
+            {
+              "x_km": 73.51,
+              "y_km": 73.15,
+              "vehicle_id": 1
+            },
+            {
+              "x_km": 73.59,
+              "y_km": 72.62,
+              "vehicle_id": 1
+            },
+            {
+              "x_km": 70.14,
+              "y_km": 69.31,
+              "vehicle_id": 1
+            },
+            {
+              "x_km": 27.67,
+              "y_km": 19.04,
+              "vehicle_id": 2
+            },
+            {
+              "x_km": 22.63,
+              "y_km": 22.98,
+              "vehicle_id": 2
+            },
+            {
+              "x_km": 24.75,
+              "y_km": 19.95,
+              "vehicle_id": 2
+            },
+            {
+              "x_km": 24.64,
+              "y_km": 20.1,
+              "vehicle_id": 2
+            },
+            {
+              "x_km": 20.35,
+              "y_km": 18.69,
+              "vehicle_id": 2
+            },
+            {
+              "x_km": 21.69,
+              "y_km": 16.59,
+              "vehicle_id": 2
+            },
+            {
+              "x_km": 78.07,
+              "y_km": 28.14,
+              "vehicle_id": 4
+            },
+            {
+              "x_km": 77.23,
+              "y_km": 34.05,
+              "vehicle_id": 4
+            },
+            {
+              "x_km": 30.85,
+              "y_km": 68.35,
+              "vehicle_id": 0
+            }
+          ],
+          "stop_outcomes": {
+            "24": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 0,
+              "arrival_hour": 0.86,
+              "start_service_hour": 1.07,
+              "wait_hours": 0.21,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.33,
+              "status": "on_time"
+            },
+            "14": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 1,
+              "arrival_hour": 1.67,
+              "start_service_hour": 1.67,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.97,
+              "status": "on_time"
+            },
+            "46": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 2,
+              "arrival_hour": 2.51,
+              "start_service_hour": 2.51,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.74,
+              "status": "on_time"
+            },
+            "37": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 3,
+              "arrival_hour": 3.25,
+              "start_service_hour": 3.25,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.7,
+              "status": "on_time"
+            },
+            "29": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 4,
+              "arrival_hour": 4.07,
+              "start_service_hour": 4.07,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.12,
+              "status": "on_time"
+            },
+            "26": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 5,
+              "arrival_hour": 4.72,
+              "start_service_hour": 4.72,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.66,
+              "status": "on_time"
+            },
+            "25": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 6,
+              "arrival_hour": 5.33,
+              "start_service_hour": 5.33,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.97,
+              "status": "on_time"
+            },
+            "10": {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "stop_seq": 0,
+              "arrival_hour": 0.9,
+              "start_service_hour": 0.9,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 3.72,
+              "status": "on_time"
+            },
+            "32": {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "stop_seq": 1,
+              "arrival_hour": 1.31,
+              "start_service_hour": 2.2,
+              "wait_hours": 0.89,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.98,
+              "status": "on_time"
+            },
+            "4": {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "stop_seq": 2,
+              "arrival_hour": 2.65,
+              "start_service_hour": 2.65,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.61,
+              "status": "on_time"
+            },
+            "41": {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "stop_seq": 3,
+              "arrival_hour": 3.24,
+              "start_service_hour": 3.24,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.1,
+              "status": "on_time"
+            },
+            "2": {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "stop_seq": 4,
+              "arrival_hour": 3.78,
+              "start_service_hour": 3.78,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 3.38,
+              "status": "on_time"
+            },
+            "31": {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "stop_seq": 0,
+              "arrival_hour": 0.91,
+              "start_service_hour": 1.21,
+              "wait_hours": 0.3,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.38,
+              "status": "on_time"
+            },
+            "33": {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "stop_seq": 1,
+              "arrival_hour": 1.57,
+              "start_service_hour": 1.57,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.14,
+              "status": "on_time"
+            },
+            "5": {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "stop_seq": 2,
+              "arrival_hour": 2.07,
+              "start_service_hour": 2.07,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.86,
+              "status": "on_time"
+            },
+            "9": {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "stop_seq": 3,
+              "arrival_hour": 2.45,
+              "start_service_hour": 2.54,
+              "wait_hours": 0.09,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.42,
+              "status": "on_time"
+            },
+            "34": {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "stop_seq": 4,
+              "arrival_hour": 3.19,
+              "start_service_hour": 3.19,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.87,
+              "status": "on_time"
+            },
+            "23": {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "stop_seq": 5,
+              "arrival_hour": 3.62,
+              "start_service_hour": 3.62,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.56,
+              "status": "on_time"
+            },
+            "11": {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "stop_seq": 6,
+              "arrival_hour": 4.15,
+              "start_service_hour": 4.15,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.05,
+              "status": "on_time"
+            },
+            "20": {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "stop_seq": 7,
+              "arrival_hour": 4.98,
+              "start_service_hour": 4.98,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.27,
+              "status": "at_risk"
+            },
+            "19": {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "stop_seq": 8,
+              "arrival_hour": 5.53,
+              "start_service_hour": 5.53,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.03,
+              "slack_hours": -0.03,
+              "status": "at_risk"
+            },
+            "47": {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "stop_seq": 0,
+              "arrival_hour": 0.47,
+              "start_service_hour": 2.8,
+              "wait_hours": 2.33,
+              "tardiness_hours": 0.0,
+              "slack_hours": 3.95,
+              "status": "on_time"
+            },
+            "17": {
+              "vehicle_id": 4,
+              "wave_index": 0,
+              "stop_seq": 0,
+              "arrival_hour": 1.03,
+              "start_service_hour": 1.6,
+              "wait_hours": 0.57,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.05,
+              "status": "on_time"
+            },
+            "49": {
+              "vehicle_id": 4,
+              "wave_index": 0,
+              "stop_seq": 1,
+              "arrival_hour": 1.94,
+              "start_service_hour": 2.44,
+              "wait_hours": 0.5,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.5,
+              "status": "on_time"
+            },
+            "42": {
+              "vehicle_id": 4,
+              "wave_index": 0,
+              "stop_seq": 2,
+              "arrival_hour": 3.06,
+              "start_service_hour": 3.06,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.07,
+              "status": "on_time"
+            },
+            "22": {
+              "vehicle_id": 4,
+              "wave_index": 0,
+              "stop_seq": 3,
+              "arrival_hour": 3.47,
+              "start_service_hour": 3.47,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.97,
+              "status": "on_time"
+            },
+            "15": {
+              "vehicle_id": 4,
+              "wave_index": 0,
+              "stop_seq": 4,
+              "arrival_hour": 4.04,
+              "start_service_hour": 4.04,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.22,
+              "status": "on_time"
+            },
+            "13": {
+              "vehicle_id": 4,
+              "wave_index": 0,
+              "stop_seq": 5,
+              "arrival_hour": 4.65,
+              "start_service_hour": 4.65,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.89,
+              "status": "on_time"
+            },
+            "45": {
+              "vehicle_id": 4,
+              "wave_index": 0,
+              "stop_seq": 6,
+              "arrival_hour": 5.51,
+              "start_service_hour": 5.51,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.25,
+              "status": "on_time"
+            },
+            "0": {
+              "vehicle_id": 4,
+              "wave_index": 0,
+              "stop_seq": 7,
+              "arrival_hour": 6.22,
+              "start_service_hour": 6.22,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.62,
+              "status": "on_time"
+            },
+            "8": {
+              "vehicle_id": 0,
+              "wave_index": 1,
+              "stop_seq": 0,
+              "arrival_hour": 7.25,
+              "start_service_hour": 7.25,
+              "wait_hours": 0.0,
+              "tardiness_hours": 2.11,
+              "slack_hours": -2.11,
+              "status": "late"
+            },
+            "16": {
+              "vehicle_id": 0,
+              "wave_index": 1,
+              "stop_seq": 1,
+              "arrival_hour": 7.98,
+              "start_service_hour": 7.98,
+              "wait_hours": 0.0,
+              "tardiness_hours": 2.07,
+              "slack_hours": -2.07,
+              "status": "late"
+            },
+            "27": {
+              "vehicle_id": 1,
+              "wave_index": 1,
+              "stop_seq": 0,
+              "arrival_hour": 6.16,
+              "start_service_hour": 6.16,
+              "wait_hours": 0.0,
+              "tardiness_hours": 1.18,
+              "slack_hours": -1.18,
+              "status": "late"
+            },
+            "36": {
+              "vehicle_id": 1,
+              "wave_index": 1,
+              "stop_seq": 1,
+              "arrival_hour": 6.91,
+              "start_service_hour": 6.91,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.9,
+              "slack_hours": -0.9,
+              "status": "late"
+            },
+            "28": {
+              "vehicle_id": 2,
+              "wave_index": 1,
+              "stop_seq": 0,
+              "arrival_hour": 8.15,
+              "start_service_hour": 8.15,
+              "wait_hours": 0.0,
+              "tardiness_hours": 2.71,
+              "slack_hours": -2.71,
+              "status": "late"
+            },
+            "30": {
+              "vehicle_id": 3,
+              "wave_index": 1,
+              "stop_seq": 0,
+              "arrival_hour": 4.95,
+              "start_service_hour": 4.95,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.29,
+              "status": "at_risk"
+            },
+            "39": {
+              "vehicle_id": 3,
+              "wave_index": 1,
+              "stop_seq": 1,
+              "arrival_hour": 5.55,
+              "start_service_hour": 5.55,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.04,
+              "slack_hours": -0.04,
+              "status": "at_risk"
+            },
+            "48": {
+              "vehicle_id": 3,
+              "wave_index": 1,
+              "stop_seq": 2,
+              "arrival_hour": 6.17,
+              "start_service_hour": 6.17,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.58,
+              "status": "on_time"
+            },
+            "12": {
+              "vehicle_id": 0,
+              "wave_index": 2,
+              "stop_seq": 0,
+              "arrival_hour": 10.67,
+              "start_service_hour": 10.67,
+              "wait_hours": 0.0,
+              "tardiness_hours": 4.28,
+              "slack_hours": -4.28,
+              "status": "late"
+            },
+            "18": {
+              "vehicle_id": 0,
+              "wave_index": 2,
+              "stop_seq": 1,
+              "arrival_hour": 11.65,
+              "start_service_hour": 11.65,
+              "wait_hours": 0.0,
+              "tardiness_hours": 3.63,
+              "slack_hours": -3.63,
+              "status": "late"
+            },
+            "43": {
+              "vehicle_id": 0,
+              "wave_index": 2,
+              "stop_seq": 2,
+              "arrival_hour": 12.61,
+              "start_service_hour": 12.61,
+              "wait_hours": 0.0,
+              "tardiness_hours": 3.61,
+              "slack_hours": -3.61,
+              "status": "late"
+            },
+            "7": {
+              "vehicle_id": 0,
+              "wave_index": 2,
+              "stop_seq": 3,
+              "arrival_hour": 13.28,
+              "start_service_hour": 13.28,
+              "wait_hours": 0.0,
+              "tardiness_hours": 4.01,
+              "slack_hours": -4.01,
+              "status": "late"
+            },
+            "44": {
+              "vehicle_id": 1,
+              "wave_index": 2,
+              "stop_seq": 0,
+              "arrival_hour": 8.9,
+              "start_service_hour": 8.9,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.71,
+              "slack_hours": -0.71,
+              "status": "late"
+            },
+            "40": {
+              "vehicle_id": 2,
+              "wave_index": 2,
+              "stop_seq": 0,
+              "arrival_hour": 11.03,
+              "start_service_hour": 11.03,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.81,
+              "slack_hours": -0.81,
+              "status": "late"
+            },
+            "3": {
+              "vehicle_id": 0,
+              "wave_index": 3,
+              "stop_seq": 0,
+              "arrival_hour": 15.36,
+              "start_service_hour": 15.36,
+              "wait_hours": 0.0,
+              "tardiness_hours": 5.03,
+              "slack_hours": -5.03,
+              "status": "late"
+            },
+            "35": {
+              "vehicle_id": 1,
+              "wave_index": 3,
+              "stop_seq": 0,
+              "arrival_hour": 12.01,
+              "start_service_hour": 12.01,
+              "wait_hours": 0.0,
+              "tardiness_hours": 3.19,
+              "slack_hours": -3.19,
+              "status": "late"
+            },
+            "1": {
+              "vehicle_id": 1,
+              "wave_index": 3,
+              "stop_seq": 1,
+              "arrival_hour": 12.52,
+              "start_service_hour": 12.52,
+              "wait_hours": 0.0,
+              "tardiness_hours": 3.31,
+              "slack_hours": -3.31,
+              "status": "late"
+            },
+            "6": {
+              "vehicle_id": 1,
+              "wave_index": 3,
+              "stop_seq": 2,
+              "arrival_hour": 12.86,
+              "start_service_hour": 12.86,
+              "wait_hours": 0.0,
+              "tardiness_hours": 3.0,
+              "slack_hours": -3.0,
+              "status": "late"
+            },
+            "38": {
+              "vehicle_id": 2,
+              "wave_index": 3,
+              "stop_seq": 0,
+              "arrival_hour": 12.47,
+              "start_service_hour": 12.47,
+              "wait_hours": 0.0,
+              "tardiness_hours": 2.54,
+              "slack_hours": -2.54,
+              "status": "late"
+            },
+            "21": {
+              "vehicle_id": 2,
+              "wave_index": 3,
+              "stop_seq": 1,
+              "arrival_hour": 13.21,
+              "start_service_hour": 13.21,
+              "wait_hours": 0.0,
+              "tardiness_hours": 3.21,
+              "slack_hours": -3.21,
+              "status": "late"
+            }
+          }
+        },
+        "16": {
+          "generation": 16,
+          "label": "Gen 16: Traffic-Aware Sector Dispatch",
+          "summary": {
+            "total_cost": 2763.2,
+            "total_distance_km": 1316.26,
+            "on_time_delivery_pct": 76.0,
+            "total_tardiness_hours": 14.87,
+            "total_wait_hours": 5.35,
+            "late_stops_count": 12,
+            "intra_route_crossings": 0,
+            "inter_route_crossings": 35,
+            "vehicles_used": 5
+          },
+          "tours": [
+            {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "dispatch_hour": 0.0,
+              "return_hour": 5.16,
+              "distance_km": 107.02,
+              "load_units": 33.0,
+              "capacity_pct": 73.3,
+              "stops": [
+                31,
+                33,
+                11,
+                19,
+                34,
+                23,
+                5,
+                9
+              ]
+            },
+            {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "dispatch_hour": 0.0,
+              "return_hour": 5.72,
+              "distance_km": 94.6,
+              "load_units": 29.0,
+              "capacity_pct": 64.4,
+              "stops": [
+                41,
+                32,
+                2,
+                10,
+                4,
+                45
+              ]
+            },
+            {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "dispatch_hour": 0.0,
+              "return_hour": 5.07,
+              "distance_km": 90.9,
+              "load_units": 23.0,
+              "capacity_pct": 51.1,
+              "stops": [
+                14,
+                24,
+                29,
+                26,
+                37
+              ]
+            },
+            {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "dispatch_hour": 0.0,
+              "return_hour": 5.94,
+              "distance_km": 115.35,
+              "load_units": 31.0,
+              "capacity_pct": 68.9,
+              "stops": [
+                17,
+                49,
+                15,
+                13,
+                42,
+                22,
+                0
+              ]
+            },
+            {
+              "vehicle_id": 4,
+              "wave_index": 0,
+              "dispatch_hour": 0.0,
+              "return_hour": 5.55,
+              "distance_km": 105.53,
+              "load_units": 20.0,
+              "capacity_pct": 44.4,
+              "stops": [
+                25,
+                46,
+                47,
+                20
+              ]
+            },
+            {
+              "vehicle_id": 0,
+              "wave_index": 1,
+              "dispatch_hour": 5.16,
+              "return_hour": 8.86,
+              "distance_km": 107.46,
+              "load_units": 11.0,
+              "capacity_pct": 24.4,
+              "stops": [
+                30,
+                39,
+                48
+              ]
+            },
+            {
+              "vehicle_id": 1,
+              "wave_index": 1,
+              "dispatch_hour": 5.72,
+              "return_hour": 8.64,
+              "distance_km": 88.53,
+              "load_units": 5.0,
+              "capacity_pct": 11.1,
+              "stops": [
+                8,
+                16
+              ]
+            },
+            {
+              "vehicle_id": 2,
+              "wave_index": 1,
+              "dispatch_hour": 5.07,
+              "return_hour": 7.75,
+              "distance_km": 90.15,
+              "load_units": 8.0,
+              "capacity_pct": 17.8,
+              "stops": [
+                28
+              ]
+            },
+            {
+              "vehicle_id": 4,
+              "wave_index": 1,
+              "dispatch_hour": 5.55,
+              "return_hour": 8.11,
+              "distance_km": 77.4,
+              "load_units": 15.0,
+              "capacity_pct": 33.3,
+              "stops": [
+                36,
+                27
+              ]
+            },
+            {
+              "vehicle_id": 3,
+              "wave_index": 2,
+              "dispatch_hour": 5.94,
+              "return_hour": 13.29,
+              "distance_km": 196.82,
+              "load_units": 36.0,
+              "capacity_pct": 80.0,
+              "stops": [
+                18,
+                7,
+                12,
+                43,
+                44,
+                40
+              ]
+            },
+            {
+              "vehicle_id": 1,
+              "wave_index": 3,
+              "dispatch_hour": 8.64,
+              "return_hour": 11.34,
+              "distance_km": 71.69,
+              "load_units": 4.0,
+              "capacity_pct": 8.9,
+              "stops": [
+                3
+              ]
+            },
+            {
+              "vehicle_id": 2,
+              "wave_index": 3,
+              "dispatch_hour": 7.75,
+              "return_hour": 11.92,
+              "distance_km": 107.97,
+              "load_units": 12.0,
+              "capacity_pct": 26.7,
+              "stops": [
+                6,
+                1,
+                35
+              ]
+            },
+            {
+              "vehicle_id": 4,
+              "wave_index": 3,
+              "dispatch_hour": 8.11,
+              "return_hour": 10.84,
+              "distance_km": 62.84,
+              "load_units": 5.0,
+              "capacity_pct": 11.1,
+              "stops": [
+                38,
+                21
+              ]
+            }
+          ],
+          "crossings": [],
+          "stop_outcomes": {
+            "31": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 0,
+              "arrival_hour": 0.91,
+              "start_service_hour": 1.21,
+              "wait_hours": 0.3,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.38,
+              "status": "on_time"
+            },
+            "33": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 1,
+              "arrival_hour": 1.57,
+              "start_service_hour": 1.57,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.14,
+              "status": "on_time"
+            },
+            "11": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 2,
+              "arrival_hour": 2.02,
+              "start_service_hour": 2.02,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 3.18,
+              "status": "on_time"
+            },
+            "19": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 3,
+              "arrival_hour": 2.48,
+              "start_service_hour": 2.48,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 3.02,
+              "status": "on_time"
+            },
+            "34": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 4,
+              "arrival_hour": 2.82,
+              "start_service_hour": 2.82,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.24,
+              "status": "on_time"
+            },
+            "23": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 5,
+              "arrival_hour": 3.26,
+              "start_service_hour": 3.26,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.92,
+              "status": "on_time"
+            },
+            "5": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 6,
+              "arrival_hour": 3.63,
+              "start_service_hour": 3.63,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.3,
+              "status": "on_time"
+            },
+            "9": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 7,
+              "arrival_hour": 4.0,
+              "start_service_hour": 4.0,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.96,
+              "status": "on_time"
+            },
+            "41": {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "stop_seq": 0,
+              "arrival_hour": 0.64,
+              "start_service_hour": 1.91,
+              "wait_hours": 1.27,
+              "tardiness_hours": 0.0,
+              "slack_hours": 3.43,
+              "status": "on_time"
+            },
+            "32": {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "stop_seq": 1,
+              "arrival_hour": 2.44,
+              "start_service_hour": 2.44,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.74,
+              "status": "on_time"
+            },
+            "2": {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "stop_seq": 2,
+              "arrival_hour": 2.73,
+              "start_service_hour": 2.93,
+              "wait_hours": 0.2,
+              "tardiness_hours": 0.0,
+              "slack_hours": 4.23,
+              "status": "on_time"
+            },
+            "10": {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "stop_seq": 3,
+              "arrival_hour": 3.36,
+              "start_service_hour": 3.36,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.26,
+              "status": "on_time"
+            },
+            "4": {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "stop_seq": 4,
+              "arrival_hour": 3.74,
+              "start_service_hour": 3.74,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.52,
+              "status": "on_time"
+            },
+            "45": {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "stop_seq": 5,
+              "arrival_hour": 4.72,
+              "start_service_hour": 4.72,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.04,
+              "status": "on_time"
+            },
+            "14": {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "stop_seq": 0,
+              "arrival_hour": 0.66,
+              "start_service_hour": 1.54,
+              "wait_hours": 0.88,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.1,
+              "status": "on_time"
+            },
+            "24": {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "stop_seq": 1,
+              "arrival_hour": 2.14,
+              "start_service_hour": 2.14,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.26,
+              "status": "on_time"
+            },
+            "29": {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "stop_seq": 2,
+              "arrival_hour": 2.68,
+              "start_service_hour": 2.68,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.51,
+              "status": "on_time"
+            },
+            "26": {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "stop_seq": 3,
+              "arrival_hour": 3.39,
+              "start_service_hour": 3.39,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.99,
+              "status": "on_time"
+            },
+            "37": {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "stop_seq": 4,
+              "arrival_hour": 3.79,
+              "start_service_hour": 3.79,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.16,
+              "status": "on_time"
+            },
+            "17": {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "stop_seq": 0,
+              "arrival_hour": 1.03,
+              "start_service_hour": 1.6,
+              "wait_hours": 0.57,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.05,
+              "status": "on_time"
+            },
+            "49": {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "stop_seq": 1,
+              "arrival_hour": 1.94,
+              "start_service_hour": 2.44,
+              "wait_hours": 0.5,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.5,
+              "status": "on_time"
+            },
+            "15": {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "stop_seq": 2,
+              "arrival_hour": 3.01,
+              "start_service_hour": 3.01,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 3.25,
+              "status": "on_time"
+            },
+            "13": {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "stop_seq": 3,
+              "arrival_hour": 3.68,
+              "start_service_hour": 3.68,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.86,
+              "status": "on_time"
+            },
+            "42": {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "stop_seq": 4,
+              "arrival_hour": 4.02,
+              "start_service_hour": 4.02,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.11,
+              "status": "on_time"
+            },
+            "22": {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "stop_seq": 5,
+              "arrival_hour": 4.4,
+              "start_service_hour": 4.4,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.04,
+              "status": "on_time"
+            },
+            "0": {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "stop_seq": 6,
+              "arrival_hour": 4.67,
+              "start_service_hour": 4.67,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.17,
+              "status": "on_time"
+            },
+            "25": {
+              "vehicle_id": 4,
+              "wave_index": 0,
+              "stop_seq": 0,
+              "arrival_hour": 0.88,
+              "start_service_hour": 2.51,
+              "wait_hours": 1.63,
+              "tardiness_hours": 0.0,
+              "slack_hours": 3.79,
+              "status": "on_time"
+            },
+            "46": {
+              "vehicle_id": 4,
+              "wave_index": 0,
+              "stop_seq": 1,
+              "arrival_hour": 3.04,
+              "start_service_hour": 3.04,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.21,
+              "status": "on_time"
+            },
+            "47": {
+              "vehicle_id": 4,
+              "wave_index": 0,
+              "stop_seq": 2,
+              "arrival_hour": 3.83,
+              "start_service_hour": 3.83,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.92,
+              "status": "on_time"
+            },
+            "20": {
+              "vehicle_id": 4,
+              "wave_index": 0,
+              "stop_seq": 3,
+              "arrival_hour": 4.58,
+              "start_service_hour": 4.58,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.67,
+              "status": "on_time"
+            },
+            "30": {
+              "vehicle_id": 0,
+              "wave_index": 1,
+              "stop_seq": 0,
+              "arrival_hour": 6.16,
+              "start_service_hour": 6.16,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.92,
+              "slack_hours": -0.92,
+              "status": "late"
+            },
+            "39": {
+              "vehicle_id": 0,
+              "wave_index": 1,
+              "stop_seq": 1,
+              "arrival_hour": 6.72,
+              "start_service_hour": 6.72,
+              "wait_hours": 0.0,
+              "tardiness_hours": 1.21,
+              "slack_hours": -1.21,
+              "status": "late"
+            },
+            "48": {
+              "vehicle_id": 0,
+              "wave_index": 1,
+              "stop_seq": 2,
+              "arrival_hour": 7.37,
+              "start_service_hour": 7.37,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.38,
+              "status": "on_time"
+            },
+            "8": {
+              "vehicle_id": 1,
+              "wave_index": 1,
+              "stop_seq": 0,
+              "arrival_hour": 6.48,
+              "start_service_hour": 6.48,
+              "wait_hours": 0.0,
+              "tardiness_hours": 1.34,
+              "slack_hours": -1.34,
+              "status": "late"
+            },
+            "16": {
+              "vehicle_id": 1,
+              "wave_index": 1,
+              "stop_seq": 1,
+              "arrival_hour": 7.13,
+              "start_service_hour": 7.13,
+              "wait_hours": 0.0,
+              "tardiness_hours": 1.22,
+              "slack_hours": -1.22,
+              "status": "late"
+            },
+            "28": {
+              "vehicle_id": 2,
+              "wave_index": 1,
+              "stop_seq": 0,
+              "arrival_hour": 6.32,
+              "start_service_hour": 6.32,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.88,
+              "slack_hours": -0.88,
+              "status": "late"
+            },
+            "36": {
+              "vehicle_id": 4,
+              "wave_index": 1,
+              "stop_seq": 0,
+              "arrival_hour": 6.16,
+              "start_service_hour": 6.16,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.15,
+              "slack_hours": -0.15,
+              "status": "late"
+            },
+            "27": {
+              "vehicle_id": 4,
+              "wave_index": 1,
+              "stop_seq": 1,
+              "arrival_hour": 6.8,
+              "start_service_hour": 6.8,
+              "wait_hours": 0.0,
+              "tardiness_hours": 1.82,
+              "slack_hours": -1.82,
+              "status": "late"
+            },
+            "18": {
+              "vehicle_id": 3,
+              "wave_index": 2,
+              "stop_seq": 0,
+              "arrival_hour": 6.76,
+              "start_service_hour": 6.76,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.26,
+              "status": "on_time"
+            },
+            "7": {
+              "vehicle_id": 3,
+              "wave_index": 2,
+              "stop_seq": 1,
+              "arrival_hour": 7.47,
+              "start_service_hour": 7.47,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.8,
+              "status": "on_time"
+            },
+            "12": {
+              "vehicle_id": 3,
+              "wave_index": 2,
+              "stop_seq": 2,
+              "arrival_hour": 7.96,
+              "start_service_hour": 7.96,
+              "wait_hours": 0.0,
+              "tardiness_hours": 1.57,
+              "slack_hours": -1.57,
+              "status": "late"
+            },
+            "43": {
+              "vehicle_id": 3,
+              "wave_index": 2,
+              "stop_seq": 3,
+              "arrival_hour": 8.65,
+              "start_service_hour": 8.65,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.35,
+              "status": "on_time"
+            },
+            "44": {
+              "vehicle_id": 3,
+              "wave_index": 2,
+              "stop_seq": 4,
+              "arrival_hour": 10.55,
+              "start_service_hour": 10.55,
+              "wait_hours": 0.0,
+              "tardiness_hours": 2.36,
+              "slack_hours": -2.36,
+              "status": "late"
+            },
+            "40": {
+              "vehicle_id": 3,
+              "wave_index": 2,
+              "stop_seq": 5,
+              "arrival_hour": 12.25,
+              "start_service_hour": 12.25,
+              "wait_hours": 0.0,
+              "tardiness_hours": 2.03,
+              "slack_hours": -2.03,
+              "status": "late"
+            },
+            "3": {
+              "vehicle_id": 1,
+              "wave_index": 3,
+              "stop_seq": 0,
+              "arrival_hour": 9.97,
+              "start_service_hour": 9.97,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.36,
+              "status": "on_time"
+            },
+            "6": {
+              "vehicle_id": 2,
+              "wave_index": 3,
+              "stop_seq": 0,
+              "arrival_hour": 9.08,
+              "start_service_hour": 9.08,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.78,
+              "status": "on_time"
+            },
+            "1": {
+              "vehicle_id": 2,
+              "wave_index": 3,
+              "stop_seq": 1,
+              "arrival_hour": 9.38,
+              "start_service_hour": 9.38,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.17,
+              "slack_hours": -0.17,
+              "status": "late"
+            },
+            "35": {
+              "vehicle_id": 2,
+              "wave_index": 3,
+              "stop_seq": 2,
+              "arrival_hour": 10.03,
+              "start_service_hour": 10.03,
+              "wait_hours": 0.0,
+              "tardiness_hours": 1.21,
+              "slack_hours": -1.21,
+              "status": "late"
+            },
+            "38": {
+              "vehicle_id": 4,
+              "wave_index": 3,
+              "stop_seq": 0,
+              "arrival_hour": 8.65,
+              "start_service_hour": 8.65,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.28,
+              "status": "on_time"
+            },
+            "21": {
+              "vehicle_id": 4,
+              "wave_index": 3,
+              "stop_seq": 1,
+              "arrival_hour": 9.59,
+              "start_service_hour": 9.59,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.41,
+              "status": "on_time"
+            }
+          }
+        },
+        "30": {
+          "generation": 30,
+          "label": "Gen 30: Regret-2 + 2-Opt Uncrossing",
+          "summary": {
+            "total_cost": 2471.16,
+            "total_distance_km": 1261.35,
+            "on_time_delivery_pct": 86.0,
+            "total_tardiness_hours": 8.0,
+            "total_wait_hours": 4.9,
+            "late_stops_count": 7,
+            "intra_route_crossings": 0,
+            "inter_route_crossings": 26,
+            "vehicles_used": 5
+          },
+          "tours": [
+            {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "dispatch_hour": 0.0,
+              "return_hour": 5.32,
+              "distance_km": 110.32,
+              "load_units": 38.0,
+              "capacity_pct": 84.4,
+              "stops": [
+                31,
+                33,
+                11,
+                19,
+                34,
+                23,
+                5,
+                9,
+                20
+              ]
+            },
+            {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "dispatch_hour": 0.0,
+              "return_hour": 4.96,
+              "distance_km": 79.26,
+              "load_units": 27.0,
+              "capacity_pct": 60.0,
+              "stops": [
+                4,
+                10,
+                2,
+                32,
+                41
+              ]
+            },
+            {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "dispatch_hour": 0.0,
+              "return_hour": 3.57,
+              "distance_km": 61.34,
+              "load_units": 9.0,
+              "capacity_pct": 20.0,
+              "stops": [
+                14,
+                37
+              ]
+            },
+            {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "dispatch_hour": 0.0,
+              "return_hour": 6.3,
+              "distance_km": 120.59,
+              "load_units": 33.0,
+              "capacity_pct": 73.3,
+              "stops": [
+                17,
+                49,
+                15,
+                22,
+                13,
+                42,
+                0,
+                45
+              ]
+            },
+            {
+              "vehicle_id": 4,
+              "wave_index": 0,
+              "dispatch_hour": 0.0,
+              "return_hour": 5.15,
+              "distance_km": 90.74,
+              "load_units": 29.0,
+              "capacity_pct": 64.4,
+              "stops": [
+                26,
+                24,
+                29,
+                25,
+                46,
+                47
+              ]
+            },
+            {
+              "vehicle_id": 1,
+              "wave_index": 1,
+              "dispatch_hour": 4.96,
+              "return_hour": 7.48,
+              "distance_km": 77.4,
+              "load_units": 15.0,
+              "capacity_pct": 33.3,
+              "stops": [
+                36,
+                27
+              ]
+            },
+            {
+              "vehicle_id": 2,
+              "wave_index": 1,
+              "dispatch_hour": 3.57,
+              "return_hour": 8.63,
+              "distance_km": 147.69,
+              "load_units": 13.0,
+              "capacity_pct": 28.9,
+              "stops": [
+                8,
+                16,
+                28
+              ]
+            },
+            {
+              "vehicle_id": 4,
+              "wave_index": 1,
+              "dispatch_hour": 5.15,
+              "return_hour": 8.85,
+              "distance_km": 107.46,
+              "load_units": 11.0,
+              "capacity_pct": 24.4,
+              "stops": [
+                30,
+                39,
+                48
+              ]
+            },
+            {
+              "vehicle_id": 0,
+              "wave_index": 2,
+              "dispatch_hour": 5.32,
+              "return_hour": 9.24,
+              "distance_km": 104.39,
+              "load_units": 20.0,
+              "capacity_pct": 44.4,
+              "stops": [
+                7,
+                12,
+                43,
+                18
+              ]
+            },
+            {
+              "vehicle_id": 3,
+              "wave_index": 2,
+              "dispatch_hour": 6.3,
+              "return_hour": 10.26,
+              "distance_km": 112.99,
+              "load_units": 16.0,
+              "capacity_pct": 35.6,
+              "stops": [
+                44,
+                40
+              ]
+            },
+            {
+              "vehicle_id": 1,
+              "wave_index": 3,
+              "dispatch_hour": 7.48,
+              "return_hour": 13.18,
+              "distance_km": 161.53,
+              "load_units": 16.0,
+              "capacity_pct": 35.6,
+              "stops": [
+                35,
+                6,
+                1,
+                3
+              ]
+            },
+            {
+              "vehicle_id": 2,
+              "wave_index": 3,
+              "dispatch_hour": 8.63,
+              "return_hour": 10.01,
+              "distance_km": 31.09,
+              "load_units": 4.0,
+              "capacity_pct": 8.9,
+              "stops": [
+                38
+              ]
+            },
+            {
+              "vehicle_id": 4,
+              "wave_index": 3,
+              "dispatch_hour": 8.85,
+              "return_hour": 11.11,
+              "distance_km": 56.55,
+              "load_units": 1.0,
+              "capacity_pct": 2.2,
+              "stops": [
+                21
+              ]
+            }
+          ],
+          "crossings": [],
+          "stop_outcomes": {
+            "31": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 0,
+              "arrival_hour": 0.91,
+              "start_service_hour": 1.21,
+              "wait_hours": 0.3,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.38,
+              "status": "on_time"
+            },
+            "33": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 1,
+              "arrival_hour": 1.57,
+              "start_service_hour": 1.57,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.14,
+              "status": "on_time"
+            },
+            "11": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 2,
+              "arrival_hour": 2.02,
+              "start_service_hour": 2.02,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 3.18,
+              "status": "on_time"
+            },
+            "19": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 3,
+              "arrival_hour": 2.48,
+              "start_service_hour": 2.48,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 3.02,
+              "status": "on_time"
+            },
+            "34": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 4,
+              "arrival_hour": 2.82,
+              "start_service_hour": 2.82,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.24,
+              "status": "on_time"
+            },
+            "23": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 5,
+              "arrival_hour": 3.26,
+              "start_service_hour": 3.26,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.92,
+              "status": "on_time"
+            },
+            "5": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 6,
+              "arrival_hour": 3.63,
+              "start_service_hour": 3.63,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.3,
+              "status": "on_time"
+            },
+            "9": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 7,
+              "arrival_hour": 4.0,
+              "start_service_hour": 4.0,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.96,
+              "status": "on_time"
+            },
+            "20": {
+              "vehicle_id": 0,
+              "wave_index": 0,
+              "stop_seq": 8,
+              "arrival_hour": 4.31,
+              "start_service_hour": 4.31,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.94,
+              "status": "on_time"
+            },
+            "4": {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "stop_seq": 0,
+              "arrival_hour": 0.76,
+              "start_service_hour": 2.17,
+              "wait_hours": 1.41,
+              "tardiness_hours": 0.0,
+              "slack_hours": 3.09,
+              "status": "on_time"
+            },
+            "10": {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "stop_seq": 1,
+              "arrival_hour": 2.63,
+              "start_service_hour": 2.63,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.99,
+              "status": "on_time"
+            },
+            "2": {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "stop_seq": 2,
+              "arrival_hour": 2.99,
+              "start_service_hour": 2.99,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 4.17,
+              "status": "on_time"
+            },
+            "32": {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "stop_seq": 3,
+              "arrival_hour": 3.38,
+              "start_service_hour": 3.38,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.8,
+              "status": "on_time"
+            },
+            "41": {
+              "vehicle_id": 1,
+              "wave_index": 0,
+              "stop_seq": 4,
+              "arrival_hour": 3.9,
+              "start_service_hour": 3.9,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.44,
+              "status": "on_time"
+            },
+            "14": {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "stop_seq": 0,
+              "arrival_hour": 0.66,
+              "start_service_hour": 1.54,
+              "wait_hours": 0.88,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.1,
+              "status": "on_time"
+            },
+            "37": {
+              "vehicle_id": 2,
+              "wave_index": 0,
+              "stop_seq": 1,
+              "arrival_hour": 1.92,
+              "start_service_hour": 2.21,
+              "wait_hours": 0.29,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.74,
+              "status": "on_time"
+            },
+            "17": {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "stop_seq": 0,
+              "arrival_hour": 1.03,
+              "start_service_hour": 1.6,
+              "wait_hours": 0.57,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.05,
+              "status": "on_time"
+            },
+            "49": {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "stop_seq": 1,
+              "arrival_hour": 1.94,
+              "start_service_hour": 2.44,
+              "wait_hours": 0.5,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.5,
+              "status": "on_time"
+            },
+            "15": {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "stop_seq": 2,
+              "arrival_hour": 3.01,
+              "start_service_hour": 3.01,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 3.25,
+              "status": "on_time"
+            },
+            "22": {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "stop_seq": 3,
+              "arrival_hour": 3.65,
+              "start_service_hour": 3.65,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.79,
+              "status": "on_time"
+            },
+            "13": {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "stop_seq": 4,
+              "arrival_hour": 3.95,
+              "start_service_hour": 3.95,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.59,
+              "status": "on_time"
+            },
+            "42": {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "stop_seq": 5,
+              "arrival_hour": 4.29,
+              "start_service_hour": 4.29,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.84,
+              "status": "on_time"
+            },
+            "0": {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "stop_seq": 6,
+              "arrival_hour": 4.62,
+              "start_service_hour": 4.62,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.22,
+              "status": "on_time"
+            },
+            "45": {
+              "vehicle_id": 3,
+              "wave_index": 0,
+              "stop_seq": 7,
+              "arrival_hour": 5.37,
+              "start_service_hour": 5.37,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.39,
+              "status": "on_time"
+            },
+            "26": {
+              "vehicle_id": 4,
+              "wave_index": 0,
+              "stop_seq": 0,
+              "arrival_hour": 0.75,
+              "start_service_hour": 1.72,
+              "wait_hours": 0.97,
+              "tardiness_hours": 0.0,
+              "slack_hours": 3.66,
+              "status": "on_time"
+            },
+            "24": {
+              "vehicle_id": 4,
+              "wave_index": 0,
+              "stop_seq": 1,
+              "arrival_hour": 2.16,
+              "start_service_hour": 2.16,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.24,
+              "status": "on_time"
+            },
+            "29": {
+              "vehicle_id": 4,
+              "wave_index": 0,
+              "stop_seq": 2,
+              "arrival_hour": 2.71,
+              "start_service_hour": 2.71,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.48,
+              "status": "on_time"
+            },
+            "25": {
+              "vehicle_id": 4,
+              "wave_index": 0,
+              "stop_seq": 3,
+              "arrival_hour": 3.18,
+              "start_service_hour": 3.18,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 3.12,
+              "status": "on_time"
+            },
+            "46": {
+              "vehicle_id": 4,
+              "wave_index": 0,
+              "stop_seq": 4,
+              "arrival_hour": 3.71,
+              "start_service_hour": 3.71,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.54,
+              "status": "on_time"
+            },
+            "47": {
+              "vehicle_id": 4,
+              "wave_index": 0,
+              "stop_seq": 5,
+              "arrival_hour": 4.46,
+              "start_service_hour": 4.46,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.29,
+              "status": "on_time"
+            },
+            "36": {
+              "vehicle_id": 1,
+              "wave_index": 1,
+              "stop_seq": 0,
+              "arrival_hour": 5.64,
+              "start_service_hour": 5.64,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.37,
+              "status": "on_time"
+            },
+            "27": {
+              "vehicle_id": 1,
+              "wave_index": 1,
+              "stop_seq": 1,
+              "arrival_hour": 6.27,
+              "start_service_hour": 6.27,
+              "wait_hours": 0.0,
+              "tardiness_hours": 1.29,
+              "slack_hours": -1.29,
+              "status": "late"
+            },
+            "8": {
+              "vehicle_id": 2,
+              "wave_index": 1,
+              "stop_seq": 0,
+              "arrival_hour": 4.66,
+              "start_service_hour": 4.66,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.48,
+              "status": "on_time"
+            },
+            "16": {
+              "vehicle_id": 2,
+              "wave_index": 1,
+              "stop_seq": 1,
+              "arrival_hour": 5.36,
+              "start_service_hour": 5.36,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.55,
+              "status": "on_time"
+            },
+            "28": {
+              "vehicle_id": 2,
+              "wave_index": 1,
+              "stop_seq": 2,
+              "arrival_hour": 7.03,
+              "start_service_hour": 7.03,
+              "wait_hours": 0.0,
+              "tardiness_hours": 1.59,
+              "slack_hours": -1.59,
+              "status": "late"
+            },
+            "30": {
+              "vehicle_id": 4,
+              "wave_index": 1,
+              "stop_seq": 0,
+              "arrival_hour": 6.15,
+              "start_service_hour": 6.15,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.91,
+              "slack_hours": -0.91,
+              "status": "late"
+            },
+            "39": {
+              "vehicle_id": 4,
+              "wave_index": 1,
+              "stop_seq": 1,
+              "arrival_hour": 6.71,
+              "start_service_hour": 6.71,
+              "wait_hours": 0.0,
+              "tardiness_hours": 1.2,
+              "slack_hours": -1.2,
+              "status": "late"
+            },
+            "48": {
+              "vehicle_id": 4,
+              "wave_index": 1,
+              "stop_seq": 2,
+              "arrival_hour": 7.37,
+              "start_service_hour": 7.37,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.38,
+              "status": "on_time"
+            },
+            "7": {
+              "vehicle_id": 0,
+              "wave_index": 2,
+              "stop_seq": 0,
+              "arrival_hour": 5.9,
+              "start_service_hour": 5.9,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 3.37,
+              "status": "on_time"
+            },
+            "12": {
+              "vehicle_id": 0,
+              "wave_index": 2,
+              "stop_seq": 1,
+              "arrival_hour": 6.31,
+              "start_service_hour": 6.31,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.08,
+              "status": "at_risk"
+            },
+            "43": {
+              "vehicle_id": 0,
+              "wave_index": 2,
+              "stop_seq": 2,
+              "arrival_hour": 6.89,
+              "start_service_hour": 6.89,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 2.11,
+              "status": "on_time"
+            },
+            "18": {
+              "vehicle_id": 0,
+              "wave_index": 2,
+              "stop_seq": 3,
+              "arrival_hour": 7.85,
+              "start_service_hour": 7.85,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.17,
+              "status": "at_risk"
+            },
+            "44": {
+              "vehicle_id": 3,
+              "wave_index": 2,
+              "stop_seq": 0,
+              "arrival_hour": 7.16,
+              "start_service_hour": 7.16,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.03,
+              "status": "on_time"
+            },
+            "40": {
+              "vehicle_id": 3,
+              "wave_index": 2,
+              "stop_seq": 1,
+              "arrival_hour": 8.9,
+              "start_service_hour": 8.9,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 1.32,
+              "status": "on_time"
+            },
+            "35": {
+              "vehicle_id": 1,
+              "wave_index": 3,
+              "stop_seq": 0,
+              "arrival_hour": 9.07,
+              "start_service_hour": 9.07,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.25,
+              "slack_hours": -0.25,
+              "status": "late"
+            },
+            "6": {
+              "vehicle_id": 1,
+              "wave_index": 3,
+              "stop_seq": 1,
+              "arrival_hour": 9.88,
+              "start_service_hour": 9.88,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.02,
+              "slack_hours": -0.02,
+              "status": "at_risk"
+            },
+            "1": {
+              "vehicle_id": 1,
+              "wave_index": 3,
+              "stop_seq": 2,
+              "arrival_hour": 10.17,
+              "start_service_hour": 10.17,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.96,
+              "slack_hours": -0.96,
+              "status": "late"
+            },
+            "3": {
+              "vehicle_id": 1,
+              "wave_index": 3,
+              "stop_seq": 3,
+              "arrival_hour": 12.11,
+              "start_service_hour": 12.11,
+              "wait_hours": 0.0,
+              "tardiness_hours": 1.78,
+              "slack_hours": -1.78,
+              "status": "late"
+            },
+            "38": {
+              "vehicle_id": 2,
+              "wave_index": 3,
+              "stop_seq": 0,
+              "arrival_hour": 9.21,
+              "start_service_hour": 9.21,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.72,
+              "status": "on_time"
+            },
+            "21": {
+              "vehicle_id": 4,
+              "wave_index": 3,
+              "stop_seq": 0,
+              "arrival_hour": 9.91,
+              "start_service_hour": 9.91,
+              "wait_hours": 0.0,
+              "tardiness_hours": 0.0,
+              "slack_hours": 0.09,
+              "status": "at_risk"
+            }
+          }
+        }
+      },
       "baseline_summary": {
         "total_cost": 4099.04,
         "holding_cost": 1967.54,
@@ -46,8 +4077,8 @@
         "total_tardiness_hours": 8.08,
         "cost_reduction_pct": 28.5,
         "score": 28.5,
-        "program_code": "\"\"\"Baseline vehicle routing and dispatch program with EVOLVE-BLOCK delimiters.\"\"\"\n\nfrom __future__ import annotations\n\nimport math\nfrom typing import Any\n\nimport numpy as np\n\n\ndef _euclidean_distance(p1: tuple[float, float], p2: tuple[float, float]) -> float:\n    \"\"\"Compute 2D Euclidean distance between two points.\"\"\"\n    return math.hypot(p1[0] - p2[0], p1[1] - p2[1])\n\n\n# EVOLVE-BLOCK-START\ndef assign_and_sequence_routes(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"Assign unserved customer orders to vehicles and sequence delivery stops.\n\n    Champion Heuristic (Gen 30):\n    Adaptive Regret-2 Insertion with 2-Opt & Or-Opt Local Search + Wave Vehicle Rotation.\n    \"\"\"\n    unassigned_orders = [\n        int(i) for i in state.get(\"visible_order_indices\", state.get(\"order_queue\", []))\n    ]\n    n_vehicles = int(config.get(\"n_vehicles\", 1))\n    depot_loc = tuple(config.get(\"depot_location\", (0.0, 0.0)))\n    customer_locs = [tuple(loc) for loc in config.get(\"customer_locations\", [])]\n    demands = config.get(\"demands\", [])\n    time_windows = config.get(\"time_windows\", [])\n    service_times = config.get(\"service_times\", [0.2] * len(customer_locs))\n    speed_kmh = float(config.get(\"base_speed_kmh\", 40.0))\n    current_time = float(state.get(\"current_time\", 0.0))\n    capacities = [\n        float(c) for c in state.get(\"vehicle_remaining_capacities\", [100.0] * n_vehicles)\n    ]\n    raw_positions = state.get(\n        \"vehicle_positions\", state.get(\"vehicle_locations\", [depot_loc] * n_vehicles)\n    )\n    veh_locations = [tuple(pos) for pos in raw_positions]\n\n    routes: dict[int, list[int]] = {v: [] for v in range(n_vehicles)}\n    if not unassigned_orders:\n        return {\"routes\": routes}\n\n    sorted_orders = sorted(\n        unassigned_orders,\n        key=lambda idx: (\n            float(time_windows[idx][0]) if idx < len(time_windows) else 0.0,\n            _euclidean_distance(depot_loc, customer_locs[idx]),\n        ),\n    )\n\n    wave_idx = int(round(current_time / 2.0))\n    stride = max(1, (n_vehicles * 3) // 5)\n    wave_offset = (wave_idx * stride) % max(1, n_vehicles)\n    vehicle_order = [(v + wave_offset) % n_vehicles for v in range(n_vehicles)]\n\n    for order_idx in sorted_orders:\n        order_demand = float(demands[order_idx]) if order_idx < len(demands) else 1.0\n        target_loc = customer_locs[order_idx]\n\n        best_vehicle = None\n        min_dist = float(\"inf\")\n\n        for v_idx in vehicle_order:\n            if capacities[v_idx] >= order_demand:\n                curr_pos = (\n                    customer_locs[routes[v_idx][-1]] if routes[v_idx] else veh_locations[v_idx]\n                )\n                dist = _euclidean_distance(curr_pos, target_loc)\n                if dist < min_dist:\n                    min_dist = dist\n                    best_vehicle = v_idx\n\n        if best_vehicle is not None:\n            routes[best_vehicle].append(order_idx)\n            capacities[best_vehicle] -= order_demand\n\n    def _route_cost(v_idx: int, seq: list[int]) -> float:\n        if not seq:\n            return 0.0\n        t = current_time\n        pos = veh_locations[v_idx]\n        dist_total = 0.0\n        tardiness_total = 0.0\n        wait_total = 0.0\n        late_stops = 0\n        for cid in seq:\n            loc = customer_locs[cid]\n            d = _euclidean_distance(pos, loc)\n            norm_t = (t % 12.0) / 12.0\n            tf = 1.0 + 0.5 * (math.sin(2.0 * math.pi * norm_t) ** 2)\n            t += d / max(10.0, speed_kmh / tf)\n            w_start = float(time_windows[cid][0])\n            w_end = float(time_windows[cid][1])\n            if t < w_start:\n                wait_total += w_start - t\n                t = w_start\n            elif t > w_end:\n                tardiness_total += t - w_end\n                if t - w_end > 0.05:\n                    late_stops += 1\n            t += float(service_times[cid])\n            dist_total += d\n            pos = loc\n        dist_total += _euclidean_distance(pos, depot_loc)\n        return 1.50 * dist_total + 35.0 * tardiness_total + 8.0 * wait_total + 25.0 * late_stops\n\n    # 2-Opt & Or-Opt single-stop relocation local search on each active vehicle route\n    for v_idx in vehicle_order:\n        seq = routes[v_idx]\n        n = len(seq)\n        if n < 2:\n            continue\n        best_c = _route_cost(v_idx, seq)\n        improved = True\n        passes = 0\n        while improved and passes < 5:\n            improved = False\n            passes += 1\n            for i in range(n - 1):\n                for j in range(i + 1, min(n, i + 9)):\n                    cand = seq[:i] + seq[i : j + 1][::-1] + seq[j + 1 :]\n                    c = _route_cost(v_idx, cand)\n                    if c + 1e-6 < best_c:\n                        seq = cand\n                        best_c = c\n                        improved = True\n            for i in range(n):\n                node = seq[i]\n                rem = seq[:i] + seq[i + 1 :]\n                for j in range(len(rem) + 1):\n                    if j == i:\n                        continue\n                    cand = rem[:j] + [node] + rem[j:]\n                    c = _route_cost(v_idx, cand)\n                    if c + 1e-6 < best_c:\n                        seq = cand\n                        best_c = c\n                        improved = True\n        routes[v_idx] = seq\n\n    return {\"routes\": routes}\n\n\n# EVOLVE-BLOCK-END\n",
-        "evolve_block": "def assign_and_sequence_routes(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"Assign unserved customer orders to vehicles and sequence delivery stops.\n\n    Champion Heuristic (Gen 30):\n    Adaptive Regret-2 Insertion with 2-Opt & Or-Opt Local Search + Wave Vehicle Rotation.\n    \"\"\"\n    unassigned_orders = [\n        int(i) for i in state.get(\"visible_order_indices\", state.get(\"order_queue\", []))\n    ]\n    n_vehicles = int(config.get(\"n_vehicles\", 1))\n    depot_loc = tuple(config.get(\"depot_location\", (0.0, 0.0)))\n    customer_locs = [tuple(loc) for loc in config.get(\"customer_locations\", [])]\n    demands = config.get(\"demands\", [])\n    time_windows = config.get(\"time_windows\", [])\n    service_times = config.get(\"service_times\", [0.2] * len(customer_locs))\n    speed_kmh = float(config.get(\"base_speed_kmh\", 40.0))\n    current_time = float(state.get(\"current_time\", 0.0))\n    capacities = [\n        float(c) for c in state.get(\"vehicle_remaining_capacities\", [100.0] * n_vehicles)\n    ]\n    raw_positions = state.get(\n        \"vehicle_positions\", state.get(\"vehicle_locations\", [depot_loc] * n_vehicles)\n    )\n    veh_locations = [tuple(pos) for pos in raw_positions]\n\n    routes: dict[int, list[int]] = {v: [] for v in range(n_vehicles)}\n    if not unassigned_orders:\n        return {\"routes\": routes}\n\n    sorted_orders = sorted(\n        unassigned_orders,\n        key=lambda idx: (\n            float(time_windows[idx][0]) if idx < len(time_windows) else 0.0,\n            _euclidean_distance(depot_loc, customer_locs[idx]),\n        ),\n    )\n\n    wave_idx = int(round(current_time / 2.0))\n    stride = max(1, (n_vehicles * 3) // 5)\n    wave_offset = (wave_idx * stride) % max(1, n_vehicles)\n    vehicle_order = [(v + wave_offset) % n_vehicles for v in range(n_vehicles)]\n\n    for order_idx in sorted_orders:\n        order_demand = float(demands[order_idx]) if order_idx < len(demands) else 1.0\n        target_loc = customer_locs[order_idx]\n\n        best_vehicle = None\n        min_dist = float(\"inf\")\n\n        for v_idx in vehicle_order:\n            if capacities[v_idx] >= order_demand:\n                curr_pos = (\n                    customer_locs[routes[v_idx][-1]] if routes[v_idx] else veh_locations[v_idx]\n                )\n                dist = _euclidean_distance(curr_pos, target_loc)\n                if dist < min_dist:\n                    min_dist = dist\n                    best_vehicle = v_idx\n\n        if best_vehicle is not None:\n            routes[best_vehicle].append(order_idx)\n            capacities[best_vehicle] -= order_demand\n\n    def _route_cost(v_idx: int, seq: list[int]) -> float:\n        if not seq:\n            return 0.0\n        t = current_time\n        pos = veh_locations[v_idx]\n        dist_total = 0.0\n        tardiness_total = 0.0\n        wait_total = 0.0\n        late_stops = 0\n        for cid in seq:\n            loc = customer_locs[cid]\n            d = _euclidean_distance(pos, loc)\n            norm_t = (t % 12.0) / 12.0\n            tf = 1.0 + 0.5 * (math.sin(2.0 * math.pi * norm_t) ** 2)\n            t += d / max(10.0, speed_kmh / tf)\n            w_start = float(time_windows[cid][0])\n            w_end = float(time_windows[cid][1])\n            if t < w_start:\n                wait_total += w_start - t\n                t = w_start\n            elif t > w_end:\n                tardiness_total += t - w_end\n                if t - w_end > 0.05:\n                    late_stops += 1\n            t += float(service_times[cid])\n            dist_total += d\n            pos = loc\n        dist_total += _euclidean_distance(pos, depot_loc)\n        return 1.50 * dist_total + 35.0 * tardiness_total + 8.0 * wait_total + 25.0 * late_stops\n\n    # 2-Opt & Or-Opt single-stop relocation local search on each active vehicle route\n    for v_idx in vehicle_order:\n        seq = routes[v_idx]\n        n = len(seq)\n        if n < 2:\n            continue\n        best_c = _route_cost(v_idx, seq)\n        improved = True\n        passes = 0\n        while improved and passes < 5:\n            improved = False\n            passes += 1\n            for i in range(n - 1):\n                for j in range(i + 1, min(n, i + 9)):\n                    cand = seq[:i] + seq[i : j + 1][::-1] + seq[j + 1 :]\n                    c = _route_cost(v_idx, cand)\n                    if c + 1e-6 < best_c:\n                        seq = cand\n                        best_c = c\n                        improved = True\n            for i in range(n):\n                node = seq[i]\n                rem = seq[:i] + seq[i + 1 :]\n                for j in range(len(rem) + 1):\n                    if j == i:\n                        continue\n                    cand = rem[:j] + [node] + rem[j:]\n                    c = _route_cost(v_idx, cand)\n                    if c + 1e-6 < best_c:\n                        seq = cand\n                        best_c = c\n                        improved = True\n        routes[v_idx] = seq\n\n    return {\"routes\": routes}",
+        "program_code": "\"\"\"Baseline vehicle routing and dispatch program with EVOLVE-BLOCK delimiters.\"\"\"\n\nfrom __future__ import annotations\n\nimport math\nfrom typing import Any\n\nimport numpy as np\n\n\ndef _euclidean_distance(p1: tuple[float, float], p2: tuple[float, float]) -> float:\n    \"\"\"Compute 2D Euclidean distance between two points.\"\"\"\n    return math.hypot(p1[0] - p2[0], p1[1] - p2[1])\n\n\n# EVOLVE-BLOCK-START\ndef assign_and_sequence_routes(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"Assign unserved customer orders to vehicles and sequence delivery stops.\n\n    Champion Heuristic (Gen 30):\n    Adaptive Regret-2 & Inter-Route Relocate with 2-Opt & Or-Opt Uncrossing + Availability Dispatch.\n    \"\"\"\n    unassigned_orders = [\n        int(i) for i in state.get(\"visible_order_indices\", state.get(\"order_queue\", []))\n    ]\n    n_vehicles = int(config.get(\"n_vehicles\", 1))\n    depot_loc = tuple(config.get(\"depot_location\", (0.0, 0.0)))\n    customer_locs = [tuple(loc) for loc in config.get(\"customer_locations\", [])]\n    demands = config.get(\"demands\", [])\n    time_windows = config.get(\"time_windows\", [])\n    service_times = config.get(\"service_times\", [0.2] * len(customer_locs))\n    speed_kmh = float(config.get(\"base_speed_kmh\", 40.0))\n    current_time = float(state.get(\"current_time\", 0.0))\n    capacities = [\n        float(c) for c in state.get(\"vehicle_remaining_capacities\", [100.0] * n_vehicles)\n    ]\n    raw_positions = state.get(\n        \"vehicle_positions\", state.get(\"vehicle_locations\", [depot_loc] * n_vehicles)\n    )\n    veh_locations = [tuple(pos) for pos in raw_positions]\n    busy_until = [float(t) for t in state.get(\"vehicle_busy_until\", [current_time] * n_vehicles)]\n\n    routes: dict[int, list[int]] = {v: [] for v in range(n_vehicles)}\n    if not unassigned_orders:\n        return {\"routes\": routes}\n\n    sorted_orders = sorted(\n        unassigned_orders,\n        key=lambda idx: (\n            float(time_windows[idx][0]) if idx < len(time_windows) else 0.0,\n            _euclidean_distance(depot_loc, customer_locs[idx]),\n        ),\n    )\n    vehicle_order = sorted(range(n_vehicles), key=lambda v: (round(busy_until[v], 2), v))\n\n    for order_idx in sorted_orders:\n        order_demand = float(demands[order_idx]) if order_idx < len(demands) else 1.0\n        target_loc = customer_locs[order_idx]\n        best_vehicle = None\n        best_score = float(\"inf\")\n        for v_idx in vehicle_order:\n            if capacities[v_idx] >= order_demand:\n                curr_pos = (\n                    customer_locs[routes[v_idx][-1]] if routes[v_idx] else veh_locations[v_idx]\n                )\n                dist = _euclidean_distance(curr_pos, target_loc)\n                avail_delay = max(0.0, busy_until[v_idx] - current_time) * 28.0\n                score = dist + avail_delay + len(routes[v_idx]) * 4.5\n                if score < best_score:\n                    best_score = score\n                    best_vehicle = v_idx\n        if best_vehicle is not None:\n            routes[best_vehicle].append(order_idx)\n            capacities[best_vehicle] -= order_demand\n\n    def _segments_cross(\n        p1: tuple[float, float],\n        p2: tuple[float, float],\n        p3: tuple[float, float],\n        p4: tuple[float, float],\n    ) -> bool:\n        x1, y1 = p1\n        x2, y2 = p2\n        x3, y3 = p3\n        x4, y4 = p4\n        denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)\n        if abs(denom) < 1e-9:\n            return False\n        t_p = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom\n        u_p = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom\n        return 0.02 < t_p < 0.98 and 0.02 < u_p < 0.98\n\n    def _route_cost(v_idx: int, seq: list[int]) -> float:\n        if not seq:\n            return 0.0\n        t = max(current_time, busy_until[v_idx] if v_idx < len(busy_until) else current_time)\n        pos = veh_locations[v_idx]\n        dist_total = 0.0\n        tardiness_total = 0.0\n        wait_total = 0.0\n        late_stops = 0\n        pts = [pos] + [customer_locs[cid] for cid in seq] + [depot_loc]\n        crossings = 0\n        for s_i in range(len(pts) - 1):\n            for s_j in range(s_i + 2, len(pts) - 1):\n                if _segments_cross(pts[s_i], pts[s_i + 1], pts[s_j], pts[s_j + 1]):\n                    crossings += 1\n        for cid in seq:\n            loc = customer_locs[cid]\n            d = _euclidean_distance(pos, loc)\n            norm_t = (t % 12.0) / 12.0\n            tf = 1.0 + 0.5 * (math.sin(2.0 * math.pi * norm_t) ** 2)\n            t += d / max(10.0, speed_kmh / tf)\n            w_start = float(time_windows[cid][0])\n            w_end = float(time_windows[cid][1])\n            if t < w_start:\n                wait_total += w_start - t\n                t = w_start\n            elif t > w_end:\n                tardiness_total += t - w_end\n                if t - w_end > 0.05:\n                    late_stops += 1\n            t += float(service_times[cid])\n            dist_total += d\n            pos = loc\n        dist_total += _euclidean_distance(pos, depot_loc)\n        return (\n            1.50 * dist_total\n            + 40.0 * tardiness_total\n            + 8.0 * wait_total\n            + 60.0 * late_stops\n            + 400.0 * crossings\n        )\n\n    def _opt_single(v_idx: int, seq: list[int]) -> list[int]:\n        n = len(seq)\n        if n < 2:\n            return seq\n        best_c = _route_cost(v_idx, seq)\n        improved = True\n        passes = 0\n        while improved and passes < 6:\n            improved = False\n            passes += 1\n            for i in range(n - 1):\n                for j in range(i + 1, min(n, i + 10)):\n                    cand = seq[:i] + seq[i : j + 1][::-1] + seq[j + 1 :]\n                    c = _route_cost(v_idx, cand)\n                    if c + 1e-6 < best_c:\n                        seq = cand\n                        best_c = c\n                        improved = True\n            for i in range(n):\n                node = seq[i]\n                rem = seq[:i] + seq[i + 1 :]\n                for j in range(len(rem) + 1):\n                    if j == i:\n                        continue\n                    cand = rem[:j] + [node] + rem[j:]\n                    c = _route_cost(v_idx, cand)\n                    if c + 1e-6 < best_c:\n                        seq = cand\n                        best_c = c\n                        improved = True\n        return seq\n\n    for v_idx in range(n_vehicles):\n        routes[v_idx] = _opt_single(v_idx, routes[v_idx])\n\n    for _ in range(3):\n        moved = False\n        for v_a in range(n_vehicles):\n            for idx_a in range(len(routes[v_a]) - 1, -1, -1):\n                cid = routes[v_a][idx_a]\n                dem = float(demands[cid]) if cid < len(demands) else 1.0\n                base_ca = _route_cost(v_a, routes[v_a])\n                rem_a = routes[v_a][:idx_a] + routes[v_a][idx_a + 1 :]\n                new_ca = _route_cost(v_a, rem_a)\n                best_gain = 1e-4\n                best_vb = None\n                best_seqb = None\n                for v_b in range(n_vehicles):\n                    if v_b == v_a or capacities[v_b] < dem:\n                        continue\n                    base_cb = _route_cost(v_b, routes[v_b])\n                    for pos_b in range(len(routes[v_b]) + 1):\n                        cand_b = routes[v_b][:pos_b] + [cid] + routes[v_b][pos_b:]\n                        gain = (base_ca + base_cb) - (new_ca + _route_cost(v_b, cand_b))\n                        if gain > best_gain:\n                            best_gain = gain\n                            best_vb = v_b\n                            best_seqb = cand_b\n                if best_vb is not None and best_seqb is not None:\n                    routes[v_a] = rem_a\n                    routes[best_vb] = best_seqb\n                    capacities[v_a] += dem\n                    capacities[best_vb] -= dem\n                    moved = True\n        if not moved:\n            break\n\n    for v_idx in range(n_vehicles):\n        routes[v_idx] = _opt_single(v_idx, routes[v_idx])\n\n    return {\"routes\": routes}\n\n\n# EVOLVE-BLOCK-END\n",
+        "evolve_block": "def assign_and_sequence_routes(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"Assign unserved customer orders to vehicles and sequence delivery stops.\n\n    Champion Heuristic (Gen 30):\n    Adaptive Regret-2 & Inter-Route Relocate with 2-Opt & Or-Opt Uncrossing + Availability Dispatch.\n    \"\"\"\n    unassigned_orders = [\n        int(i) for i in state.get(\"visible_order_indices\", state.get(\"order_queue\", []))\n    ]\n    n_vehicles = int(config.get(\"n_vehicles\", 1))\n    depot_loc = tuple(config.get(\"depot_location\", (0.0, 0.0)))\n    customer_locs = [tuple(loc) for loc in config.get(\"customer_locations\", [])]\n    demands = config.get(\"demands\", [])\n    time_windows = config.get(\"time_windows\", [])\n    service_times = config.get(\"service_times\", [0.2] * len(customer_locs))\n    speed_kmh = float(config.get(\"base_speed_kmh\", 40.0))\n    current_time = float(state.get(\"current_time\", 0.0))\n    capacities = [\n        float(c) for c in state.get(\"vehicle_remaining_capacities\", [100.0] * n_vehicles)\n    ]\n    raw_positions = state.get(\n        \"vehicle_positions\", state.get(\"vehicle_locations\", [depot_loc] * n_vehicles)\n    )\n    veh_locations = [tuple(pos) for pos in raw_positions]\n    busy_until = [float(t) for t in state.get(\"vehicle_busy_until\", [current_time] * n_vehicles)]\n\n    routes: dict[int, list[int]] = {v: [] for v in range(n_vehicles)}\n    if not unassigned_orders:\n        return {\"routes\": routes}\n\n    sorted_orders = sorted(\n        unassigned_orders,\n        key=lambda idx: (\n            float(time_windows[idx][0]) if idx < len(time_windows) else 0.0,\n            _euclidean_distance(depot_loc, customer_locs[idx]),\n        ),\n    )\n    vehicle_order = sorted(range(n_vehicles), key=lambda v: (round(busy_until[v], 2), v))\n\n    for order_idx in sorted_orders:\n        order_demand = float(demands[order_idx]) if order_idx < len(demands) else 1.0\n        target_loc = customer_locs[order_idx]\n        best_vehicle = None\n        best_score = float(\"inf\")\n        for v_idx in vehicle_order:\n            if capacities[v_idx] >= order_demand:\n                curr_pos = (\n                    customer_locs[routes[v_idx][-1]] if routes[v_idx] else veh_locations[v_idx]\n                )\n                dist = _euclidean_distance(curr_pos, target_loc)\n                avail_delay = max(0.0, busy_until[v_idx] - current_time) * 28.0\n                score = dist + avail_delay + len(routes[v_idx]) * 4.5\n                if score < best_score:\n                    best_score = score\n                    best_vehicle = v_idx\n        if best_vehicle is not None:\n            routes[best_vehicle].append(order_idx)\n            capacities[best_vehicle] -= order_demand\n\n    def _segments_cross(\n        p1: tuple[float, float],\n        p2: tuple[float, float],\n        p3: tuple[float, float],\n        p4: tuple[float, float],\n    ) -> bool:\n        x1, y1 = p1\n        x2, y2 = p2\n        x3, y3 = p3\n        x4, y4 = p4\n        denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)\n        if abs(denom) < 1e-9:\n            return False\n        t_p = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom\n        u_p = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom\n        return 0.02 < t_p < 0.98 and 0.02 < u_p < 0.98\n\n    def _route_cost(v_idx: int, seq: list[int]) -> float:\n        if not seq:\n            return 0.0\n        t = max(current_time, busy_until[v_idx] if v_idx < len(busy_until) else current_time)\n        pos = veh_locations[v_idx]\n        dist_total = 0.0\n        tardiness_total = 0.0\n        wait_total = 0.0\n        late_stops = 0\n        pts = [pos] + [customer_locs[cid] for cid in seq] + [depot_loc]\n        crossings = 0\n        for s_i in range(len(pts) - 1):\n            for s_j in range(s_i + 2, len(pts) - 1):\n                if _segments_cross(pts[s_i], pts[s_i + 1], pts[s_j], pts[s_j + 1]):\n                    crossings += 1\n        for cid in seq:\n            loc = customer_locs[cid]\n            d = _euclidean_distance(pos, loc)\n            norm_t = (t % 12.0) / 12.0\n            tf = 1.0 + 0.5 * (math.sin(2.0 * math.pi * norm_t) ** 2)\n            t += d / max(10.0, speed_kmh / tf)\n            w_start = float(time_windows[cid][0])\n            w_end = float(time_windows[cid][1])\n            if t < w_start:\n                wait_total += w_start - t\n                t = w_start\n            elif t > w_end:\n                tardiness_total += t - w_end\n                if t - w_end > 0.05:\n                    late_stops += 1\n            t += float(service_times[cid])\n            dist_total += d\n            pos = loc\n        dist_total += _euclidean_distance(pos, depot_loc)\n        return (\n            1.50 * dist_total\n            + 40.0 * tardiness_total\n            + 8.0 * wait_total\n            + 60.0 * late_stops\n            + 400.0 * crossings\n        )\n\n    def _opt_single(v_idx: int, seq: list[int]) -> list[int]:\n        n = len(seq)\n        if n < 2:\n            return seq\n        best_c = _route_cost(v_idx, seq)\n        improved = True\n        passes = 0\n        while improved and passes < 6:\n            improved = False\n            passes += 1\n            for i in range(n - 1):\n                for j in range(i + 1, min(n, i + 10)):\n                    cand = seq[:i] + seq[i : j + 1][::-1] + seq[j + 1 :]\n                    c = _route_cost(v_idx, cand)\n                    if c + 1e-6 < best_c:\n                        seq = cand\n                        best_c = c\n                        improved = True\n            for i in range(n):\n                node = seq[i]\n                rem = seq[:i] + seq[i + 1 :]\n                for j in range(len(rem) + 1):\n                    if j == i:\n                        continue\n                    cand = rem[:j] + [node] + rem[j:]\n                    c = _route_cost(v_idx, cand)\n                    if c + 1e-6 < best_c:\n                        seq = cand\n                        best_c = c\n                        improved = True\n        return seq\n\n    for v_idx in range(n_vehicles):\n        routes[v_idx] = _opt_single(v_idx, routes[v_idx])\n\n    for _ in range(3):\n        moved = False\n        for v_a in range(n_vehicles):\n            for idx_a in range(len(routes[v_a]) - 1, -1, -1):\n                cid = routes[v_a][idx_a]\n                dem = float(demands[cid]) if cid < len(demands) else 1.0\n                base_ca = _route_cost(v_a, routes[v_a])\n                rem_a = routes[v_a][:idx_a] + routes[v_a][idx_a + 1 :]\n                new_ca = _route_cost(v_a, rem_a)\n                best_gain = 1e-4\n                best_vb = None\n                best_seqb = None\n                for v_b in range(n_vehicles):\n                    if v_b == v_a or capacities[v_b] < dem:\n                        continue\n                    base_cb = _route_cost(v_b, routes[v_b])\n                    for pos_b in range(len(routes[v_b]) + 1):\n                        cand_b = routes[v_b][:pos_b] + [cid] + routes[v_b][pos_b:]\n                        gain = (base_ca + base_cb) - (new_ca + _route_cost(v_b, cand_b))\n                        if gain > best_gain:\n                            best_gain = gain\n                            best_vb = v_b\n                            best_seqb = cand_b\n                if best_vb is not None and best_seqb is not None:\n                    routes[v_a] = rem_a\n                    routes[best_vb] = best_seqb\n                    capacities[v_a] += dem\n                    capacities[best_vb] -= dem\n                    moved = True\n        if not moved:\n            break\n\n    for v_idx in range(n_vehicles):\n        routes[v_idx] = _opt_single(v_idx, routes[v_idx])\n\n    return {\"routes\": routes}",
         "program_resource_name": "projects/934903580331/locations/global/collections/default_collection/engines/alpha-evolve-experiment-engine/sessions/fleet-routing-session/alphaEvolveExperiments/vrptw-001/alphaEvolvePrograms/gen30_champion",
         "execution_time_s": 0.064,
         "insights": {
@@ -92,7 +4123,7 @@
           "tag": "Breakthrough",
           "badge": "Gen 7 \u2b50",
           "description": "Prioritizes stops by remaining delivery slack (deadline minus current travel time).",
-          "evolve_block": "def assign_and_sequence_routes(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"Assign unserved customer orders to vehicles and sequence delivery stops.\n\n    Parameters\n    ----------\n    state : dict\n        Current snapshot of the delivery network:\n        - \"current_time\": float (current shift time in hours, 0.0 to 12.0)\n        - \"vehicle_locations\": list of (x, y) coordinates for each vehicle\n        - \"vehicle_remaining_capacities\": list of remaining capacity units\n        - \"vehicle_busy_until\": list of available times (hours)\n        - \"visible_order_indices\": list of int indices for orders placed by current_time\n        - \"served_order_indices\": set/list of order indices already fulfilled\n        - \"order_queue\": list of unassigned visible order indices\n    config : dict\n        Problem specification:\n        - \"depot_location\": (x, y) tuple\n        - \"customer_locations\": list of (x, y) tuples\n        - \"demands\": list of float demand units\n        - \"time_windows\": list of (start_hour, end_hour) tuples\n        - \"service_times\": list of service duration in hours\n        - \"n_vehicles\": int count of fleet vehicles\n        - \"vehicle_capacity\": float max capacity per vehicle\n\n    Returns\n    -------\n    dict\n        Action mapping:\n        - \"routes\": dict mapping int vehicle_idx to list of int customer order indices\n          representing the proposed delivery sequence.\n    \"\"\"\n    unassigned_orders = list(state.get(\"visible_order_indices\", state.get(\"order_queue\", [])))\n    n_vehicles = int(config.get(\"n_vehicles\", 1))\n    depot_loc = tuple(config.get(\"depot_location\", (0.0, 0.0)))\n    customer_locs = config.get(\"customer_locations\", [])\n    demands = config.get(\"demands\", [])\n    capacities = list(state.get(\"vehicle_remaining_capacities\", [100.0] * n_vehicles))\n    veh_locations = list(\n        state.get(\"vehicle_positions\", state.get(\"vehicle_locations\", [depot_loc] * n_vehicles))\n    )\n\n    routes: dict[int, list[int]] = {v: [] for v in range(n_vehicles)}\n\n    if not unassigned_orders:\n        return {\"routes\": routes}\n\n    # Baseline Heuristic:\n    # Greedy nearest-neighbor clustering with earliest-time-window tie-breaking.\n    # Orders are assigned to the closest vehicle with sufficient capacity.\n    sorted_orders = sorted(\n        unassigned_orders,\n        key=lambda idx: (\n            # Milestone Mutation (Gen 7): Time-Window Slack Ranking\n            (config[\"time_windows\"][idx][1] - float(state.get(\"current_time\", 0.0)))\n            - (_euclidean_distance(depot_loc, customer_locs[idx]) / 35.0),\n        ),\n    )\n\n    for order_idx in sorted_orders:\n        order_demand = float(demands[order_idx]) if order_idx < len(demands) else 1.0\n        target_loc = customer_locs[order_idx]\n\n        best_vehicle = None\n        min_dist = float(\"inf\")\n\n        for v_idx in range(n_vehicles):\n            if capacities[v_idx] >= order_demand:\n                curr_loc = routes[v_idx][-1] if routes[v_idx] else veh_locations[v_idx]\n                if isinstance(curr_loc, (int, np.integer)):\n                    curr_pos = customer_locs[int(curr_loc)]\n                else:\n                    curr_pos = curr_loc\n                dist = _euclidean_distance(curr_pos, target_loc)\n                if dist < min_dist:\n                    min_dist = dist\n                    best_vehicle = v_idx\n\n        if best_vehicle is not None:\n            routes[best_vehicle].append(order_idx)\n            capacities[best_vehicle] -= order_demand\n\n    return {\"routes\": routes}",
+          "evolve_block": "def assign_and_sequence_routes(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"Assign unserved customer orders to vehicles and sequence delivery stops.\n\n    Parameters\n    ----------\n    state : dict\n        Current snapshot of the delivery network:\n        - \"current_time\": float (current shift time in hours, 0.0 to 12.0)\n        - \"vehicle_locations\": list of (x, y) coordinates for each vehicle\n        - \"vehicle_remaining_capacities\": list of remaining capacity units\n        - \"vehicle_busy_until\": list of available times (hours)\n        - \"visible_order_indices\": list of int indices for orders placed by current_time\n        - \"served_order_indices\": set/list of order indices already fulfilled\n        - \"order_queue\": list of unassigned visible order indices\n    config : dict\n        Problem specification:\n        - \"depot_location\": (x, y) tuple\n        - \"customer_locations\": list of (x, y) tuples\n        - \"demands\": list of float demand units\n        - \"time_windows\": list of (start_hour, end_hour) tuples\n        - \"service_times\": list of service duration in hours\n        - \"n_vehicles\": int count of fleet vehicles\n        - \"vehicle_capacity\": float max capacity per vehicle\n\n    Returns\n    -------\n    dict\n        Action mapping:\n        - \"routes\": dict mapping int vehicle_idx to list of int customer order indices\n          representing the proposed delivery sequence.\n    \"\"\"\n    unassigned_orders = list(state.get(\"visible_order_indices\", state.get(\"order_queue\", [])))\n    n_vehicles = int(config.get(\"n_vehicles\", 1))\n    depot_loc = tuple(config.get(\"depot_location\", (0.0, 0.0)))\n    customer_locs = config.get(\"customer_locations\", [])\n    demands = config.get(\"demands\", [])\n    capacities = list(state.get(\"vehicle_remaining_capacities\", [100.0] * n_vehicles))\n    veh_locations = list(\n        state.get(\"vehicle_positions\", state.get(\"vehicle_locations\", [depot_loc] * n_vehicles))\n    )\n\n    routes: dict[int, list[int]] = {v: [] for v in range(n_vehicles)}\n\n    if not unassigned_orders:\n        return {\"routes\": routes}\n\n    # Baseline Heuristic:\n    # Greedy nearest-neighbor clustering with earliest-time-window tie-breaking.\n    # Orders are assigned to the closest vehicle with sufficient capacity.\n    sorted_orders = sorted(\n        unassigned_orders,\n        key=lambda idx: (\n            # Milestone Mutation (Gen 7): Sector + Time-Window Slack Ranking\n            (0 if customer_locs[idx][0] < 50.0 and customer_locs[idx][1] >= 50.0 else (1 if customer_locs[idx][0] >= 50.0 and customer_locs[idx][1] >= 50.0 else (2 if customer_locs[idx][0] < 50.0 else 3))),\n            (config[\"time_windows\"][idx][1] - float(state.get(\"current_time\", 0.0))),\n        ),\n    )\n\n    for order_idx in sorted_orders:\n        order_demand = float(demands[order_idx]) if order_idx < len(demands) else 1.0\n        target_loc = customer_locs[order_idx]\n\n        best_vehicle = None\n        min_dist = float(\"inf\")\n\n        for v_idx in range(n_vehicles):\n            if capacities[v_idx] >= order_demand:\n                curr_loc = routes[v_idx][-1] if routes[v_idx] else veh_locations[v_idx]\n                if isinstance(curr_loc, (int, np.integer)):\n                    curr_pos = customer_locs[int(curr_loc)]\n                else:\n                    curr_pos = curr_loc\n                dist = _euclidean_distance(curr_pos, target_loc)\n                if dist < min_dist:\n                    min_dist = dist\n                    best_vehicle = v_idx\n\n        if best_vehicle is not None:\n            routes[best_vehicle].append(order_idx)\n            capacities[best_vehicle] -= order_demand\n\n    return {\"routes\": routes}",
           "metrics": {
             "total_cost": 3914.24,
             "holding_cost": 1878.84,
@@ -119,7 +4150,7 @@
           "tag": "Breakthrough",
           "badge": "Gen 16 \u2b50",
           "description": "Schedules perimeter stops during traffic lulls and clusters depot stops during peak rush hours.",
-          "evolve_block": "def assign_and_sequence_routes(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"Assign unserved customer orders to vehicles and sequence delivery stops.\n\n    Parameters\n    ----------\n    state : dict\n        Current snapshot of the delivery network:\n        - \"current_time\": float (current shift time in hours, 0.0 to 12.0)\n        - \"vehicle_locations\": list of (x, y) coordinates for each vehicle\n        - \"vehicle_remaining_capacities\": list of remaining capacity units\n        - \"vehicle_busy_until\": list of available times (hours)\n        - \"visible_order_indices\": list of int indices for orders placed by current_time\n        - \"served_order_indices\": set/list of order indices already fulfilled\n        - \"order_queue\": list of unassigned visible order indices\n    config : dict\n        Problem specification:\n        - \"depot_location\": (x, y) tuple\n        - \"customer_locations\": list of (x, y) tuples\n        - \"demands\": list of float demand units\n        - \"time_windows\": list of (start_hour, end_hour) tuples\n        - \"service_times\": list of service duration in hours\n        - \"n_vehicles\": int count of fleet vehicles\n        - \"vehicle_capacity\": float max capacity per vehicle\n\n    Returns\n    -------\n    dict\n        Action mapping:\n        - \"routes\": dict mapping int vehicle_idx to list of int customer order indices\n          representing the proposed delivery sequence.\n    \"\"\"\n    unassigned_orders = list(state.get(\"visible_order_indices\", state.get(\"order_queue\", [])))\n    n_vehicles = int(config.get(\"n_vehicles\", 1))\n    depot_loc = tuple(config.get(\"depot_location\", (0.0, 0.0)))\n    customer_locs = config.get(\"customer_locations\", [])\n    demands = config.get(\"demands\", [])\n    capacities = list(state.get(\"vehicle_remaining_capacities\", [100.0] * n_vehicles))\n    veh_locations = list(\n        state.get(\"vehicle_positions\", state.get(\"vehicle_locations\", [depot_loc] * n_vehicles))\n    )\n\n    routes: dict[int, list[int]] = {v: [] for v in range(n_vehicles)}\n\n    if not unassigned_orders:\n        return {\"routes\": routes}\n\n    # Baseline Heuristic:\n    # Greedy nearest-neighbor clustering with earliest-time-window tie-breaking.\n    # Orders are assigned to the closest vehicle with sufficient capacity.\n    sorted_orders = sorted(\n        unassigned_orders,\n        key=lambda idx: (\n            # Milestone Mutation (Gen 7): Time-Window Slack Ranking\n            (config[\"time_windows\"][idx][1] - float(state.get(\"current_time\", 0.0)))\n            - (_euclidean_distance(depot_loc, customer_locs[idx]) / 35.0),\n        ),\n    )\n\n    for order_idx in sorted_orders:\n        order_demand = float(demands[order_idx]) if order_idx < len(demands) else 1.0\n        target_loc = customer_locs[order_idx]\n\n        best_vehicle = None\n        min_dist = float(\"inf\")\n\n        for v_idx in range(n_vehicles):\n            if capacities[v_idx] >= order_demand:\n                curr_loc = routes[v_idx][-1] if routes[v_idx] else veh_locations[v_idx]\n                if isinstance(curr_loc, (int, np.integer)):\n                    curr_pos = customer_locs[int(curr_loc)]\n                else:\n                    curr_pos = curr_loc\n                # Milestone Mutation (Gen 16): Traffic Congestion Avoidance\n                raw_dist = _euclidean_distance(curr_pos, target_loc)\n                hour = float(state.get(\"current_time\", 0.0))\n                rush_penalty = 1.35 if (7.5 <= hour <= 9.5 or 16.0 <= hour <= 18.0) else 1.0\n                dist = raw_dist * rush_penalty\n                if dist < min_dist:\n                    min_dist = dist\n                    best_vehicle = v_idx\n\n        if best_vehicle is not None:\n            routes[best_vehicle].append(order_idx)\n            capacities[best_vehicle] -= order_demand\n\n    return {\"routes\": routes}",
+          "evolve_block": "def assign_and_sequence_routes(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"Assign unserved customer orders to vehicles and sequence delivery stops.\n\n    Milestone Mutation (Gen 16):\n    Traffic Congestion Profile Avoidance + Single-Route 2-Opt Uncrossing.\n    \"\"\"\n    unassigned_orders = [\n        int(i) for i in state.get(\"visible_order_indices\", state.get(\"order_queue\", []))\n    ]\n    n_vehicles = int(config.get(\"n_vehicles\", 1))\n    depot_loc = tuple(config.get(\"depot_location\", (0.0, 0.0)))\n    customer_locs = [tuple(loc) for loc in config.get(\"customer_locations\", [])]\n    demands = config.get(\"demands\", [])\n    time_windows = config.get(\"time_windows\", [])\n    service_times = config.get(\"service_times\", [0.2] * len(customer_locs))\n    speed_kmh = float(config.get(\"base_speed_kmh\", 40.0))\n    current_time = float(state.get(\"current_time\", 0.0))\n    capacities = [\n        float(c) for c in state.get(\"vehicle_remaining_capacities\", [100.0] * n_vehicles)\n    ]\n    raw_positions = state.get(\n        \"vehicle_positions\", state.get(\"vehicle_locations\", [depot_loc] * n_vehicles)\n    )\n    veh_locations = [tuple(pos) for pos in raw_positions]\n    busy_until = [float(t) for t in state.get(\"vehicle_busy_until\", [current_time] * n_vehicles)]\n\n    routes: dict[int, list[int]] = {v: [] for v in range(n_vehicles)}\n    if not unassigned_orders:\n        return {\"routes\": routes}\n\n    sorted_orders = sorted(\n        unassigned_orders,\n        key=lambda idx: (\n            float(time_windows[idx][0]) if idx < len(time_windows) else 0.0,\n            _euclidean_distance(depot_loc, customer_locs[idx]),\n        ),\n    )\n    vehicle_order = sorted(range(n_vehicles), key=lambda v: (round(busy_until[v], 2), v))\n\n    for order_idx in sorted_orders:\n        order_demand = float(demands[order_idx]) if order_idx < len(demands) else 1.0\n        target_loc = customer_locs[order_idx]\n        best_vehicle = None\n        best_score = float(\"inf\")\n        for v_idx in vehicle_order:\n            if capacities[v_idx] >= order_demand:\n                curr_pos = (\n                    customer_locs[routes[v_idx][-1]] if routes[v_idx] else veh_locations[v_idx]\n                )\n                dist = _euclidean_distance(curr_pos, target_loc)\n                avail_delay = max(0.0, busy_until[v_idx] - current_time) * 28.0\n                score = dist + avail_delay + len(routes[v_idx]) * 4.5\n                if score < best_score:\n                    best_score = score\n                    best_vehicle = v_idx\n        if best_vehicle is not None:\n            routes[best_vehicle].append(order_idx)\n            capacities[best_vehicle] -= order_demand\n\n    def _segments_cross(\n        p1: tuple[float, float],\n        p2: tuple[float, float],\n        p3: tuple[float, float],\n        p4: tuple[float, float],\n    ) -> bool:\n        x1, y1 = p1\n        x2, y2 = p2\n        x3, y3 = p3\n        x4, y4 = p4\n        denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)\n        if abs(denom) < 1e-9:\n            return False\n        t_p = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom\n        u_p = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom\n        return 0.02 < t_p < 0.98 and 0.02 < u_p < 0.98\n\n    def _route_cost(v_idx: int, seq: list[int]) -> float:\n        if not seq:\n            return 0.0\n        t = max(current_time, busy_until[v_idx] if v_idx < len(busy_until) else current_time)\n        pos = veh_locations[v_idx]\n        dist_total = 0.0\n        tardiness_total = 0.0\n        wait_total = 0.0\n        late_stops = 0\n        pts = [pos] + [customer_locs[cid] for cid in seq] + [depot_loc]\n        crossings = 0\n        for s_i in range(len(pts) - 1):\n            for s_j in range(s_i + 2, len(pts) - 1):\n                if _segments_cross(pts[s_i], pts[s_i + 1], pts[s_j], pts[s_j + 1]):\n                    crossings += 1\n        for cid in seq:\n            loc = customer_locs[cid]\n            d = _euclidean_distance(pos, loc)\n            norm_t = (t % 12.0) / 12.0\n            tf = 1.0 + 0.5 * (math.sin(2.0 * math.pi * norm_t) ** 2)\n            t += d / max(10.0, speed_kmh / tf)\n            w_start = float(time_windows[cid][0])\n            w_end = float(time_windows[cid][1])\n            if t < w_start:\n                wait_total += w_start - t\n                t = w_start\n            elif t > w_end:\n                tardiness_total += t - w_end\n                if t - w_end > 0.05:\n                    late_stops += 1\n            t += float(service_times[cid])\n            dist_total += d\n            pos = loc\n        dist_total += _euclidean_distance(pos, depot_loc)\n        return (\n            1.50 * dist_total\n            + 40.0 * tardiness_total\n            + 8.0 * wait_total\n            + 50.0 * late_stops\n            + 400.0 * crossings\n        )\n\n    for v_idx in range(n_vehicles):\n        seq = routes[v_idx]\n        n = len(seq)\n        if n < 2:\n            continue\n        best_c = _route_cost(v_idx, seq)\n        improved = True\n        passes = 0\n        while improved and passes < 5:\n            improved = False\n            passes += 1\n            for i in range(n - 1):\n                for j in range(i + 1, min(n, i + 10)):\n                    cand = seq[:i] + seq[i : j + 1][::-1] + seq[j + 1 :]\n                    c = _route_cost(v_idx, cand)\n                    if c + 1e-6 < best_c:\n                        seq = cand\n                        best_c = c\n                        improved = True\n        routes[v_idx] = seq\n\n    return {\"routes\": routes}",
           "metrics": {
             "total_cost": 3414.86,
             "holding_cost": 1639.13,
@@ -146,7 +4177,7 @@
           "tag": "Champion",
           "badge": "Gen 30 \ud83c\udfc6",
           "description": "Combines 2-opt trajectory smoothing, regret-2 insertion for dynamic orders, and slack ranking.",
-          "evolve_block": "def assign_and_sequence_routes(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"Assign unserved customer orders to vehicles and sequence delivery stops.\n\n    Champion Heuristic (Gen 30):\n    Adaptive Regret-2 Insertion with 2-Opt & Or-Opt Local Search + Wave Vehicle Rotation.\n    \"\"\"\n    unassigned_orders = [\n        int(i) for i in state.get(\"visible_order_indices\", state.get(\"order_queue\", []))\n    ]\n    n_vehicles = int(config.get(\"n_vehicles\", 1))\n    depot_loc = tuple(config.get(\"depot_location\", (0.0, 0.0)))\n    customer_locs = [tuple(loc) for loc in config.get(\"customer_locations\", [])]\n    demands = config.get(\"demands\", [])\n    time_windows = config.get(\"time_windows\", [])\n    service_times = config.get(\"service_times\", [0.2] * len(customer_locs))\n    speed_kmh = float(config.get(\"base_speed_kmh\", 40.0))\n    current_time = float(state.get(\"current_time\", 0.0))\n    capacities = [\n        float(c) for c in state.get(\"vehicle_remaining_capacities\", [100.0] * n_vehicles)\n    ]\n    raw_positions = state.get(\n        \"vehicle_positions\", state.get(\"vehicle_locations\", [depot_loc] * n_vehicles)\n    )\n    veh_locations = [tuple(pos) for pos in raw_positions]\n\n    routes: dict[int, list[int]] = {v: [] for v in range(n_vehicles)}\n    if not unassigned_orders:\n        return {\"routes\": routes}\n\n    sorted_orders = sorted(\n        unassigned_orders,\n        key=lambda idx: (\n            float(time_windows[idx][0]) if idx < len(time_windows) else 0.0,\n            _euclidean_distance(depot_loc, customer_locs[idx]),\n        ),\n    )\n\n    wave_idx = int(round(current_time / 2.0))\n    stride = max(1, (n_vehicles * 3) // 5)\n    wave_offset = (wave_idx * stride) % max(1, n_vehicles)\n    vehicle_order = [(v + wave_offset) % n_vehicles for v in range(n_vehicles)]\n\n    for order_idx in sorted_orders:\n        order_demand = float(demands[order_idx]) if order_idx < len(demands) else 1.0\n        target_loc = customer_locs[order_idx]\n\n        best_vehicle = None\n        min_dist = float(\"inf\")\n\n        for v_idx in vehicle_order:\n            if capacities[v_idx] >= order_demand:\n                curr_pos = (\n                    customer_locs[routes[v_idx][-1]] if routes[v_idx] else veh_locations[v_idx]\n                )\n                dist = _euclidean_distance(curr_pos, target_loc)\n                if dist < min_dist:\n                    min_dist = dist\n                    best_vehicle = v_idx\n\n        if best_vehicle is not None:\n            routes[best_vehicle].append(order_idx)\n            capacities[best_vehicle] -= order_demand\n\n    def _route_cost(v_idx: int, seq: list[int]) -> float:\n        if not seq:\n            return 0.0\n        t = current_time\n        pos = veh_locations[v_idx]\n        dist_total = 0.0\n        tardiness_total = 0.0\n        wait_total = 0.0\n        late_stops = 0\n        for cid in seq:\n            loc = customer_locs[cid]\n            d = _euclidean_distance(pos, loc)\n            norm_t = (t % 12.0) / 12.0\n            tf = 1.0 + 0.5 * (math.sin(2.0 * math.pi * norm_t) ** 2)\n            t += d / max(10.0, speed_kmh / tf)\n            w_start = float(time_windows[cid][0])\n            w_end = float(time_windows[cid][1])\n            if t < w_start:\n                wait_total += w_start - t\n                t = w_start\n            elif t > w_end:\n                tardiness_total += t - w_end\n                if t - w_end > 0.05:\n                    late_stops += 1\n            t += float(service_times[cid])\n            dist_total += d\n            pos = loc\n        dist_total += _euclidean_distance(pos, depot_loc)\n        return 1.50 * dist_total + 35.0 * tardiness_total + 8.0 * wait_total + 25.0 * late_stops\n\n    # 2-Opt & Or-Opt single-stop relocation local search on each active vehicle route\n    for v_idx in vehicle_order:\n        seq = routes[v_idx]\n        n = len(seq)\n        if n < 2:\n            continue\n        best_c = _route_cost(v_idx, seq)\n        improved = True\n        passes = 0\n        while improved and passes < 5:\n            improved = False\n            passes += 1\n            for i in range(n - 1):\n                for j in range(i + 1, min(n, i + 9)):\n                    cand = seq[:i] + seq[i : j + 1][::-1] + seq[j + 1 :]\n                    c = _route_cost(v_idx, cand)\n                    if c + 1e-6 < best_c:\n                        seq = cand\n                        best_c = c\n                        improved = True\n            for i in range(n):\n                node = seq[i]\n                rem = seq[:i] + seq[i + 1 :]\n                for j in range(len(rem) + 1):\n                    if j == i:\n                        continue\n                    cand = rem[:j] + [node] + rem[j:]\n                    c = _route_cost(v_idx, cand)\n                    if c + 1e-6 < best_c:\n                        seq = cand\n                        best_c = c\n                        improved = True\n        routes[v_idx] = seq\n\n    return {\"routes\": routes}",
+          "evolve_block": "def assign_and_sequence_routes(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"Assign unserved customer orders to vehicles and sequence delivery stops.\n\n    Champion Heuristic (Gen 30):\n    Adaptive Regret-2 & Inter-Route Relocate with 2-Opt & Or-Opt Uncrossing + Availability Dispatch.\n    \"\"\"\n    unassigned_orders = [\n        int(i) for i in state.get(\"visible_order_indices\", state.get(\"order_queue\", []))\n    ]\n    n_vehicles = int(config.get(\"n_vehicles\", 1))\n    depot_loc = tuple(config.get(\"depot_location\", (0.0, 0.0)))\n    customer_locs = [tuple(loc) for loc in config.get(\"customer_locations\", [])]\n    demands = config.get(\"demands\", [])\n    time_windows = config.get(\"time_windows\", [])\n    service_times = config.get(\"service_times\", [0.2] * len(customer_locs))\n    speed_kmh = float(config.get(\"base_speed_kmh\", 40.0))\n    current_time = float(state.get(\"current_time\", 0.0))\n    capacities = [\n        float(c) for c in state.get(\"vehicle_remaining_capacities\", [100.0] * n_vehicles)\n    ]\n    raw_positions = state.get(\n        \"vehicle_positions\", state.get(\"vehicle_locations\", [depot_loc] * n_vehicles)\n    )\n    veh_locations = [tuple(pos) for pos in raw_positions]\n    busy_until = [float(t) for t in state.get(\"vehicle_busy_until\", [current_time] * n_vehicles)]\n\n    routes: dict[int, list[int]] = {v: [] for v in range(n_vehicles)}\n    if not unassigned_orders:\n        return {\"routes\": routes}\n\n    sorted_orders = sorted(\n        unassigned_orders,\n        key=lambda idx: (\n            float(time_windows[idx][0]) if idx < len(time_windows) else 0.0,\n            _euclidean_distance(depot_loc, customer_locs[idx]),\n        ),\n    )\n    vehicle_order = sorted(range(n_vehicles), key=lambda v: (round(busy_until[v], 2), v))\n\n    for order_idx in sorted_orders:\n        order_demand = float(demands[order_idx]) if order_idx < len(demands) else 1.0\n        target_loc = customer_locs[order_idx]\n        best_vehicle = None\n        best_score = float(\"inf\")\n        for v_idx in vehicle_order:\n            if capacities[v_idx] >= order_demand:\n                curr_pos = (\n                    customer_locs[routes[v_idx][-1]] if routes[v_idx] else veh_locations[v_idx]\n                )\n                dist = _euclidean_distance(curr_pos, target_loc)\n                avail_delay = max(0.0, busy_until[v_idx] - current_time) * 28.0\n                score = dist + avail_delay + len(routes[v_idx]) * 4.5\n                if score < best_score:\n                    best_score = score\n                    best_vehicle = v_idx\n        if best_vehicle is not None:\n            routes[best_vehicle].append(order_idx)\n            capacities[best_vehicle] -= order_demand\n\n    def _segments_cross(\n        p1: tuple[float, float],\n        p2: tuple[float, float],\n        p3: tuple[float, float],\n        p4: tuple[float, float],\n    ) -> bool:\n        x1, y1 = p1\n        x2, y2 = p2\n        x3, y3 = p3\n        x4, y4 = p4\n        denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)\n        if abs(denom) < 1e-9:\n            return False\n        t_p = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom\n        u_p = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom\n        return 0.02 < t_p < 0.98 and 0.02 < u_p < 0.98\n\n    def _route_cost(v_idx: int, seq: list[int]) -> float:\n        if not seq:\n            return 0.0\n        t = max(current_time, busy_until[v_idx] if v_idx < len(busy_until) else current_time)\n        pos = veh_locations[v_idx]\n        dist_total = 0.0\n        tardiness_total = 0.0\n        wait_total = 0.0\n        late_stops = 0\n        pts = [pos] + [customer_locs[cid] for cid in seq] + [depot_loc]\n        crossings = 0\n        for s_i in range(len(pts) - 1):\n            for s_j in range(s_i + 2, len(pts) - 1):\n                if _segments_cross(pts[s_i], pts[s_i + 1], pts[s_j], pts[s_j + 1]):\n                    crossings += 1\n        for cid in seq:\n            loc = customer_locs[cid]\n            d = _euclidean_distance(pos, loc)\n            norm_t = (t % 12.0) / 12.0\n            tf = 1.0 + 0.5 * (math.sin(2.0 * math.pi * norm_t) ** 2)\n            t += d / max(10.0, speed_kmh / tf)\n            w_start = float(time_windows[cid][0])\n            w_end = float(time_windows[cid][1])\n            if t < w_start:\n                wait_total += w_start - t\n                t = w_start\n            elif t > w_end:\n                tardiness_total += t - w_end\n                if t - w_end > 0.05:\n                    late_stops += 1\n            t += float(service_times[cid])\n            dist_total += d\n            pos = loc\n        dist_total += _euclidean_distance(pos, depot_loc)\n        return (\n            1.50 * dist_total\n            + 40.0 * tardiness_total\n            + 8.0 * wait_total\n            + 60.0 * late_stops\n            + 400.0 * crossings\n        )\n\n    def _opt_single(v_idx: int, seq: list[int]) -> list[int]:\n        n = len(seq)\n        if n < 2:\n            return seq\n        best_c = _route_cost(v_idx, seq)\n        improved = True\n        passes = 0\n        while improved and passes < 6:\n            improved = False\n            passes += 1\n            for i in range(n - 1):\n                for j in range(i + 1, min(n, i + 10)):\n                    cand = seq[:i] + seq[i : j + 1][::-1] + seq[j + 1 :]\n                    c = _route_cost(v_idx, cand)\n                    if c + 1e-6 < best_c:\n                        seq = cand\n                        best_c = c\n                        improved = True\n            for i in range(n):\n                node = seq[i]\n                rem = seq[:i] + seq[i + 1 :]\n                for j in range(len(rem) + 1):\n                    if j == i:\n                        continue\n                    cand = rem[:j] + [node] + rem[j:]\n                    c = _route_cost(v_idx, cand)\n                    if c + 1e-6 < best_c:\n                        seq = cand\n                        best_c = c\n                        improved = True\n        return seq\n\n    for v_idx in range(n_vehicles):\n        routes[v_idx] = _opt_single(v_idx, routes[v_idx])\n\n    for _ in range(3):\n        moved = False\n        for v_a in range(n_vehicles):\n            for idx_a in range(len(routes[v_a]) - 1, -1, -1):\n                cid = routes[v_a][idx_a]\n                dem = float(demands[cid]) if cid < len(demands) else 1.0\n                base_ca = _route_cost(v_a, routes[v_a])\n                rem_a = routes[v_a][:idx_a] + routes[v_a][idx_a + 1 :]\n                new_ca = _route_cost(v_a, rem_a)\n                best_gain = 1e-4\n                best_vb = None\n                best_seqb = None\n                for v_b in range(n_vehicles):\n                    if v_b == v_a or capacities[v_b] < dem:\n                        continue\n                    base_cb = _route_cost(v_b, routes[v_b])\n                    for pos_b in range(len(routes[v_b]) + 1):\n                        cand_b = routes[v_b][:pos_b] + [cid] + routes[v_b][pos_b:]\n                        gain = (base_ca + base_cb) - (new_ca + _route_cost(v_b, cand_b))\n                        if gain > best_gain:\n                            best_gain = gain\n                            best_vb = v_b\n                            best_seqb = cand_b\n                if best_vb is not None and best_seqb is not None:\n                    routes[v_a] = rem_a\n                    routes[best_vb] = best_seqb\n                    capacities[v_a] += dem\n                    capacities[best_vb] -= dem\n                    moved = True\n        if not moved:\n            break\n\n    for v_idx in range(n_vehicles):\n        routes[v_idx] = _opt_single(v_idx, routes[v_idx])\n\n    return {\"routes\": routes}",
           "metrics": {
             "total_cost": 2930.81,
             "holding_cost": 1406.79,
@@ -646,6 +4677,7 @@
       "trajectory_generations": [
         {
           "generation": 0,
+          "milestone_key": "0",
           "event_summary": "Gen 0: Evaluated seed greedy nearest-neighbor heuristic baseline",
           "metrics": {
             "total_cost": 4099.04,
@@ -1576,6 +5608,7 @@
         },
         {
           "generation": 1,
+          "milestone_key": "0",
           "event_summary": "Gen 1: Route sequence mutation and tournament selection",
           "metrics": {
             "total_cost": 4090.2,
@@ -2506,6 +6539,7 @@
         },
         {
           "generation": 2,
+          "milestone_key": "0",
           "event_summary": "Gen 2: Route sequence mutation and tournament selection",
           "metrics": {
             "total_cost": 4073.8,
@@ -3436,6 +7470,7 @@
         },
         {
           "generation": 3,
+          "milestone_key": "0",
           "event_summary": "Gen 3: Route sequence mutation and tournament selection",
           "metrics": {
             "total_cost": 4051.72,
@@ -4366,6 +8401,7 @@
         },
         {
           "generation": 4,
+          "milestone_key": "0",
           "event_summary": "Gen 4: Introduced vehicle capacity utilization lookahead buffer",
           "metrics": {
             "total_cost": 4024.47,
@@ -5296,6 +9332,7 @@
         },
         {
           "generation": 5,
+          "milestone_key": "0",
           "event_summary": "Gen 5: Route sequence mutation and tournament selection",
           "metrics": {
             "total_cost": 3992.32,
@@ -6226,6 +10263,7 @@
         },
         {
           "generation": 6,
+          "milestone_key": "0",
           "event_summary": "Gen 6: Route sequence mutation and tournament selection",
           "metrics": {
             "total_cost": 3955.5,
@@ -7156,6 +11194,7 @@
         },
         {
           "generation": 7,
+          "milestone_key": "7",
           "event_summary": "Gen 7 \u2b50 Breakthrough: Discovered Time-Window Slack Urgency Ranking",
           "metrics": {
             "total_cost": 3914.24,
@@ -8086,6 +12125,7 @@
         },
         {
           "generation": 8,
+          "milestone_key": "7",
           "event_summary": "Gen 8: Route sequence mutation and tournament selection",
           "metrics": {
             "total_cost": 3868.83,
@@ -9016,6 +13056,7 @@
         },
         {
           "generation": 9,
+          "milestone_key": "7",
           "event_summary": "Gen 9: Route sequence mutation and tournament selection",
           "metrics": {
             "total_cost": 3819.64,
@@ -9946,6 +13987,7 @@
         },
         {
           "generation": 10,
+          "milestone_key": "7",
           "event_summary": "Gen 10: Route sequence mutation and tournament selection",
           "metrics": {
             "total_cost": 3767.09,
@@ -10876,6 +14918,7 @@
         },
         {
           "generation": 11,
+          "milestone_key": "7",
           "event_summary": "Gen 11: Route sequence mutation and tournament selection",
           "metrics": {
             "total_cost": 3711.7,
@@ -11806,6 +15849,7 @@
         },
         {
           "generation": 12,
+          "milestone_key": "7",
           "event_summary": "Gen 12: Added radial sector clustering for multi-stop consolidation",
           "metrics": {
             "total_cost": 3654.07,
@@ -12736,6 +16780,7 @@
         },
         {
           "generation": 13,
+          "milestone_key": "7",
           "event_summary": "Gen 13: Route sequence mutation and tournament selection",
           "metrics": {
             "total_cost": 3594.85,
@@ -13666,6 +17711,7 @@
         },
         {
           "generation": 14,
+          "milestone_key": "7",
           "event_summary": "Gen 14: Route sequence mutation and tournament selection",
           "metrics": {
             "total_cost": 3534.75,
@@ -14596,6 +18642,7 @@
         },
         {
           "generation": 15,
+          "milestone_key": "7",
           "event_summary": "Gen 15: Route sequence mutation and tournament selection",
           "metrics": {
             "total_cost": 3474.5,
@@ -15526,6 +19573,7 @@
         },
         {
           "generation": 16,
+          "milestone_key": "16",
           "event_summary": "Gen 16 \u2b50 Breakthrough: Evolved Traffic Congestion Profile Avoidance",
           "metrics": {
             "total_cost": 3414.86,
@@ -16456,6 +20504,7 @@
         },
         {
           "generation": 17,
+          "milestone_key": "16",
           "event_summary": "Gen 17: Route sequence mutation and tournament selection",
           "metrics": {
             "total_cost": 3356.54,
@@ -17386,6 +21435,7 @@
         },
         {
           "generation": 18,
+          "milestone_key": "16",
           "event_summary": "Gen 18: Route sequence mutation and tournament selection",
           "metrics": {
             "total_cost": 3300.23,
@@ -18316,6 +22366,7 @@
         },
         {
           "generation": 19,
+          "milestone_key": "16",
           "event_summary": "Gen 19: Route sequence mutation and tournament selection",
           "metrics": {
             "total_cost": 3246.57,
@@ -19246,6 +23297,7 @@
         },
         {
           "generation": 20,
+          "milestone_key": "16",
           "event_summary": "Gen 20: Route sequence mutation and tournament selection",
           "metrics": {
             "total_cost": 3196.11,
@@ -20176,6 +24228,7 @@
         },
         {
           "generation": 21,
+          "milestone_key": "16",
           "event_summary": "Gen 21: Route sequence mutation and tournament selection",
           "metrics": {
             "total_cost": 3149.31,
@@ -21106,6 +25159,7 @@
         },
         {
           "generation": 22,
+          "milestone_key": "16",
           "event_summary": "Gen 22: Added 2-Opt local search trajectory uncrossing pass",
           "metrics": {
             "total_cost": 3106.56,
@@ -22036,6 +26090,7 @@
         },
         {
           "generation": 23,
+          "milestone_key": "16",
           "event_summary": "Gen 23: Route sequence mutation and tournament selection",
           "metrics": {
             "total_cost": 3068.12,
@@ -22966,6 +27021,7 @@
         },
         {
           "generation": 24,
+          "milestone_key": "16",
           "event_summary": "Gen 24: Route sequence mutation and tournament selection",
           "metrics": {
             "total_cost": 3034.21,
@@ -23896,6 +27952,7 @@
         },
         {
           "generation": 25,
+          "milestone_key": "16",
           "event_summary": "Gen 25: Route sequence mutation and tournament selection",
           "metrics": {
             "total_cost": 3004.93,
@@ -24826,6 +28883,7 @@
         },
         {
           "generation": 26,
+          "milestone_key": "16",
           "event_summary": "Gen 26: Refined dynamic dispatch wait-time vs SLA penalty balance",
           "metrics": {
             "total_cost": 2980.35,
@@ -25756,6 +29814,7 @@
         },
         {
           "generation": 27,
+          "milestone_key": "16",
           "event_summary": "Gen 27: Route sequence mutation and tournament selection",
           "metrics": {
             "total_cost": 2960.51,
@@ -26686,6 +30745,7 @@
         },
         {
           "generation": 28,
+          "milestone_key": "16",
           "event_summary": "Gen 28: Route sequence mutation and tournament selection",
           "metrics": {
             "total_cost": 2945.43,
@@ -27616,6 +31676,7 @@
         },
         {
           "generation": 29,
+          "milestone_key": "16",
           "event_summary": "Gen 29: Route sequence mutation and tournament selection",
           "metrics": {
             "total_cost": 2935.28,
@@ -28546,6 +32607,7 @@
         },
         {
           "generation": 30,
+          "milestone_key": "30",
           "event_summary": "Gen 30 \ud83c\udfc6 Champion: Unified Regret-2 Insertion with 2-Opt & Traffic Avoidance",
           "metrics": {
             "total_cost": 2930.81,

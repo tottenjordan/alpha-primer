@@ -36,6 +36,11 @@
       let ribbonMilestones = uc.ribbon_milestones || [];
       let costWaterfall = uc.cost_waterfall || null;
       let paretoFrontier = uc.pareto_frontier || [];
+      let spatialTopology = uc.spatial_topology || null;
+      let dispatchSnapshots = uc.dispatch_snapshots || null;
+      let fleetMapFilter = "all";
+      let hoveredCustomerId = null;
+      let fleetHitRegions = [];
       let maxGen = Math.max(0, trajectories.length - 1);
 
       // 3. Tab Switching (with WAI-ARIA role="tab" sync)
@@ -270,7 +275,30 @@
             benchList.appendChild(li);
           });
         }
+
+        const fleetMapCtrl = document.getElementById("fleet-map-controls");
+        const c1SubEl = document.getElementById("canvas1-subtitle");
+        const c1ContainerEl = document.getElementById("canvas1-container");
+        if (fleetMapCtrl) {
+          fleetMapCtrl.classList.toggle("hidden", !isFleet);
+        }
+        if (c1SubEl) {
+          c1SubEl.classList.toggle("hidden", isFleet);
+        }
+        if (c1ContainerEl) {
+          c1ContainerEl.classList.toggle("fleet-spatial-mode", isFleet);
+        }
       }
+
+      document.querySelectorAll(".btn-fleet-filter").forEach(btn => {
+        btn.addEventListener("click", () => {
+          fleetMapFilter = btn.getAttribute("data-fleet-filter") || "all";
+          document.querySelectorAll(".btn-fleet-filter").forEach(b => {
+            b.classList.toggle("active", b === btn);
+          });
+          drawTrajectoryChart(currentGen, hoveredDayIdx);
+        });
+      });
 
       // 4c. Use Case Switching Engine (Strict Safe DOM)
       let diffViewMode = "split"; // "split" or "unified"
@@ -355,6 +383,9 @@
         ribbonMilestones = uc.ribbon_milestones || [];
         costWaterfall = uc.cost_waterfall || null;
         paretoFrontier = uc.pareto_frontier || [];
+        spatialTopology = uc.spatial_topology || null;
+        dispatchSnapshots = uc.dispatch_snapshots || null;
+        hoveredCustomerId = null;
         maxGen = Math.max(0, trajectories.length - 1);
 
         const titleEl = document.getElementById("active-use-case-title");
@@ -533,7 +564,7 @@
           const spoilRateEl = document.getElementById("kpi-spoilage-rate");
           if (spoilRateEl) spoilRateEl.textContent = (m.vehicles_used || 5) + " vehicles";
           const subComp2El = document.getElementById("kpi-sub-comp-2");
-          if (subComp2El) subComp2El.textContent = "vs. " + Math.round(baselineSum.total_distance_km || 642) + " km baseline";
+          if (subComp2El) subComp2El.textContent = "vs. " + Math.round(baselineSum.total_distance_km || 1433) + " km baseline";
 
           const kpi3Label = document.getElementById("kpi-label-3");
           if (kpi3Label) kpi3Label.textContent = "On-Time Delivery Rate";
@@ -589,7 +620,7 @@
         }
 
         document.getElementById("milestone-title").textContent = "GEN " + currentGen + (currentGen === 30 ? " CHAMPION" : (currentGen === 0 ? " SEED BASELINE" : " BREAKTHROUGH"));
-        document.getElementById("milestone-desc").textContent = frame.event_summary || (currentUseCaseId === "fleet_routing" ? (currentGen === 30 ? "Champion Regret-2 + 2-opt traffic-aware heuristic (-28.5% cost)" : (currentGen === 0 ? "Greedy nearest-neighbor baseline dispatch" : "Breakthrough candidate")) : "");
+        document.getElementById("milestone-desc").textContent = frame.event_summary || (currentUseCaseId === "fleet_routing" ? (currentGen === 30 ? "Champion Regret-2 + 2-opt traffic-aware heuristic (-39.7% cost)" : (currentGen === 0 ? "Greedy nearest-neighbor baseline dispatch" : "Breakthrough candidate")) : "");
 
         updateMilestoneRibbonActive();
         drawTrajectoryChart(currentGen);
@@ -686,10 +717,355 @@
         }
       }
 
-      // 7. Retina Canvas 2D Trajectory Chart (Multi-Domain Scaled + Interactive Crosshair)
+      // 7. Retina Canvas 2D Trajectory Chart & Synchronized 2D Fleet Spatial Topology Map
       let hoveredDayIdx = null;
+      const FLEET_VEHICLE_COLORS = ["#06B6D4", "#10B981", "#3B82F6", "#F59E0B", "#F43F5E"];
+
+      function drawFleetSpatialCanvas(genIdx) {
+        const canvas = document.getElementById("canvas-trajectory");
+        if (!canvas || !spatialTopology || !dispatchSnapshots) return;
+        const ctx = canvas.getContext("2d");
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+
+        const w = rect.width;
+        const h = rect.height;
+        ctx.clearRect(0, 0, w, h);
+
+        const c1Title = document.getElementById("canvas1-title");
+        if (c1Title) {
+          c1Title.textContent = "2D Spatial Dispatch Topology: Greedy Nearest-Neighbor vs Evolved Regret-2 + 2-Opt";
+        }
+
+        const frame = trajectories[genIdx] || trajectories[0];
+        const mKey = (frame && frame.milestone_key)
+          ? String(frame.milestone_key)
+          : (genIdx < 7 ? "0" : (genIdx < 16 ? "7" : (genIdx < 30 ? "16" : "30")));
+        const leftSnap = dispatchSnapshots["0"];
+        const rightSnap = dispatchSnapshots[mKey] || dispatchSnapshots["30"] || leftSnap;
+        if (!leftSnap || !rightSnap) return;
+
+        fleetHitRegions = [];
+
+        const centerW = Math.min(116, Math.max(88, Math.round(w * 0.16)));
+        const padSide = 6;
+        const boxW = Math.max(120, Math.floor((w - centerW - padSide * 4) / 2));
+        const leftBoxX = padSide;
+        const centerX = leftBoxX + boxW + padSide;
+        const rightBoxX = centerX + centerW + padSide;
+        const mapTop = 24;
+        const mapBot = h - 8;
+        const mapH = Math.max(80, mapBot - mapTop);
+
+        function projX(boxX, xKm) {
+          return boxX + 10 + (xKm / 100.0) * (boxW - 20);
+        }
+        function projY(yKm) {
+          return mapBot - 10 - (yKm / 100.0) * (mapH - 20);
+        }
+
+        const custById = {};
+        (spatialTopology.customers || []).forEach(c => {
+          custById[c.id] = c;
+        });
+
+        function renderViewport(boxX, snap, titleText, accentColor) {
+          const sum = snap.summary || {};
+          // Viewport background & border
+          ctx.fillStyle = "rgba(15, 23, 42, 0.55)";
+          ctx.fillRect(boxX, mapTop, boxW, mapH);
+          ctx.strokeStyle = "rgba(148, 163, 184, 0.18)";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(boxX, mapTop, boxW, mapH);
+
+          // Header banner
+          ctx.fillStyle = accentColor;
+          ctx.font = "bold 10px JetBrains Mono, monospace";
+          ctx.fillText(titleText, boxX + 4, 12);
+
+          ctx.fillStyle = "#94A3B8";
+          ctx.font = "9px JetBrains Mono, monospace";
+          const subStats = "$" + Math.round(sum.total_cost || 0).toLocaleString() +
+            " | " + Math.round(sum.total_distance_km || 0) + "km | " +
+            (sum.intra_route_crossings || 0) + " cross";
+          ctx.fillText(subStats, boxX + 4, 21);
+
+          // Quadrant cluster rings
+          const quads = spatialTopology.cluster_centers || [];
+          const qRadPx = (14.0 / 100.0) * Math.min(boxW - 20, mapH - 20);
+          ctx.strokeStyle = "rgba(148, 163, 184, 0.13)";
+          ctx.lineWidth = 1;
+          ctx.setLineDash([2, 3]);
+          quads.forEach(q => {
+            const qx = projX(boxX, q.x_km);
+            const qy = projY(q.y_km);
+            ctx.beginPath();
+            ctx.arc(qx, qy, qRadPx, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = "rgba(148, 163, 184, 0.35)";
+            ctx.font = "8px JetBrains Mono, monospace";
+            ctx.fillText((q.label || "").slice(0, 2), qx - 6, qy - qRadPx + 9);
+          });
+          ctx.setLineDash([]);
+
+          const depot = spatialTopology.depot || { x_km: 50, y_km: 50 };
+          const hubX = projX(boxX, depot.x_km);
+          const hubY = projY(depot.y_km);
+          const outcomes = snap.stop_outcomes || {};
+
+          // Layer 1: Vehicle Route Polylines & Directional Chevrons
+          (snap.tours || []).forEach(tour => {
+            const vid = tour.vehicle_id || 0;
+            const vColor = FLEET_VEHICLE_COLORS[vid % FLEET_VEHICLE_COLORS.length];
+            const isVehFilter = fleetMapFilter.indexOf("v") === 0;
+            const vehSelected = !isVehFilter || fleetMapFilter === ("v" + vid);
+            const isDynamicWave = (tour.wave_index || 0) > 0;
+
+            let prevX = hubX;
+            let prevY = hubY;
+            const stops = tour.stops || [];
+
+            stops.forEach(cid => {
+              const cust = custById[cid];
+              if (!cust) return;
+              const out = outcomes[String(cid)] || {};
+              const currX = projX(boxX, cust.x_km);
+              const currY = projY(cust.y_km);
+
+              let legActive = vehSelected;
+              if (fleetMapFilter === "wave0" && isDynamicWave) legActive = false;
+              if (fleetMapFilter === "dynamic" && !isDynamicWave) legActive = false;
+              if (fleetMapFilter === "late" && out.status !== "late") legActive = false;
+
+              ctx.strokeStyle = vColor;
+              ctx.lineWidth = legActive ? 1.65 : 0.55;
+              if (isDynamicWave) {
+                ctx.setLineDash([3, 3]);
+              } else {
+                ctx.setLineDash([]);
+              }
+
+              if (legActive) {
+                ctx.beginPath();
+                ctx.moveTo(prevX, prevY);
+                ctx.lineTo(currX, currY);
+                ctx.stroke();
+
+                // Midpoint directional chevron triangle
+                const mx = (prevX + currX) * 0.5;
+                const my = (prevY + currY) * 0.5;
+                const dx = currX - prevX;
+                const dy = currY - prevY;
+                const segLen = Math.hypot(dx, dy);
+                if (segLen > 16) {
+                  const ux = dx / segLen;
+                  const uy = dy / segLen;
+                  const px = -uy;
+                  const py = ux;
+                  const tipX = mx + ux * 3.2;
+                  const tipY = my + uy * 3.2;
+                  const lx = mx - ux * 2.4 + px * 2.2;
+                  const ly = my - uy * 2.4 + py * 2.2;
+                  const rx = mx - ux * 2.4 - px * 2.2;
+                  const ry = my - uy * 2.4 - py * 2.2;
+                  ctx.fillStyle = vColor;
+                  ctx.beginPath();
+                  ctx.moveTo(tipX, tipY);
+                  ctx.lineTo(lx, ly);
+                  ctx.lineTo(rx, ry);
+                  ctx.lineTo(tipX, tipY);
+                  ctx.fill();
+                }
+              }
+
+              prevX = currX;
+              prevY = currY;
+            });
+
+            // Return leg to depot
+            ctx.setLineDash([2, 3]);
+            if (vehSelected && fleetMapFilter === "all" && stops.length > 0) {
+              ctx.strokeStyle = "rgba(148, 163, 184, 0.22)";
+              ctx.lineWidth = 0.9;
+              ctx.beginPath();
+              ctx.moveTo(prevX, prevY);
+              ctx.lineTo(hubX, hubY);
+              ctx.stroke();
+            }
+            ctx.setLineDash([]);
+          });
+
+          // Layer 2: Intra-Route Self-Crossing Conflict Rings
+          (snap.crossings || []).forEach(cr => {
+            const cx = projX(boxX, cr.x_km);
+            const cy = projY(cr.y_km);
+            ctx.strokeStyle = "rgba(244, 63, 94, 0.92)";
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(cx, cy, 5.5, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.fillStyle = "#F43F5E";
+            ctx.beginPath();
+            ctx.arc(cx, cy, 1.8, 0, Math.PI * 2);
+            ctx.fill();
+          });
+
+          // Layer 3 & 4: Time-Window Urgency / SLA Breach Halos & Customer Glyphs
+          (spatialTopology.customers || []).forEach(c => {
+            const cx = projX(boxX, c.x_km);
+            const cy = projY(c.y_km);
+            const st = outcomes[String(c.id)] || null;
+            const vid = st ? st.vehicle_id : 0;
+            const isLate = st && st.status === "late";
+
+            let nodeActive = true;
+            if (fleetMapFilter === "wave0" && c.is_dynamic) nodeActive = false;
+            if (fleetMapFilter === "dynamic" && !c.is_dynamic) nodeActive = false;
+            if (fleetMapFilter === "late" && !isLate) nodeActive = false;
+            if (fleetMapFilter.indexOf("v") === 0 && ("v" + vid) !== fleetMapFilter) nodeActive = false;
+
+            if (isLate) {
+              const haloR = Math.min(9.5, 5.0 + ((st.tardiness_hours || 0) * 1.3));
+              ctx.strokeStyle = nodeActive ? "rgba(244, 63, 94, 0.88)" : "rgba(244, 63, 94, 0.18)";
+              ctx.lineWidth = 1.5;
+              ctx.beginPath();
+              ctx.arc(cx, cy, haloR, 0, Math.PI * 2);
+              ctx.stroke();
+            } else if (c.tw_width <= 1.65 && nodeActive) {
+              ctx.strokeStyle = "rgba(245, 158, 11, 0.45)";
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              ctx.arc(cx, cy, 5.0, 0, Math.PI * 2);
+              ctx.stroke();
+            }
+
+            const baseColor = isLate ? "#F43F5E" : FLEET_VEHICLE_COLORS[vid % FLEET_VEHICLE_COLORS.length];
+            ctx.fillStyle = nodeActive ? baseColor : "rgba(148, 163, 184, 0.22)";
+
+            if (c.is_dynamic) {
+              const s = nodeActive ? 3.8 : 2.5;
+              ctx.beginPath();
+              ctx.moveTo(cx, cy - s);
+              ctx.lineTo(cx + s, cy);
+              ctx.lineTo(cx, cy + s);
+              ctx.lineTo(cx - s, cy);
+              ctx.lineTo(cx, cy - s);
+              ctx.fill();
+            } else {
+              const rNode = nodeActive ? 3.0 : 2.0;
+              ctx.beginPath();
+              ctx.arc(cx, cy, rNode, 0, Math.PI * 2);
+              ctx.fill();
+            }
+
+            if (hoveredCustomerId === c.id) {
+              ctx.strokeStyle = "#06B6D4";
+              ctx.lineWidth = 2.2;
+              ctx.beginPath();
+              ctx.arc(cx, cy, 8.5, 0, Math.PI * 2);
+              ctx.stroke();
+
+              ctx.fillStyle = "#F8FAFC";
+              ctx.font = "bold 9px JetBrains Mono, monospace";
+              ctx.fillText("#" + c.id, cx + 8, cy - 6);
+            }
+
+            fleetHitRegions.push({
+              customer: c,
+              leftStop: (leftSnap.stop_outcomes || {})[String(c.id)] || null,
+              rightStop: (rightSnap.stop_outcomes || {})[String(c.id)] || null,
+              x: cx,
+              y: cy
+            });
+          });
+
+          // Layer 5: Central Depot Hub (50, 50)
+          ctx.fillStyle = "rgba(6, 182, 212, 0.25)";
+          ctx.beginPath();
+          ctx.arc(hubX, hubY, 7.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = "#F8FAFC";
+          ctx.fillRect(hubX - 3.5, hubY - 3.5, 7, 7);
+          ctx.strokeStyle = "#06B6D4";
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(hubX - 3.5, hubY - 3.5, 7, 7);
+        }
+
+        renderViewport(leftBoxX, leftSnap, "GEN 0: GREEDY BASELINE", "#F43F5E");
+        renderViewport(
+          rightBoxX,
+          rightSnap,
+          "GEN " + genIdx + ": " + (genIdx >= 16 ? "REGRET-2 + 2-OPT" : (genIdx >= 7 ? "SLACK URGENCY" : "GREEDY SEED")),
+          "#10B981"
+        );
+
+        // Center Telemetry Delta Strip
+        const lSum = leftSnap.summary || {};
+        const rSum = rightSnap.summary || {};
+        ctx.fillStyle = "rgba(15, 23, 42, 0.78)";
+        ctx.fillRect(centerX, mapTop, centerW, mapH);
+        ctx.strokeStyle = "rgba(148, 163, 184, 0.2)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(centerX, mapTop, centerW, mapH);
+
+        ctx.fillStyle = "#06B6D4";
+        ctx.font = "bold 9px JetBrains Mono, monospace";
+        ctx.fillText("DELTA HUD", centerX + 8, mapTop + 14);
+
+        const rows = [
+          ["Crossings", (lSum.intra_route_crossings || 0) + " \u2192 " + (rSum.intra_route_crossings || 0), (rSum.intra_route_crossings || 0) === 0 ? "#10B981" : "#F59E0B"],
+          ["Late Stops", (lSum.late_stops_count || 0) + " \u2192 " + (rSum.late_stops_count || 0), (rSum.late_stops_count || 0) < (lSum.late_stops_count || 0) ? "#10B981" : "#F43F5E"],
+          ["On-Time", Math.round(lSum.on_time_delivery_pct || 0) + "% \u2192 " + Math.round(rSum.on_time_delivery_pct || 0) + "%", "#06B6D4"],
+          ["Distance", Math.round(lSum.total_distance_km || 0) + "\u2192" + Math.round(rSum.total_distance_km || 0) + "km", "#CBD5E1"]
+        ];
+        rows.forEach((r, idx) => {
+          const ry = mapTop + 30 + idx * 32;
+          ctx.fillStyle = "#94A3B8";
+          ctx.font = "8px JetBrains Mono, monospace";
+          ctx.fillText(r[0], centerX + 8, ry);
+          ctx.fillStyle = r[2];
+          ctx.font = "bold 9.5px JetBrains Mono, monospace";
+          ctx.fillText(r[1], centerX + 8, ry + 12);
+        });
+
+        // Vehicle utilization bars in center column
+        ctx.fillStyle = "#94A3B8";
+        ctx.font = "8px JetBrains Mono, monospace";
+        ctx.fillText("PEAK WAVE LOAD", centerX + 8, mapTop + 162);
+
+        for (let vIdx = 0; vIdx < 5; vIdx++) {
+          const vy = mapTop + 174 + vIdx * 16;
+          if (vy + 8 > mapBot) break;
+          const vCol = FLEET_VEHICLE_COLORS[vIdx % FLEET_VEHICLE_COLORS.length];
+          ctx.fillStyle = vCol;
+          ctx.font = "8px JetBrains Mono, monospace";
+          ctx.fillText("V" + vIdx, centerX + 8, vy + 6);
+
+          const barMaxW = Math.max(24, centerW - 32);
+          ctx.fillStyle = "rgba(148, 163, 184, 0.16)";
+          ctx.fillRect(centerX + 24, vy, barMaxW, 6);
+
+          const vTours = (rightSnap.tours || []).filter(t => t.vehicle_id === vIdx);
+          const peakCap = vTours.reduce((mx, t) => Math.max(mx, t.capacity_pct || 0), 0);
+          const fillW = Math.min(barMaxW, Math.round((peakCap / 100.0) * barMaxW));
+          ctx.fillStyle = vCol;
+          ctx.fillRect(centerX + 24, vy, fillW, 6);
+        }
+      }
 
       function drawTrajectoryChart(genIdx, hoverDay) {
+        if (currentUseCaseId === "fleet_routing" && spatialTopology && dispatchSnapshots) {
+          drawFleetSpatialCanvas(genIdx);
+          return;
+        }
+
         const canvas = document.getElementById("canvas-trajectory");
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
@@ -829,8 +1205,52 @@
       if (canvasTrajEl && tooltipTrajEl) {
         canvasTrajEl.addEventListener("mousemove", (e) => {
           const rect = canvasTrajEl.getBoundingClientRect();
-          const padL = 46, padR = 18;
           const relX = e.clientX - rect.left;
+          const relY = e.clientY - rect.top;
+
+          if (currentUseCaseId === "fleet_routing" && spatialTopology && dispatchSnapshots) {
+            let bestHit = null;
+            let bestDist = 14;
+            fleetHitRegions.forEach(reg => {
+              const d = Math.hypot(relX - reg.x, relY - reg.y);
+              if (d < bestDist) {
+                bestDist = d;
+                bestHit = reg;
+              }
+            });
+
+            if (bestHit) {
+              hoveredCustomerId = bestHit.customer.id;
+              drawFleetSpatialCanvas(currentGen);
+              const c = bestHit.customer;
+              const ls = bestHit.leftStop;
+              const rs = bestHit.rightStop;
+              const g0Status = ls
+                ? ("V" + ls.vehicle_id + " #" + ls.stop_seq + (ls.status === "late" ? " (+" + Math.round((ls.tardiness_hours || 0) * 60) + "m LATE)" : " (ON-TIME)"))
+                : "Unassigned";
+              const gnStatus = rs
+                ? ("V" + rs.vehicle_id + " #" + rs.stop_seq + (rs.status === "late" ? " (+" + Math.round((rs.tardiness_hours || 0) * 60) + "m LATE)" : " (ON-TIME)"))
+                : "Unassigned";
+
+              tooltipTrajEl.replaceChildren();
+              tooltipTrajEl.appendChild(
+                el(
+                  "span",
+                  null,
+                  "Stop #" + c.id + " (" + c.quadrant + " | Wave " + c.wave_index + " | TW " + c.tw_start.toFixed(1) + "-" + c.tw_end.toFixed(1) + "h) — " +
+                  "Gen 0: " + g0Status + " \u2192 Gen " + currentGen + ": " + gnStatus
+                )
+              );
+              tooltipTrajEl.classList.add("visible");
+            } else if (hoveredCustomerId !== null) {
+              hoveredCustomerId = null;
+              tooltipTrajEl.classList.remove("visible");
+              drawFleetSpatialCanvas(currentGen);
+            }
+            return;
+          }
+
+          const padL = 46, padR = 18;
           const ratio = (relX - padL) / Math.max(1, rect.width - padL - padR);
           const dayIdx = Math.max(0, Math.min(89, Math.round(ratio * 89)));
           hoveredDayIdx = dayIdx;
@@ -857,6 +1277,7 @@
 
         canvasTrajEl.addEventListener("mouseleave", () => {
           hoveredDayIdx = null;
+          hoveredCustomerId = null;
           tooltipTrajEl.classList.remove("visible");
           drawTrajectoryChart(currentGen, null);
         });
@@ -2186,6 +2607,7 @@
             const baseFrame = trajectories[Math.min(iter, trajectories.length - 1)] || trajectories[0];
             const newFrame = {
               generation: iter,
+              milestone_key: baseFrame.milestone_key || "30",
               event_summary: isBest
                 ? ("★ New Breakthrough Candidate (Iter " + iter + ") | Score: " + scoreVal.toFixed(2) + "%")
                 : ("Evaluated Candidate (Iter " + iter + ") | Score: " + scoreVal.toFixed(2) + "%"),
@@ -2196,6 +2618,10 @@
                 stockout_penalty: baseFrame.metrics ? baseFrame.metrics.stockout_penalty : 14573,
                 fill_rate_pct: (cand.scores && cand.scores.fill_rate_pct) || (baseFrame.metrics ? baseFrame.metrics.fill_rate_pct : 93.49),
                 spoilage_rate_pct: (cand.scores && cand.scores.spoilage_rate_pct) || (baseFrame.metrics ? baseFrame.metrics.spoilage_rate_pct : 8.45),
+                total_distance_km: (cand.scores && cand.scores.total_distance_km) || (baseFrame.metrics ? baseFrame.metrics.total_distance_km : 1388),
+                on_time_delivery_pct: (cand.scores && cand.scores.on_time_delivery_pct) || (baseFrame.metrics ? baseFrame.metrics.on_time_delivery_pct : 86.0),
+                total_tardiness_hours: (cand.scores && cand.scores.total_tardiness_hours) || (baseFrame.metrics ? baseFrame.metrics.total_tardiness_hours : 8.0),
+                vehicles_used: (cand.scores && cand.scores.vehicles_used) || (baseFrame.metrics ? baseFrame.metrics.vehicles_used : 5),
                 cost_reduction_pct: scoreVal,
                 fitness_score: scoreVal
               },

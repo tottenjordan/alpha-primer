@@ -27,10 +27,282 @@ from alpha_evolve.dashboard.trajectory_utils import (  # noqa: E402
     s_curve_progress,
     update_master_trajectories_bundle,
 )
-from alpha_evolve.utils import extract_evolve_blocks  # noqa: E402
+from alpha_evolve.utils import compile_candidate_callable, extract_evolve_blocks  # noqa: E402
 
 RECORDS_DIR = ROOT_DIR / "records"
 FLEET_ROUTING_DIR = ROOT_DIR / "examples" / "fleet_routing"
+
+
+def _segment_intersection(
+    p1: tuple[float, float],
+    p2: tuple[float, float],
+    p3: tuple[float, float],
+    p4: tuple[float, float],
+) -> tuple[float, float] | None:
+    """Return interior intersection point (x, y) of segments p1->p2 and p3->p4, or None."""
+    x1, y1 = p1
+    x2, y2 = p2
+    x3, y3 = p3
+    x4, y4 = p4
+
+    denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+    if abs(denom) < 1e-9:
+        return None
+
+    t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom
+    u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom
+    if 0.02 < t < 0.98 and 0.02 < u < 0.98:
+        ix = x1 + t * (x2 - x1)
+        iy = y1 + t * (y2 - y1)
+        return (round(ix, 2), round(iy, 2))
+    return None
+
+
+def _build_spatial_topology(config: Any) -> dict[str, Any]:
+    """Export 2D customer/depot topology and time-window metadata for Canvas 1 map."""
+    depot_x = round(float(config.depot_location[0]), 2)
+    depot_y = round(float(config.depot_location[1]), 2)
+    customers: list[dict[str, Any]] = []
+    for i in range(config.n_customers):
+        x_km = round(float(config.customer_locations[i][0]), 2)
+        y_km = round(float(config.customer_locations[i][1]), 2)
+        tw_start = round(float(config.time_windows[i][0]), 2)
+        tw_end = round(float(config.time_windows[i][1]), 2)
+        arr_hr = round(float(config.order_times[i]), 2)
+        if x_km < 50.0 and y_km >= 50.0:
+            quad = "NW"
+        elif x_km >= 50.0 and y_km >= 50.0:
+            quad = "NE"
+        elif x_km < 50.0:
+            quad = "SW"
+        else:
+            quad = "SE"
+        wave_idx = 0 if arr_hr <= 0.0 else int(math.ceil(arr_hr / 2.0))
+        customers.append(
+            {
+                "id": int(i),
+                "x_km": x_km,
+                "y_km": y_km,
+                "demand": round(float(config.demands[i]), 1),
+                "tw_start": tw_start,
+                "tw_end": tw_end,
+                "tw_width": round(tw_end - tw_start, 2),
+                "service_time": round(float(config.service_times[i]), 2),
+                "arrival_hour": arr_hr,
+                "is_dynamic": bool(arr_hr > 0.0),
+                "wave_index": wave_idx,
+                "quadrant": quad,
+            }
+        )
+
+    return {
+        "grid_bounds_km": [0.0, 100.0, 0.0, 100.0],
+        "depot": {"x_km": depot_x, "y_km": depot_y, "label": "Central Hub"},
+        "cluster_centers": [
+            {"id": 0, "label": "NW Sector", "x_km": 25.0, "y_km": 75.0},
+            {"id": 1, "label": "NE Sector", "x_km": 75.0, "y_km": 75.0},
+            {"id": 2, "label": "SW Sector", "x_km": 25.0, "y_km": 25.0},
+            {"id": 3, "label": "SE Sector", "x_km": 75.0, "y_km": 25.0},
+        ],
+        "customers": customers,
+    }
+
+
+def _trace_simulation_episode(
+    twin: FleetRoutingDigitalTwin,
+    policy_callable: Any,
+    generation: int,
+    label: str,
+    dispatch_interval_hours: float = 2.0,
+) -> dict[str, Any]:
+    """Run a full 12-hour simulation while recording tour polylines, stop SLA outcomes, and crossings."""
+    import numpy as np
+
+    cfg = twin.config
+    cfg_dict = cfg.to_dict()
+    served_mask = np.zeros(cfg.n_customers, dtype=bool)
+    tardiness_hours = np.zeros(cfg.n_customers, dtype=np.float64)
+    wait_hours = np.zeros(cfg.n_customers, dtype=np.float64)
+
+    vehicle_locations = np.tile(cfg.depot_location, (cfg.n_vehicles, 1))
+    vehicle_available_times = np.zeros(cfg.n_vehicles, dtype=np.float64)
+    vehicle_odometers = np.zeros(cfg.n_vehicles, dtype=np.float64)
+    vehicle_used = np.zeros(cfg.n_vehicles, dtype=bool)
+
+    tours: list[dict[str, Any]] = []
+    stop_outcomes: dict[str, dict[str, Any]] = {}
+    depot_pt = (float(cfg.depot_location[0]), float(cfg.depot_location[1]))
+
+    current_time = 0.0
+    while current_time < cfg.shift_hours:
+        wave_idx = int(round(current_time / dispatch_interval_hours))
+        state = twin.get_visible_state(
+            current_time=current_time,
+            served_mask=served_mask,
+            vehicle_positions=vehicle_locations,
+            vehicle_available_times=vehicle_available_times,
+        )
+        if len(state["visible_order_indices"]) > 0:
+            try:
+                decision = policy_callable(state, cfg_dict)
+                raw_routes = decision.get("routes", [])
+                if isinstance(raw_routes, dict):
+                    routes = [raw_routes.get(v, []) for v in range(cfg.n_vehicles)]
+                elif isinstance(raw_routes, list):
+                    routes = raw_routes
+                else:
+                    routes = []
+            except Exception:
+                routes = []
+
+            for v_idx, route in enumerate(routes):
+                if v_idx >= cfg.n_vehicles or not route:
+                    continue
+                valid_stops = [
+                    int(idx)
+                    for idx in route
+                    if idx in state["visible_order_indices"] and not served_mask[idx]
+                ]
+                total_demand = sum(float(cfg.demands[s]) for s in valid_stops)
+                if total_demand > cfg.vehicle_capacity:
+                    accum_d = 0.0
+                    capped: list[int] = []
+                    for s in valid_stops:
+                        if accum_d + float(cfg.demands[s]) <= cfg.vehicle_capacity:
+                            capped.append(s)
+                            accum_d += float(cfg.demands[s])
+                        else:
+                            break
+                    valid_stops = capped
+
+                if not valid_stops:
+                    continue
+
+                vehicle_used[v_idx] = True
+                start_t = float(max(current_time, vehicle_available_times[v_idx]))
+                v_time = start_t
+                curr_pos = vehicle_locations[v_idx]
+                tour_dist = 0.0
+                tour_load = 0.0
+
+                for seq_idx, stop in enumerate(valid_stops):
+                    stop_loc = cfg.customer_locations[stop]
+                    dist = twin.calculate_distance(curr_pos, stop_loc)
+                    vehicle_odometers[v_idx] += dist
+                    tour_dist += dist
+
+                    traffic = twin.traffic_congestion_factor(v_time)
+                    eff_speed = max(10.0, cfg.base_speed_kmh / traffic)
+                    v_time += dist / eff_speed
+                    arr_t = v_time
+
+                    earliest, deadline = (
+                        float(cfg.time_windows[stop][0]),
+                        float(cfg.time_windows[stop][1]),
+                    )
+                    w_hr = 0.0
+                    t_hr = 0.0
+                    if v_time < earliest:
+                        w_hr = earliest - v_time
+                        wait_hours[stop] = w_hr
+                        v_time = earliest
+                    elif v_time > deadline:
+                        t_hr = v_time - deadline
+                        tardiness_hours[stop] = t_hr
+
+                    start_srv = v_time
+                    slack_hr = deadline - start_srv
+                    v_time += float(cfg.service_times[stop])
+                    served_mask[stop] = True
+                    tour_load += float(cfg.demands[stop])
+                    curr_pos = stop_loc
+
+                    status = (
+                        "late" if t_hr > 0.05 else ("at_risk" if slack_hr < 0.35 else "on_time")
+                    )
+                    stop_outcomes[str(stop)] = {
+                        "vehicle_id": int(v_idx),
+                        "wave_index": int(wave_idx),
+                        "stop_seq": int(seq_idx),
+                        "arrival_hour": round(arr_t, 2),
+                        "start_service_hour": round(start_srv, 2),
+                        "wait_hours": round(w_hr, 2),
+                        "tardiness_hours": round(t_hr, 2),
+                        "slack_hours": round(slack_hr, 2),
+                        "status": status,
+                    }
+
+                return_dist = twin.calculate_distance(curr_pos, cfg.depot_location)
+                vehicle_odometers[v_idx] += return_dist
+                tour_dist += return_dist
+                traffic = twin.traffic_congestion_factor(v_time)
+                v_time += return_dist / max(10.0, cfg.base_speed_kmh / traffic)
+                vehicle_locations[v_idx] = cfg.depot_location.copy()
+                vehicle_available_times[v_idx] = v_time
+
+                tours.append(
+                    {
+                        "vehicle_id": int(v_idx),
+                        "wave_index": int(wave_idx),
+                        "dispatch_hour": round(start_t, 2),
+                        "return_hour": round(v_time, 2),
+                        "distance_km": round(tour_dist, 2),
+                        "load_units": round(tour_load, 1),
+                        "capacity_pct": round((tour_load / cfg.vehicle_capacity) * 100.0, 1),
+                        "stops": valid_stops,
+                    }
+                )
+
+        current_time += dispatch_interval_hours
+
+    # Detect intra-route and inter-route segment crossings
+    tour_segments: list[tuple[int, int, tuple[float, float], tuple[float, float]]] = []
+    for t_idx, tour in enumerate(tours):
+        pts = (
+            [depot_pt]
+            + [
+                (float(cfg.customer_locations[s][0]), float(cfg.customer_locations[s][1]))
+                for s in tour["stops"]
+            ]
+            + [depot_pt]
+        )
+        for s_i in range(len(pts) - 1):
+            tour_segments.append((t_idx, int(tour["vehicle_id"]), pts[s_i], pts[s_i + 1]))
+
+    intra_crossings: list[dict[str, Any]] = []
+    inter_crossings_count = 0
+    for i in range(len(tour_segments)):
+        t_a, v_a, p1, p2 = tour_segments[i]
+        for j in range(i + 1, len(tour_segments)):
+            t_b, v_b, p3, p4 = tour_segments[j]
+            hit = _segment_intersection(p1, p2, p3, p4)
+            if hit is not None:
+                if t_a == t_b:
+                    intra_crossings.append({"x_km": hit[0], "y_km": hit[1], "vehicle_id": v_a})
+                else:
+                    inter_crossings_count += 1
+
+    res = twin.run_simulation(policy_callable, dispatch_interval_hours=dispatch_interval_hours)
+    late_stops_count = sum(1 for v in stop_outcomes.values() if v["status"] == "late")
+
+    return {
+        "generation": generation,
+        "label": label,
+        "summary": {
+            "total_cost": res.total_cost,
+            "total_distance_km": res.total_distance_km,
+            "on_time_delivery_pct": res.on_time_delivery_pct,
+            "total_tardiness_hours": res.total_tardiness_hours,
+            "total_wait_hours": res.total_wait_hours,
+            "late_stops_count": late_stops_count,
+            "intra_route_crossings": len(intra_crossings),
+            "inter_route_crossings": inter_crossings_count,
+            "vehicles_used": res.vehicles_used,
+        },
+        "tours": tours,
+        "crossings": intra_crossings,
+        "stop_outcomes": stop_outcomes,
+    }
 
 
 def _build_routing_daily_series(
@@ -40,7 +312,7 @@ def _build_routing_daily_series(
     gen0_dist: float,
     gen30_dist: float,
 ) -> list[dict[str, Any]]:
-    """Synthesize a 90-step shift & fleet dispatch telemetry series for Canvas 1 replay."""
+    """Synthesize a 90-step shift & fleet dispatch telemetry series for schema parity."""
     series: list[dict[str, Any]] = []
     for day_idx in range(90):
         if day_idx < 30:
@@ -90,6 +362,7 @@ def generate_fleet_routing_trajectory_dataset(
     config = generate_routing_benchmark_dataset(n_customers=50, n_vehicles=5, seed=42)
     twin = FleetRoutingDigitalTwin(config)
     base_res = twin.run_simulation(baseline_policy, dispatch_interval_hours=2.0)
+    spatial_topology = _build_spatial_topology(config)
 
     program_file = FLEET_ROUTING_DIR / "src" / "program.py"
     program_code = program_file.read_text(encoding="utf-8") if program_file.exists() else ""
@@ -159,9 +432,19 @@ def generate_fleet_routing_trajectory_dataset(
             "score": g_score,
         }
 
+        if gen < 7:
+            m_key = "0"
+        elif gen < 16:
+            m_key = "7"
+        elif gen < 30:
+            m_key = "16"
+        else:
+            m_key = "30"
+
         trajectory_generations.append(
             {
                 "generation": gen,
+                "milestone_key": m_key,
                 "event_summary": mutation_events.get(
                     gen, f"Gen {gen}: Route sequence mutation and tournament selection"
                 ),
@@ -199,25 +482,17 @@ def generate_fleet_routing_trajectory_dataset(
     gen7_block = baseline_evolve_block.replace(
         '            config["time_windows"][idx][0] if "time_windows" in config else 0.0,\n'
         "            _euclidean_distance(depot_loc, customer_locs[idx]),",
-        "            # Milestone Mutation (Gen 7): Time-Window Slack Ranking\n"
-        '            (config["time_windows"][idx][1] - float(state.get("current_time", 0.0)))\n'
-        "            - (_euclidean_distance(depot_loc, customer_locs[idx]) / 35.0),",
+        "            # Milestone Mutation (Gen 7): Sector + Time-Window Slack Ranking\n"
+        "            (0 if customer_locs[idx][0] < 50.0 and customer_locs[idx][1] >= 50.0 else "
+        "(1 if customer_locs[idx][0] >= 50.0 and customer_locs[idx][1] >= 50.0 else "
+        "(2 if customer_locs[idx][0] < 50.0 else 3))),\n"
+        '            (config["time_windows"][idx][1] - float(state.get("current_time", 0.0))),',
     )
-    gen16_block = gen7_block.replace(
-        "                dist = _euclidean_distance(curr_pos, target_loc)\n"
-        "                if dist < min_dist:",
-        "                # Milestone Mutation (Gen 16): Traffic Congestion Avoidance\n"
-        "                raw_dist = _euclidean_distance(curr_pos, target_loc)\n"
-        '                hour = float(state.get("current_time", 0.0))\n'
-        "                rush_penalty = 1.35 if (7.5 <= hour <= 9.5 or 16.0 <= hour <= 18.0) else 1.0\n"
-        "                dist = raw_dist * rush_penalty\n"
-        "                if dist < min_dist:",
-    )
-    gen30_block = '''def assign_and_sequence_routes(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
+    gen16_block = '''def assign_and_sequence_routes(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
     """Assign unserved customer orders to vehicles and sequence delivery stops.
 
-    Champion Heuristic (Gen 30):
-    Adaptive Regret-2 Insertion with 2-Opt & Or-Opt Local Search + Wave Vehicle Rotation.
+    Milestone Mutation (Gen 16):
+    Traffic Congestion Profile Avoidance + Single-Route 2-Opt Uncrossing.
     """
     unassigned_orders = [
         int(i) for i in state.get("visible_order_indices", state.get("order_queue", []))
@@ -237,6 +512,7 @@ def generate_fleet_routing_trajectory_dataset(
         "vehicle_positions", state.get("vehicle_locations", [depot_loc] * n_vehicles)
     )
     veh_locations = [tuple(pos) for pos in raw_positions]
+    busy_until = [float(t) for t in state.get("vehicle_busy_until", [current_time] * n_vehicles)]
 
     routes: dict[int, list[int]] = {v: [] for v in range(n_vehicles)}
     if not unassigned_orders:
@@ -249,42 +525,60 @@ def generate_fleet_routing_trajectory_dataset(
             _euclidean_distance(depot_loc, customer_locs[idx]),
         ),
     )
-
-    wave_idx = int(round(current_time / 2.0))
-    stride = max(1, (n_vehicles * 3) // 5)
-    wave_offset = (wave_idx * stride) % max(1, n_vehicles)
-    vehicle_order = [(v + wave_offset) % n_vehicles for v in range(n_vehicles)]
+    vehicle_order = sorted(range(n_vehicles), key=lambda v: (round(busy_until[v], 2), v))
 
     for order_idx in sorted_orders:
         order_demand = float(demands[order_idx]) if order_idx < len(demands) else 1.0
         target_loc = customer_locs[order_idx]
-
         best_vehicle = None
-        min_dist = float("inf")
-
+        best_score = float("inf")
         for v_idx in vehicle_order:
             if capacities[v_idx] >= order_demand:
                 curr_pos = (
                     customer_locs[routes[v_idx][-1]] if routes[v_idx] else veh_locations[v_idx]
                 )
                 dist = _euclidean_distance(curr_pos, target_loc)
-                if dist < min_dist:
-                    min_dist = dist
+                avail_delay = max(0.0, busy_until[v_idx] - current_time) * 28.0
+                score = dist + avail_delay + len(routes[v_idx]) * 4.5
+                if score < best_score:
+                    best_score = score
                     best_vehicle = v_idx
-
         if best_vehicle is not None:
             routes[best_vehicle].append(order_idx)
             capacities[best_vehicle] -= order_demand
 
+    def _segments_cross(
+        p1: tuple[float, float],
+        p2: tuple[float, float],
+        p3: tuple[float, float],
+        p4: tuple[float, float],
+    ) -> bool:
+        x1, y1 = p1
+        x2, y2 = p2
+        x3, y3 = p3
+        x4, y4 = p4
+        denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+        if abs(denom) < 1e-9:
+            return False
+        t_p = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom
+        u_p = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom
+        return 0.02 < t_p < 0.98 and 0.02 < u_p < 0.98
+
     def _route_cost(v_idx: int, seq: list[int]) -> float:
         if not seq:
             return 0.0
-        t = current_time
+        t = max(current_time, busy_until[v_idx] if v_idx < len(busy_until) else current_time)
         pos = veh_locations[v_idx]
         dist_total = 0.0
         tardiness_total = 0.0
         wait_total = 0.0
         late_stops = 0
+        pts = [pos] + [customer_locs[cid] for cid in seq] + [depot_loc]
+        crossings = 0
+        for s_i in range(len(pts) - 1):
+            for s_j in range(s_i + 2, len(pts) - 1):
+                if _segments_cross(pts[s_i], pts[s_i + 1], pts[s_j], pts[s_j + 1]):
+                    crossings += 1
         for cid in seq:
             loc = customer_locs[cid]
             d = _euclidean_distance(pos, loc)
@@ -304,10 +598,15 @@ def generate_fleet_routing_trajectory_dataset(
             dist_total += d
             pos = loc
         dist_total += _euclidean_distance(pos, depot_loc)
-        return 1.50 * dist_total + 35.0 * tardiness_total + 8.0 * wait_total + 25.0 * late_stops
+        return (
+            1.50 * dist_total
+            + 40.0 * tardiness_total
+            + 8.0 * wait_total
+            + 50.0 * late_stops
+            + 400.0 * crossings
+        )
 
-    # 2-Opt & Or-Opt single-stop relocation local search on each active vehicle route
-    for v_idx in vehicle_order:
+    for v_idx in range(n_vehicles):
         seq = routes[v_idx]
         n = len(seq)
         if n < 2:
@@ -319,7 +618,147 @@ def generate_fleet_routing_trajectory_dataset(
             improved = False
             passes += 1
             for i in range(n - 1):
-                for j in range(i + 1, min(n, i + 9)):
+                for j in range(i + 1, min(n, i + 10)):
+                    cand = seq[:i] + seq[i : j + 1][::-1] + seq[j + 1 :]
+                    c = _route_cost(v_idx, cand)
+                    if c + 1e-6 < best_c:
+                        seq = cand
+                        best_c = c
+                        improved = True
+        routes[v_idx] = seq
+
+    return {"routes": routes}'''
+
+    gen30_block = '''def assign_and_sequence_routes(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
+    """Assign unserved customer orders to vehicles and sequence delivery stops.
+
+    Champion Heuristic (Gen 30):
+    Adaptive Regret-2 & Inter-Route Relocate with 2-Opt & Or-Opt Uncrossing + Availability Dispatch.
+    """
+    unassigned_orders = [
+        int(i) for i in state.get("visible_order_indices", state.get("order_queue", []))
+    ]
+    n_vehicles = int(config.get("n_vehicles", 1))
+    depot_loc = tuple(config.get("depot_location", (0.0, 0.0)))
+    customer_locs = [tuple(loc) for loc in config.get("customer_locations", [])]
+    demands = config.get("demands", [])
+    time_windows = config.get("time_windows", [])
+    service_times = config.get("service_times", [0.2] * len(customer_locs))
+    speed_kmh = float(config.get("base_speed_kmh", 40.0))
+    current_time = float(state.get("current_time", 0.0))
+    capacities = [
+        float(c) for c in state.get("vehicle_remaining_capacities", [100.0] * n_vehicles)
+    ]
+    raw_positions = state.get(
+        "vehicle_positions", state.get("vehicle_locations", [depot_loc] * n_vehicles)
+    )
+    veh_locations = [tuple(pos) for pos in raw_positions]
+    busy_until = [float(t) for t in state.get("vehicle_busy_until", [current_time] * n_vehicles)]
+
+    routes: dict[int, list[int]] = {v: [] for v in range(n_vehicles)}
+    if not unassigned_orders:
+        return {"routes": routes}
+
+    sorted_orders = sorted(
+        unassigned_orders,
+        key=lambda idx: (
+            float(time_windows[idx][0]) if idx < len(time_windows) else 0.0,
+            _euclidean_distance(depot_loc, customer_locs[idx]),
+        ),
+    )
+    vehicle_order = sorted(range(n_vehicles), key=lambda v: (round(busy_until[v], 2), v))
+
+    for order_idx in sorted_orders:
+        order_demand = float(demands[order_idx]) if order_idx < len(demands) else 1.0
+        target_loc = customer_locs[order_idx]
+        best_vehicle = None
+        best_score = float("inf")
+        for v_idx in vehicle_order:
+            if capacities[v_idx] >= order_demand:
+                curr_pos = (
+                    customer_locs[routes[v_idx][-1]] if routes[v_idx] else veh_locations[v_idx]
+                )
+                dist = _euclidean_distance(curr_pos, target_loc)
+                avail_delay = max(0.0, busy_until[v_idx] - current_time) * 28.0
+                score = dist + avail_delay + len(routes[v_idx]) * 4.5
+                if score < best_score:
+                    best_score = score
+                    best_vehicle = v_idx
+        if best_vehicle is not None:
+            routes[best_vehicle].append(order_idx)
+            capacities[best_vehicle] -= order_demand
+
+    def _segments_cross(
+        p1: tuple[float, float],
+        p2: tuple[float, float],
+        p3: tuple[float, float],
+        p4: tuple[float, float],
+    ) -> bool:
+        x1, y1 = p1
+        x2, y2 = p2
+        x3, y3 = p3
+        x4, y4 = p4
+        denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+        if abs(denom) < 1e-9:
+            return False
+        t_p = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom
+        u_p = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom
+        return 0.02 < t_p < 0.98 and 0.02 < u_p < 0.98
+
+    def _route_cost(v_idx: int, seq: list[int]) -> float:
+        if not seq:
+            return 0.0
+        t = max(current_time, busy_until[v_idx] if v_idx < len(busy_until) else current_time)
+        pos = veh_locations[v_idx]
+        dist_total = 0.0
+        tardiness_total = 0.0
+        wait_total = 0.0
+        late_stops = 0
+        pts = [pos] + [customer_locs[cid] for cid in seq] + [depot_loc]
+        crossings = 0
+        for s_i in range(len(pts) - 1):
+            for s_j in range(s_i + 2, len(pts) - 1):
+                if _segments_cross(pts[s_i], pts[s_i + 1], pts[s_j], pts[s_j + 1]):
+                    crossings += 1
+        for cid in seq:
+            loc = customer_locs[cid]
+            d = _euclidean_distance(pos, loc)
+            norm_t = (t % 12.0) / 12.0
+            tf = 1.0 + 0.5 * (math.sin(2.0 * math.pi * norm_t) ** 2)
+            t += d / max(10.0, speed_kmh / tf)
+            w_start = float(time_windows[cid][0])
+            w_end = float(time_windows[cid][1])
+            if t < w_start:
+                wait_total += w_start - t
+                t = w_start
+            elif t > w_end:
+                tardiness_total += t - w_end
+                if t - w_end > 0.05:
+                    late_stops += 1
+            t += float(service_times[cid])
+            dist_total += d
+            pos = loc
+        dist_total += _euclidean_distance(pos, depot_loc)
+        return (
+            1.50 * dist_total
+            + 40.0 * tardiness_total
+            + 8.0 * wait_total
+            + 60.0 * late_stops
+            + 400.0 * crossings
+        )
+
+    def _opt_single(v_idx: int, seq: list[int]) -> list[int]:
+        n = len(seq)
+        if n < 2:
+            return seq
+        best_c = _route_cost(v_idx, seq)
+        improved = True
+        passes = 0
+        while improved and passes < 6:
+            improved = False
+            passes += 1
+            for i in range(n - 1):
+                for j in range(i + 1, min(n, i + 10)):
                     cand = seq[:i] + seq[i : j + 1][::-1] + seq[j + 1 :]
                     c = _route_cost(v_idx, cand)
                     if c + 1e-6 < best_c:
@@ -338,9 +777,76 @@ def generate_fleet_routing_trajectory_dataset(
                         seq = cand
                         best_c = c
                         improved = True
-        routes[v_idx] = seq
+        return seq
+
+    for v_idx in range(n_vehicles):
+        routes[v_idx] = _opt_single(v_idx, routes[v_idx])
+
+    for _ in range(3):
+        moved = False
+        for v_a in range(n_vehicles):
+            for idx_a in range(len(routes[v_a]) - 1, -1, -1):
+                cid = routes[v_a][idx_a]
+                dem = float(demands[cid]) if cid < len(demands) else 1.0
+                base_ca = _route_cost(v_a, routes[v_a])
+                rem_a = routes[v_a][:idx_a] + routes[v_a][idx_a + 1 :]
+                new_ca = _route_cost(v_a, rem_a)
+                best_gain = 1e-4
+                best_vb = None
+                best_seqb = None
+                for v_b in range(n_vehicles):
+                    if v_b == v_a or capacities[v_b] < dem:
+                        continue
+                    base_cb = _route_cost(v_b, routes[v_b])
+                    for pos_b in range(len(routes[v_b]) + 1):
+                        cand_b = routes[v_b][:pos_b] + [cid] + routes[v_b][pos_b:]
+                        gain = (base_ca + base_cb) - (new_ca + _route_cost(v_b, cand_b))
+                        if gain > best_gain:
+                            best_gain = gain
+                            best_vb = v_b
+                            best_seqb = cand_b
+                if best_vb is not None and best_seqb is not None:
+                    routes[v_a] = rem_a
+                    routes[best_vb] = best_seqb
+                    capacities[v_a] += dem
+                    capacities[best_vb] -= dem
+                    moved = True
+        if not moved:
+            break
+
+    for v_idx in range(n_vehicles):
+        routes[v_idx] = _opt_single(v_idx, routes[v_idx])
 
     return {"routes": routes}'''
+
+    fn7 = (
+        compile_candidate_callable(
+            program_code.replace(baseline_evolve_block, gen7_block), "assign_and_sequence_routes"
+        )
+        if baseline_evolve_block
+        else baseline_policy
+    )
+    fn16 = (
+        compile_candidate_callable(
+            program_code.replace(baseline_evolve_block, gen16_block), "assign_and_sequence_routes"
+        )
+        if baseline_evolve_block
+        else baseline_policy
+    )
+    fn30 = (
+        compile_candidate_callable(
+            program_code.replace(baseline_evolve_block, gen30_block), "assign_and_sequence_routes"
+        )
+        if baseline_evolve_block
+        else baseline_policy
+    )
+
+    dispatch_snapshots = {
+        "0": _trace_simulation_episode(twin, baseline_policy, 0, "Gen 0: Greedy Nearest-Vehicle"),
+        "7": _trace_simulation_episode(twin, fn7, 7, "Gen 7: Sector + Slack Ranking"),
+        "16": _trace_simulation_episode(twin, fn16, 16, "Gen 16: Traffic-Aware Sector Dispatch"),
+        "30": _trace_simulation_episode(twin, fn30, 30, "Gen 30: Regret-2 + 2-Opt Uncrossing"),
+    }
 
     milestones = {
         "0": {
@@ -543,6 +1049,8 @@ def generate_fleet_routing_trajectory_dataset(
         "horizon_days": 30,
         "num_skus": 50,
         "total_generations": 30,
+        "spatial_topology": spatial_topology,
+        "dispatch_snapshots": dispatch_snapshots,
         "baseline_summary": {
             "total_cost": gen0_cost,
             "holding_cost": m0["holding_cost"],
