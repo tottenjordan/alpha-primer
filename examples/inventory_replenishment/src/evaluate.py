@@ -63,8 +63,10 @@ class InventoryReplenishmentEvaluator(BaseEvaluator):
                 n_skus=10, total_days=40, seed=99
             )
         if self._full_config is None:
-            self._full_config, self._full_demand, self._full_promo = generate_benchmark_dataset(
-                n_skus=50, total_days=90, seed=42
+            self._full_config, self._full_demand, self._full_promo = (
+                _CONFIG_FULL,
+                _DEMAND_FULL,
+                _PROMO_FULL,
             )
 
     def evaluate_smoke(self, candidate_callable: Any) -> TierResult:

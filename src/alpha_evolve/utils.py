@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import ast
 import re
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 
 def extract_evolve_blocks(code: str) -> list[str]:
@@ -46,9 +48,21 @@ def compute_code_complexity(code: str) -> dict[str, int]:
     }
 
 
-def load_file_content(path: str | Path) -> str:
-    """Read full text from a given file path."""
-    return Path(path).read_text(encoding="utf-8")
+def compile_candidate_callable(
+    code: str,
+    function_name: str,
+    filename: str = "<candidate>",
+) -> Callable[..., Any]:
+    """Compile candidate Python source and return the target callable function."""
+    module_scope: dict[str, Any] = {}
+    compiled = compile(code, filename, "exec")
+    exec(compiled, module_scope)
+    candidate_fn = module_scope.get(function_name)
+    if candidate_fn is None or not callable(candidate_fn):
+        raise KeyError(
+            f"Target function '{function_name}' not found or not callable in candidate code."
+        )
+    return candidate_fn
 
 
 def export_artifact(output_dir: str | Path, filename: str, content: str) -> Path:

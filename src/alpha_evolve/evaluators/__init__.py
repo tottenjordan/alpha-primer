@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
-from .base import BaseEvaluator, EvaluationTier, EvaluatorProtocol, TierResult
+from .base import (
+    BaseEvaluator,
+    EvaluationTier,
+    EvaluatorProtocol,
+    TierResult,
+    resolve_evaluator,
+)
 
 __all__ = [
     "BaseEvaluator",
     "EvaluationTier",
     "EvaluatorProtocol",
     "TierResult",
+    "resolve_evaluator",
 ]

@@ -25,6 +25,9 @@ from .models import (
 
 logger = logging.getLogger(__name__)
 
+_SRC_DIR = Path(__file__).resolve().parent.parent
+_REPO_ROOT = _SRC_DIR.parent
+
 
 @dataclass(frozen=True)
 class SandboxConfig:
@@ -35,100 +38,42 @@ class SandboxConfig:
     sandbox_mode: Literal["process", "subprocess", "thread"] = "process"
 
 
-def _sandbox_child_worker(
-    code: str,
-    evaluator_bytes: bytes,
-    function_name: str,
-    max_memory_mb: int,
-    result_queue: Any,
-) -> None:
-    """Isolated child process entrypoint executed under spawn context."""
-    # Apply virtual memory limit on POSIX systems
-    if max_memory_mb > 0:
-        try:
-            import resource
-
-            bytes_limit = max_memory_mb * 1024 * 1024
-            resource.setrlimit(resource.RLIMIT_AS, (bytes_limit, bytes_limit))
-        except (ImportError, ValueError, OSError):
-            pass
-
-    start_time = time.perf_counter()
-
-    # Tier 0: Syntax and compilation check
+def _apply_memory_limit(max_memory_mb: int) -> None:
+    """Apply virtual address-space limit (RLIMIT_AS) on POSIX systems."""
+    if max_memory_mb <= 0:
+        return
     try:
-        compiled_code = compile(code, "<candidate_program>", "exec")
-    except SyntaxError as e:
-        res = EvaluationResult.failure(
-            f"SyntaxError in candidate code: {e}",
-            insights={"tier": "tier_0", "error_type": "SyntaxError"},
-        )
-        result_queue.put(pickle.dumps(res))
-        return
+        import resource
 
-    module_scope: dict[str, Any] = {}
-    try:
-        exec(compiled_code, module_scope)
-    except MemoryError:
-        res = EvaluationResult.failure(
-            f"MemoryError during candidate initialization (exceeded {max_memory_mb}MB limit).",
-            insights={"tier": "sandbox_memory", "error_type": "MemoryError"},
-        )
-        result_queue.put(pickle.dumps(res))
-        return
-    except Exception as e:
-        res = EvaluationResult.failure(
-            f"Import or initialization exception: {e}\n{traceback.format_exc()}",
-            insights={"tier": "tier_0", "error_type": type(e).__name__},
-        )
-        result_queue.put(pickle.dumps(res))
-        return
-
-    if function_name not in module_scope:
-        res = EvaluationResult.failure(
-            f"Required function '{function_name}' was not defined in candidate code.",
-            insights={"tier": "tier_0", "missing_function": function_name},
-        )
-        result_queue.put(pickle.dumps(res))
-        return
-
-    candidate_callable = module_scope[function_name]
-
-    try:
-        evaluator_fn = pickle.loads(evaluator_bytes)
-    except Exception as e:
-        res = EvaluationResult.failure(
-            f"Failed to unpickle evaluator in child process: {e}",
-            insights={"tier": "sandbox_ipc", "error": str(e)},
-        )
-        result_queue.put(pickle.dumps(res))
-        return
-
-    # Tier 1 & 2: User Evaluator Harness
-    try:
-        result = evaluator_fn(candidate_callable)
-        result.execution_time_s = time.perf_counter() - start_time
-        result_queue.put(pickle.dumps(result))
-    except MemoryError:
-        res = EvaluationResult.failure(
-            f"MemoryError during candidate evaluation (exceeded {max_memory_mb}MB limit).",
-            insights={"tier": "sandbox_memory", "error_type": "MemoryError"},
-        )
-        result_queue.put(pickle.dumps(res))
-    except Exception as e:
-        res = EvaluationResult.failure(
-            f"Evaluation exception: {e}\n{traceback.format_exc()}",
-            insights={"tier": "tier_1_2", "exception": str(e)[:300]},
-        )
-        result_queue.put(pickle.dumps(res))
+        bytes_limit = max_memory_mb * 1024 * 1024
+        resource.setrlimit(resource.RLIMIT_AS, (bytes_limit, bytes_limit))
+    except (ImportError, ValueError, OSError):
+        pass
 
 
-def _execute_in_thread(
+def _make_timeout_result(
+    timeout_s: float,
+    message_prefix: str = "Evaluation",
+) -> EvaluationResult:
+    """Construct a standardized TIMEOUT EvaluationResult."""
+    return EvaluationResult(
+        status="TIMEOUT",
+        scores=AlphaEvolveEvaluationScores.from_dict({"score": -1e9}),
+        error_message=f"{message_prefix} exceeded {timeout_s}s timeout limit.",
+        execution_time_s=timeout_s,
+        insights=AlphaEvolveEvaluationInsights.from_dict(
+            {"tier": "sandbox_timeout", "timeout_s": str(timeout_s)}
+        ),
+    )
+
+
+def _compile_and_invoke(
     code: str,
     evaluator_fn: Callable[[Any], EvaluationResult],
     function_name: str,
+    max_memory_mb: int = 0,
 ) -> EvaluationResult:
-    """Execute evaluation in-thread (used for unpicklable closures or thread mode)."""
+    """Compile candidate code (Tier 0) and invoke the evaluator harness (Tiers 1 & 2)."""
     start_time = time.perf_counter()
 
     try:
@@ -142,6 +87,11 @@ def _execute_in_thread(
     module_scope: dict[str, Any] = {}
     try:
         exec(compiled_code, module_scope)
+    except MemoryError:
+        return EvaluationResult.failure(
+            f"MemoryError during candidate initialization (exceeded {max_memory_mb}MB limit).",
+            insights={"tier": "sandbox_memory", "error_type": "MemoryError"},
+        )
     except Exception as e:
         return EvaluationResult.failure(
             f"Import or initialization exception: {e}\n{traceback.format_exc()}",
@@ -160,11 +110,49 @@ def _execute_in_thread(
         result = evaluator_fn(candidate_callable)
         result.execution_time_s = time.perf_counter() - start_time
         return result
+    except MemoryError:
+        return EvaluationResult.failure(
+            f"MemoryError during candidate evaluation (exceeded {max_memory_mb}MB limit).",
+            insights={"tier": "sandbox_memory", "error_type": "MemoryError"},
+        )
     except Exception as e:
         return EvaluationResult.failure(
             f"Evaluation exception: {e}\n{traceback.format_exc()}",
             insights={"tier": "tier_1_2", "exception": str(e)[:300]},
         )
+
+
+def _sandbox_child_worker(
+    code: str,
+    evaluator_bytes: bytes,
+    function_name: str,
+    max_memory_mb: int,
+    result_queue: Any,
+) -> None:
+    """Isolated child process entrypoint executed under spawn context."""
+    _apply_memory_limit(max_memory_mb)
+
+    try:
+        evaluator_fn = pickle.loads(evaluator_bytes)
+    except Exception as e:
+        res = EvaluationResult.failure(
+            f"Failed to unpickle evaluator in child process: {e}",
+            insights={"tier": "sandbox_ipc", "error": str(e)},
+        )
+        result_queue.put(pickle.dumps(res))
+        return
+
+    res = _compile_and_invoke(code, evaluator_fn, function_name, max_memory_mb=max_memory_mb)
+    result_queue.put(pickle.dumps(res))
+
+
+def _execute_in_thread(
+    code: str,
+    evaluator_fn: Callable[[Any], EvaluationResult],
+    function_name: str,
+) -> EvaluationResult:
+    """Execute evaluation in-thread (used for unpicklable closures or thread mode)."""
+    return _compile_and_invoke(code, evaluator_fn, function_name)
 
 
 def _run_in_process_sandbox(
@@ -208,17 +196,8 @@ def _run_in_process_sandbox(
             proc.kill()
             proc.join(timeout=0.3)
 
-        return EvaluationResult(
-            status="TIMEOUT",
-            scores=AlphaEvolveEvaluationScores.from_dict({"score": -1e9}),
-            error_message=f"Evaluation exceeded {config.timeout_s}s timeout limit.",
-            execution_time_s=config.timeout_s,
-            insights=AlphaEvolveEvaluationInsights.from_dict(
-                {"tier": "sandbox_timeout", "timeout_s": str(config.timeout_s)}
-            ),
-        )
+        return _make_timeout_result(config.timeout_s)
 
-    # Process terminated. Verify exit code
     exitcode = proc.exitcode
     if exitcode is not None and exitcode != 0:
         sig_info = f"signal {-exitcode}" if exitcode < 0 else f"exitcode {exitcode}"
@@ -259,35 +238,9 @@ def _subprocess_runner_main() -> None:
         function_name: str = payload["function_name"]
         max_memory_mb: int = payload.get("max_memory_mb", 0)
 
-        # Apply memory limit on POSIX
-        if max_memory_mb > 0:
-            try:
-                import resource
-
-                bytes_limit = max_memory_mb * 1024 * 1024
-                resource.setrlimit(resource.RLIMIT_AS, (bytes_limit, bytes_limit))
-            except (ImportError, ValueError, OSError):
-                pass
-
-        start_time = time.perf_counter()
-
-        # Compile and execute
-        compiled_code = compile(code, "<candidate_program>", "exec")
-        module_scope: dict[str, Any] = {}
-        exec(compiled_code, module_scope)
-
-        if function_name not in module_scope:
-            res = EvaluationResult.failure(
-                f"Required function '{function_name}' was not defined in candidate code.",
-                insights={"tier": "tier_0", "missing_function": function_name},
-            )
-            sys.stdout.buffer.write(pickle.dumps(res))
-            return
-
-        candidate_callable = module_scope[function_name]
+        _apply_memory_limit(max_memory_mb)
         evaluator_fn = pickle.loads(evaluator_bytes)
-        result = evaluator_fn(candidate_callable)
-        result.execution_time_s = time.perf_counter() - start_time
+        result = _compile_and_invoke(code, evaluator_fn, function_name, max_memory_mb=max_memory_mb)
         sys.stdout.buffer.write(pickle.dumps(result))
     except MemoryError:
         res = EvaluationResult.failure(
@@ -332,9 +285,11 @@ def _run_in_subprocess_sandbox(
     ]
 
     env = os.environ.copy()
-    repo_root = str(Path.cwd().resolve())
-    pythonpath = env.get("PYTHONPATH", "")
-    env["PYTHONPATH"] = f"{repo_root}:{repo_root}/tests:{pythonpath}".rstrip(":")
+    existing_pythonpath = env.get("PYTHONPATH", "")
+    search_paths = [str(_SRC_DIR), str(_REPO_ROOT), str(_REPO_ROOT / "tests")]
+    if existing_pythonpath:
+        search_paths.append(existing_pythonpath)
+    env["PYTHONPATH"] = os.pathsep.join(search_paths)
 
     try:
         proc = subprocess.Popen(
@@ -352,15 +307,7 @@ def _run_in_subprocess_sandbox(
     except subprocess.TimeoutExpired:
         proc.kill()
         proc.communicate()
-        return EvaluationResult(
-            status="TIMEOUT",
-            scores=AlphaEvolveEvaluationScores.from_dict({"score": -1e9}),
-            error_message=f"Evaluation exceeded {config.timeout_s}s timeout limit.",
-            execution_time_s=config.timeout_s,
-            insights=AlphaEvolveEvaluationInsights.from_dict(
-                {"tier": "sandbox_timeout", "timeout_s": str(config.timeout_s)}
-            ),
-        )
+        return _make_timeout_result(config.timeout_s)
 
     if proc.returncode != 0:
         stderr_text = stderr_data.decode("utf-8", errors="replace")[:300]
@@ -409,62 +356,29 @@ class WorkerPool:
         function_name: str,
     ) -> EvaluationResult:
         """Run candidate evaluation in an isolated sandbox with strict wall-clock timeout."""
-        if self.sandbox_config.sandbox_mode == "thread":
+        mode = self.sandbox_config.sandbox_mode
+        if mode == "thread":
             future = self.executor.submit(
                 _execute_in_thread, candidate.code, evaluator_fn, function_name
             )
-            try:
-                return future.result(timeout=self.timeout_s)
-            except concurrent.futures.TimeoutError:
-                return EvaluationResult(
-                    status="TIMEOUT",
-                    scores=AlphaEvolveEvaluationScores.from_dict({"score": -1e9}),
-                    error_message=f"Evaluation exceeded {self.timeout_s}s timeout limit.",
-                    execution_time_s=self.timeout_s,
-                    insights=AlphaEvolveEvaluationInsights.from_dict(
-                        {"tier": "sandbox_timeout", "timeout_s": str(self.timeout_s)}
-                    ),
-                )
-            except Exception as e:
-                return EvaluationResult.failure(f"Worker execution crashed: {e}")
-
-        if self.sandbox_config.sandbox_mode == "subprocess":
+            wait_timeout = self.timeout_s
+            prefix = "Evaluation"
+        else:
+            runner = _run_in_subprocess_sandbox if mode == "subprocess" else _run_in_process_sandbox
             future = self.executor.submit(
-                _run_in_subprocess_sandbox,
+                runner,
                 candidate.code,
                 evaluator_fn,
                 function_name,
                 self.sandbox_config,
             )
-            try:
-                return future.result(timeout=self.timeout_s + 2.0)
-            except concurrent.futures.TimeoutError:
-                return EvaluationResult(
-                    status="TIMEOUT",
-                    scores=AlphaEvolveEvaluationScores.from_dict({"score": -1e9}),
-                    error_message=f"Worker supervisor exceeded {self.timeout_s}s timeout limit.",
-                    execution_time_s=self.timeout_s,
-                )
-            except Exception as e:
-                return EvaluationResult.failure(f"Worker execution crashed: {e}")
+            wait_timeout = self.timeout_s + 2.0
+            prefix = "Worker supervisor"
 
-        # Process sandbox execution (default)
-        future = self.executor.submit(
-            _run_in_process_sandbox,
-            candidate.code,
-            evaluator_fn,
-            function_name,
-            self.sandbox_config,
-        )
         try:
-            return future.result(timeout=self.timeout_s + 2.0)
+            return future.result(timeout=wait_timeout)
         except concurrent.futures.TimeoutError:
-            return EvaluationResult(
-                status="TIMEOUT",
-                scores=AlphaEvolveEvaluationScores.from_dict({"score": -1e9}),
-                error_message=f"Worker supervisor exceeded {self.timeout_s}s timeout limit.",
-                execution_time_s=self.timeout_s,
-            )
+            return _make_timeout_result(self.timeout_s, message_prefix=prefix)
         except Exception as e:
             return EvaluationResult.failure(f"Worker execution crashed: {e}")
 

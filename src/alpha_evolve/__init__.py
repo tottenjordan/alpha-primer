@@ -18,7 +18,12 @@ from .models import (
     ProgramCandidate,
     RunSettings,
 )
-from .utils import compute_code_complexity, export_artifact, extract_evolve_blocks
+from .utils import (
+    compile_candidate_callable,
+    compute_code_complexity,
+    export_artifact,
+    extract_evolve_blocks,
+)
 
 __version__ = "0.1.0"
 
@@ -37,6 +42,7 @@ __all__ = [
     "MockAlphaEvolveClient",
     "ProgramCandidate",
     "RunSettings",
+    "compile_candidate_callable",
     "compute_code_complexity",
     "export_artifact",
     "extract_evolve_blocks",

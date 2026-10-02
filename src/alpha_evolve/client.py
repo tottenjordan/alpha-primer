@@ -54,6 +54,16 @@ class AlphaEvolveClient:
         self._auth_lock = threading.Lock()
         self._http_client = httpx.Client(timeout=30.0)
 
+    def close(self) -> None:
+        """Close the underlying HTTP client connection pool."""
+        self._http_client.close()
+
+    def __enter__(self) -> AlphaEvolveClient:
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        self.close()
+
     def _get_access_token(self) -> str:
         """Retrieve valid OAuth2 access token via Application Default Credentials (ADC)."""
         with self._auth_lock:
@@ -236,25 +246,51 @@ class MockAlphaEvolveClient:
     ) -> None:
         self.evaluated_count += len(submissions)
 
+    def close(self) -> None:
+        """No-op close for interface parity with AlphaEvolveClient."""
+
+    def __enter__(self) -> MockAlphaEvolveClient:
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        self.close()
+
     def _mutate_seed_code(self, base_code: str, iteration: int) -> str:
-        """Apply simple realistic heuristic mutations (varying safety stock multipliers, lookbacks)."""
+        """Synthesize realistic candidate heuristic mutations for offline dry-run mode."""
         code = base_code
 
-        # Mutation 1: Adjust safety stock multiplier z
-        new_z = round(1.2 + (iteration % 8) * 0.15, 2)
-        code = re.sub(r"z\s*=\s*[0-9\.]+", f"z = {new_z}", code)
+        # 1. Inventory Replenishment parameter & promo-lookahead mutations
+        if "compute_replenishment_orders" in code or "lookback_days" in code:
+            new_z = round(1.2 + (iteration % 8) * 0.15, 2)
+            code = re.sub(r"z\s*=\s*[0-9\.]+", f"z = {new_z}", code)
 
-        # Mutation 2: Adjust demand lookback window
-        lookback = 7 + (iteration % 4) * 7
-        code = re.sub(r"lookback_days\s*=\s*\d+", f"lookback_days = {lookback}", code)
+            lookback = 7 + (iteration % 4) * 7
+            code = re.sub(r"lookback_days\s*=\s*\d+", f"lookback_days = {lookback}", code)
 
-        # Mutation 3: Insert promo responsiveness or spoilage discounting
-        if iteration >= 2 and "promo_schedule_lookahead" in code:
-            promo_boost = "        # Evolved promo awareness\n        promo_multiplier = 1.0 + 0.5 * np.max(promo_schedule[:, :3], axis=1)\n        target_inventory = target_inventory * promo_multiplier\n"
-            if "promo_multiplier" not in code and "order_up_to" in code:
-                code = code.replace(
-                    "orders = np.maximum(0, order_up_to - net_inventory)",
-                    f"{promo_boost}        orders = np.maximum(0, target_inventory - net_inventory)",
+            if (
+                iteration >= 2
+                and "promo_schedule_lookahead" in code
+                and "promo_multiplier" not in code
+            ):
+                promo_boost = (
+                    "    promo_schedule = state.get('promo_schedule_lookahead')\n"
+                    "    if promo_schedule is not None:\n"
+                    "        promo_multiplier = 1.0 + 0.35 * np.max(promo_schedule[:, :3], axis=1)\n"
+                    "        order_up_to = order_up_to * promo_multiplier\n"
                 )
+                code = code.replace(
+                    "    deficit = np.maximum(0.0, order_up_to - net_inventory)",
+                    f"{promo_boost}    deficit = np.maximum(0.0, order_up_to - net_inventory)",
+                )
+            return code
+
+        # 2. Fleet Routing & Dispatch urgency / distance trade-off mutations
+        if "assign_and_sequence_routes" in code:
+            urgency_weight = round(0.05 + (iteration % 6) * 0.08, 2)
+            code = code.replace(
+                "_euclidean_distance(depot_loc, customer_locs[idx])",
+                f"{urgency_weight} * _euclidean_distance(depot_loc, customer_locs[idx])",
+            )
+            return code
 
         return code

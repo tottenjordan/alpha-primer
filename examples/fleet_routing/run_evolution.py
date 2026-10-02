@@ -22,6 +22,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from alpha_evolve.dashboard.telemetry_broker import get_global_broker
 from alpha_evolve.experiment import AlphaEvolveExperiment
+from alpha_evolve.utils import compile_candidate_callable
 from examples.fleet_routing.src.evaluate import (
     VehicleRoutingEvaluator,
 )
@@ -83,15 +84,16 @@ def main() -> None:
 
     best_candidate = experiment.run(output_dir=args.output_dir)
 
-    # Compile the best candidate code to evaluate on locked holdout
-    scope: dict[str, object] = {}
-    exec(compile(best_candidate.code, "<best_candidate>", "exec"), scope)
-    best_policy_fn = scope["assign_and_sequence_routes"]
+    best_policy_fn = compile_candidate_callable(
+        best_candidate.code,
+        "assign_and_sequence_routes",
+        filename="<best_candidate>",
+    )
 
     # Evaluate on Locked Holdout (100 Customers / Dynamic Traffic)
     evaluate_on_locked_holdout(
         baseline_fn=assign_and_sequence_routes,
-        evolved_fn=best_policy_fn,  # type: ignore[arg-type]
+        evolved_fn=best_policy_fn,
     )
 
 

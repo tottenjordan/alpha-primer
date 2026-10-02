@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import abc
 import time
+from collections.abc import Callable
 from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
@@ -164,3 +165,47 @@ class BaseEvaluator(abc.ABC):
     def __call__(self, candidate_callable: Any) -> EvaluationResult:
         """Allow evaluator instances to be passed directly as callables."""
         return self.evaluate(candidate_callable)
+
+
+def resolve_evaluator(
+    evaluator: BaseEvaluator | Callable[[Any], EvaluationResult] | None = None,
+    evaluator_fn: Callable[[Any], EvaluationResult] | None = None,
+    target_function_name: str | None = None,
+    primary_metric: str | None = None,
+) -> tuple[
+    BaseEvaluator | Callable[[Any], EvaluationResult],
+    Callable[[Any], EvaluationResult],
+    str,
+    str,
+    bool,
+]:
+    """Normalize an evaluator or legacy callable into (evaluator, evaluator_fn, target_fn, metric, higher_is_better)."""
+    resolved = evaluator if evaluator is not None else evaluator_fn
+    if resolved is None:
+        raise ValueError("Either 'evaluator' or 'evaluator_fn' must be provided.")
+
+    if isinstance(resolved, BaseEvaluator):
+        return (
+            resolved,
+            resolved.evaluate,
+            target_function_name or resolved.target_function_name,
+            primary_metric or resolved.primary_metric,
+            resolved.higher_is_better,
+        )
+
+    return (
+        resolved,
+        resolved,
+        target_function_name or "compute",
+        primary_metric or "cost_reduction_pct",
+        bool(getattr(resolved, "higher_is_better", True)),
+    )
+
+
+__all__ = [
+    "BaseEvaluator",
+    "EvaluationTier",
+    "EvaluatorProtocol",
+    "TierResult",
+    "resolve_evaluator",
+]
