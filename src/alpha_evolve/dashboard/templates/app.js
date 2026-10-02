@@ -38,15 +38,19 @@
       let paretoFrontier = uc.pareto_frontier || [];
       let maxGen = Math.max(0, trajectories.length - 1);
 
-      // 3. Tab Switching
+      // 3. Tab Switching (with WAI-ARIA role="tab" sync)
       const tabBtns = document.querySelectorAll(".tab-btn");
       const tabPanes = document.querySelectorAll(".tab-pane");
 
       tabBtns.forEach(btn => {
         btn.addEventListener("click", () => {
-          tabBtns.forEach(b => b.classList.remove("active"));
+          tabBtns.forEach(b => {
+            b.classList.remove("active");
+            b.setAttribute("aria-selected", "false");
+          });
           tabPanes.forEach(p => p.classList.remove("active"));
           btn.classList.add("active");
+          btn.setAttribute("aria-selected", "true");
           const targetId = btn.getAttribute("data-tab");
           const target = document.getElementById(targetId);
           if (target) target.classList.add("active");
@@ -66,13 +70,50 @@
         });
       });
 
-      // 4. Render Archetype Table via Safe DOM
+      // 4. Render Archetype Table Header & Body via Safe DOM
       const tbody = document.getElementById("tbody-archetypes");
+      const theadRow = document.getElementById("thead-archetypes-row");
+      const tableTitleEl = document.getElementById("table-archetypes-title");
+
       function renderArchetypesTable() {
         if (!tbody) return;
         tbody.replaceChildren();
+
+        if (theadRow) {
+          theadRow.replaceChildren();
+          const cols = currentUseCaseId === "fleet_routing"
+            ? [
+                "Vehicle Archetype",
+                "Capacity",
+                "Avg Speed",
+                "Cost / km",
+                "Fixed Dispatch Cost",
+                "On-Time SLA",
+                "Fleet Status",
+                "Guardrail"
+              ]
+            : [
+                "SKU Category Archetype",
+                "Shelf Life",
+                "Lead Time",
+                "Baseline Spoilage",
+                "Champion Spoilage",
+                "Holding Cost",
+                "Spoilage Cost",
+                "Stockout Penalty"
+              ];
+          cols.forEach(colText => {
+            theadRow.appendChild(el("th", null, colText));
+          });
+        }
+
+        if (tableTitleEl) {
+          tableTitleEl.textContent = currentUseCaseId === "fleet_routing"
+            ? "Fleet Vehicle Archetype Dispatch & SLA Performance Breakdown"
+            : "SKU Archetype Cost & Spoilage Performance Breakdown";
+        }
+
         if (currentUseCaseId === "fleet_routing") {
-          // Fleet Routing vehicle archetypes
           const fleetRows = [
             { type: "Standard Delivery Van", cap: "120 boxes", speed: "45 km/h", costPerKm: "$1.85", fixedCost: "$120.00", slaRate: "97.2%" },
             { type: "Refrigerated Transit Van", cap: "90 boxes", speed: "40 km/h", costPerKm: "$2.40", fixedCost: "$160.00", slaRate: "98.5%" },
@@ -107,8 +148,127 @@
       }
       renderArchetypesTable();
 
-      // 4b. Use Case Switching Engine (Strict Safe DOM)
-      // Diff State variables
+      // 4b. Multi-Domain Controls & Benchmark Content Synchronization (Safe DOM)
+      function updateDomainControls() {
+        const isFleet = currentUseCaseId === "fleet_routing";
+        const skuLabel = document.getElementById("whatif-sku-label");
+        const skuSel = document.getElementById("whatif-sku");
+        if (skuLabel) {
+          skuLabel.textContent = isFleet ? "Fleet Route & SLA Archetype" : "SKU Category Archetype";
+        }
+        if (skuSel) {
+          skuSel.replaceChildren();
+          const options = isFleet
+            ? [
+                "Tight-Window Urban Stops (1-hr SLA)",
+                "Commercial Metro Deliveries (2-hr SLA)",
+                "Suburban Perimeter Bulk Routes (4-hr SLA)"
+              ]
+            : [
+                "Ultra-Perishables (Berries / Pre-cut Salads - 3 Days)",
+                "Chilled Dairy & Fresh Meats (7 Days)",
+                "Ambient Grocery & Packaged Goods (21 Days)"
+              ];
+          options.forEach((optText, idx) => {
+            const opt = el("option", null, optText);
+            opt.value = String(idx);
+            skuSel.appendChild(opt);
+          });
+        }
+
+        const l1 = document.getElementById("label-slide-1");
+        const l2 = document.getElementById("label-slide-2");
+        const l3 = document.getElementById("label-slide-3");
+        const l4 = document.getElementById("label-slide-4");
+        if (l1) l1.textContent = isFleet ? "Urban Traffic Congestion Delay" : "Supplier Lead Time Delay";
+        if (l2) l2.textContent = isFleet ? "Dynamic Order Surge" : "Promotional Demand Spike";
+        if (l3) l3.textContent = isFleet ? "SLA Tardiness Penalty Multiplier" : "Spoilage Cost Multiplier";
+        if (l4) l4.textContent = isFleet ? "Unserved / Overtime Multiplier" : "Stockout Penalty Multiplier";
+
+        const whatifCardTitle = document.getElementById("whatif-card-title");
+        if (whatifCardTitle) {
+          whatifCardTitle.textContent = isFleet
+            ? "Dual-Policy Stress Simulation: Greedy Nearest-Neighbor vs AlphaEvolve Regret-2"
+            : "Dual-Policy Stress Simulation: Baseline (s, S) vs AlphaEvolve Champion";
+        }
+        const baseTitle = document.getElementById("whatif-base-title");
+        const champTitle = document.getElementById("whatif-champ-title");
+        if (baseTitle) baseTitle.textContent = isFleet ? "1. Baseline Greedy Dispatch" : "1. Baseline Static (s, S)";
+        if (champTitle) champTitle.textContent = isFleet ? "2. AlphaEvolve Regret-2 + 2-Opt" : "2. AlphaEvolve Champion";
+
+        const bStat1 = document.getElementById("label-base-stat1");
+        const bStat2 = document.getElementById("label-base-stat2");
+        const bStat4 = document.getElementById("label-base-stat4");
+        const cStat1 = document.getElementById("label-champ-stat1");
+        const cStat2 = document.getElementById("label-champ-stat2");
+        const cStat4 = document.getElementById("label-champ-stat4");
+        if (bStat1) bStat1.textContent = isFleet ? "On-Time SLA:" : "Fill Rate:";
+        if (cStat1) cStat1.textContent = isFleet ? "On-Time SLA:" : "Fill Rate:";
+        if (bStat2) bStat2.textContent = isFleet ? "Late / Tardiness:" : "Daily Spoilage:";
+        if (cStat2) cStat2.textContent = isFleet ? "Late / Tardiness:" : "Daily Spoilage:";
+        if (bStat4) bStat4.textContent = isFleet ? "Active Fleet Load:" : "Order-Up-To Level:";
+        if (cStat4) cStat4.textContent = isFleet ? "Active Fleet Load:" : "Order-Up-To Level:";
+
+        // Benchmark & Math Tab updates via Safe DOM
+        const benchTitle = document.getElementById("benchmark-title");
+        const benchDesc = document.getElementById("benchmark-desc");
+        const benchFormula = document.getElementById("benchmark-formula");
+        const benchList = document.getElementById("benchmark-phases-list");
+
+        if (benchTitle) {
+          benchTitle.textContent = isFleet
+            ? "VRPTW Dispatch Objective & Dynamic Traffic Digital Twin"
+            : "Evaluation Objective & Digital Twin Architecture";
+        }
+        if (benchDesc) {
+          benchDesc.textContent = isFleet
+            ? "The dynamic Vehicle Routing Problem with Time Windows (VRPTW) digital twin simulates 50 customer delivery stops across urban, metro, and suburban zones under time-varying rush-hour congestion."
+            : "The multi-echelon replenishment digital twin models stochastic customer demand across 50 heterogeneous SKU nodes over a 90-day causal horizon. The evaluation strictly enforces causal isolation: policy functions only have access to history t <= now.";
+        }
+        if (benchFormula) {
+          benchFormula.replaceChildren();
+          benchFormula.appendChild(el("b", null, "Objective Function:"));
+          benchFormula.appendChild(el("br"));
+          benchFormula.appendChild(
+            document.createTextNode(
+              isFleet
+                ? "Score = Cost_Reduction_% - 60.0 × max(0, 0.95 - OnTime_SLA)^2"
+                : "Score = Cost_Reduction_% - 50.0 × max(0, 0.95 - Fill_Rate)^2"
+            )
+          );
+          benchFormula.appendChild(el("br"));
+          benchFormula.appendChild(el("br"));
+          benchFormula.appendChild(
+            document.createTextNode(
+              isFleet
+                ? "Total_Cost = C_distance + C_tardiness + C_overtime + C_dispatch"
+                : "Total_Cost = C_holding + C_spoilage + C_stockout + C_ordering"
+            )
+          );
+        }
+        if (benchList) {
+          benchList.replaceChildren();
+          const phases = isFleet
+            ? [
+                ["Morning Rush (06:00..09:30):", "Peak highway congestion factor (1.35x); champion clusters tight-window depot stops first."],
+                ["Midday Window (09:30..15:30):", "Regret-2 dynamic stop insertion serves commercial and suburban bulk routes at peak velocity."],
+                ["Evening Wave (15:30..18:00):", "2-opt trajectory uncrossing eliminates route crisscrossing before shift overtime cutoff."]
+              ]
+            : [
+                ["Days 0..29 (Warmup):", "Digital twin initializes FIFO age cohorts and in-transit pipelines under fixed seed demand."],
+                ["Days 30..65 (Validation Window):", "AlphaEvolve scores candidate policies over 35 active business days."],
+                ["Days 66..89 (Holdout Window):", "Out-of-sample stress test with promotional demand surges and lead-time shocks."]
+              ];
+          phases.forEach(pair => {
+            const li = el("li");
+            li.appendChild(el("b", null, pair[0] + " "));
+            li.appendChild(document.createTextNode(pair[1]));
+            benchList.appendChild(li);
+          });
+        }
+      }
+
+      // 4c. Use Case Switching Engine (Strict Safe DOM)
       let diffViewMode = "split"; // "split" or "unified"
       let diffFoldUnchanged = true;
       let leftMilestoneKey = "0";
@@ -175,7 +335,6 @@
         currentUseCaseId = useCaseId;
         uc = masterData.use_cases[currentUseCaseId];
 
-        // Update active button state
         document.querySelectorAll(".use-case-btn").forEach(btn => {
           if (btn.getAttribute("data-use-case") === useCaseId) {
             btn.classList.add("active");
@@ -184,7 +343,6 @@
           }
         });
 
-        // Rebind data structures
         trajectories = uc.trajectory_generations || [];
         archetypes = uc.sku_archetypes || [];
         baselineSum = uc.baseline_summary || {};
@@ -195,7 +353,6 @@
         paretoFrontier = uc.pareto_frontier || [];
         maxGen = Math.max(0, trajectories.length - 1);
 
-        // Header metadata
         const titleEl = document.getElementById("active-use-case-title");
         if (titleEl) {
           titleEl.textContent = uc.title || (useCaseId === "fleet_routing"
@@ -207,12 +364,12 @@
           horizonEl.textContent = useCaseId === "fleet_routing" ? "12 Hours (Traffic)" : "90 Days (Causal)";
         }
 
-        // Re-render components
         renderArchetypesTable();
+        updateDomainControls();
         renderMilestoneRibbon();
         updateDiffStepperOptions();
+        updateWhatIfSimulation();
 
-        // Update scrubber & display
         if (scrubber) {
           scrubber.max = maxGen;
           scrubber.value = maxGen;
@@ -221,7 +378,6 @@
         updateDisplay(currentGen);
       }
 
-      // Wire up use case switcher buttons
       document.querySelectorAll(".use-case-btn").forEach(btn => {
         btn.addEventListener("click", () => {
           pauseReplay();
@@ -232,7 +388,7 @@
         });
       });
 
-      // 5. Interactive Milestone Ribbon
+      // 5. Interactive Milestone Ribbon (Zero inline styles)
       const ribbonContainer = document.getElementById("milestone-ribbon-nodes");
       function renderMilestoneRibbon() {
         if (!ribbonContainer) return;
@@ -250,26 +406,20 @@
           const reducSpan = el("span", "badge-diff " + (item.cost_reduc > 0 ? "positive" : "neutral"), (item.cost_reduc > 0 ? "-" : "") + item.cost_reduc.toFixed(1) + "%");
           node.appendChild(reducSpan);
 
-          // Tooltip (Safe DOM)
+          // Tooltip (Safe DOM with CSS classes)
           const tip = el("div", "ribbon-tooltip");
-          const tipHeader = el("div", null);
-          tipHeader.style.fontWeight = "700";
-          tipHeader.style.color = "var(--accent-cyan)";
-          tipHeader.style.marginBottom = "4px";
-          tipHeader.textContent = item.title;
+          const tipHeader = el("div", "ribbon-tip-title", item.title);
           tip.appendChild(tipHeader);
 
-          const tipStats = el("div", null);
-          tipStats.style.fontSize = "11px";
-          tipStats.style.marginBottom = "4px";
-          tipStats.style.color = "var(--text-secondary)";
-          tipStats.textContent = "Cost Reduc: " + item.cost_reduc.toFixed(1) + "% | Fill Rate: " + item.fill_rate.toFixed(1) + "%";
+          const slaLabel = currentUseCaseId === "fleet_routing" ? "On-Time: " : "Fill Rate: ";
+          const tipStats = el(
+            "div",
+            "ribbon-tip-stats",
+            "Cost Reduc: " + item.cost_reduc.toFixed(1) + "% | " + slaLabel + item.fill_rate.toFixed(1) + "%"
+          );
           tip.appendChild(tipStats);
 
-          const tipInn = el("div", null);
-          tipInn.style.fontSize = "10.5px";
-          tipInn.style.color = "var(--text-muted)";
-          tipInn.textContent = item.innovation;
+          const tipInn = el("div", "ribbon-tip-inn", item.innovation);
           tip.appendChild(tipInn);
 
           node.appendChild(tip);
@@ -306,15 +456,21 @@
         });
       }
 
-      // 6. State & Replay Scrubber
+      // 6. State, Replay Scrubber, Speed Toggle & Keyboard Navigation
       let currentGen = maxGen;
       let isPlaying = false;
       let playInterval = null;
+      let playSpeedMultiplier = 1; // 1x (400ms) or 2x (180ms)
       let canvas2Mode = "pareto"; // "pareto" or "waterfall"
 
       const scrubber = document.getElementById("scrubber");
       const scrubberLabel = document.getElementById("scrubber-label");
       const playBtn = document.getElementById("btn-play");
+      const speedBtn = document.getElementById("btn-speed-toggle");
+
+      function getIntervalMs() {
+        return playSpeedMultiplier === 2 ? 180 : 400;
+      }
 
       function pauseReplay() {
         if (isPlaying) {
@@ -323,6 +479,18 @@
           if (playInterval) clearInterval(playInterval);
           playInterval = null;
         }
+      }
+
+      function startReplayTimer() {
+        if (playInterval) clearInterval(playInterval);
+        playInterval = setInterval(() => {
+          currentGen++;
+          if (currentGen > maxGen) {
+            currentGen = maxGen;
+            pauseReplay();
+          }
+          updateDisplay(currentGen);
+        }, getIntervalMs());
       }
 
       function updateDisplay(genIdx) {
@@ -334,8 +502,17 @@
         if (!frame) return;
 
         const m = frame.metrics;
+        const fitVal = m.score !== undefined ? m.score : (m.fitness_score || 0);
+        const fitBadgeEl = document.getElementById("kpi-fitness-badge");
+        if (fitBadgeEl) {
+          fitBadgeEl.textContent = (fitVal >= 0 ? "+" : "") + fitVal.toFixed(2) + " pts";
+        }
+        const latencyEl = document.getElementById("kpi-latency-val");
+        if (latencyEl) {
+          latencyEl.textContent = currentUseCaseId === "fleet_routing" ? "64 ms" : "79 ms";
+        }
+
         if (currentUseCaseId === "fleet_routing") {
-          // Fleet Routing KPIs: Cost, Distance, On-Time %, Score
           const kpi1Label = document.getElementById("kpi-label-1");
           if (kpi1Label) kpi1Label.textContent = "Total Fleet Cost";
           const totalCostEl = document.getElementById("kpi-total-cost");
@@ -343,7 +520,7 @@
           const costReducEl = document.getElementById("kpi-cost-reduc");
           if (costReducEl) costReducEl.textContent = (m.cost_reduction_pct > 0 ? "-" : "") + m.cost_reduction_pct.toFixed(1) + "%";
           const baselineCompEl = document.getElementById("kpi-baseline-comp");
-          if (baselineCompEl) baselineCompEl.textContent = "vs. $" + Math.round(baselineSum.total_cost || 14250).toLocaleString() + " baseline";
+          if (baselineCompEl) baselineCompEl.textContent = "vs. $" + Math.round(baselineSum.total_cost || 4099).toLocaleString() + " baseline";
 
           const kpi2Label = document.getElementById("kpi-label-2");
           if (kpi2Label) kpi2Label.textContent = "Fleet Distance Traveled";
@@ -357,7 +534,7 @@
           const kpi3Label = document.getElementById("kpi-label-3");
           if (kpi3Label) kpi3Label.textContent = "On-Time Delivery Rate";
           const fillRateEl = document.getElementById("kpi-fill-rate");
-          if (fillRateEl) fillRateEl.textContent = (m.on_time_delivery_pct || 0).toFixed(1) + "%";
+          if (fillRateEl) fillRateEl.textContent = (m.on_time_delivery_pct || m.fill_rate_pct || 0).toFixed(1) + "%";
           const badge3El = document.getElementById("kpi-badge-3");
           if (badge3El) badge3El.textContent = "Target: ≥95.0%";
           const subComp3El = document.getElementById("kpi-sub-comp-3");
@@ -366,9 +543,8 @@
           const kpi4Label = document.getElementById("kpi-label-4");
           if (kpi4Label) kpi4Label.textContent = "VRPTW Optimization Score";
           const fitScoreEl = document.getElementById("kpi-fitness-score");
-          if (fitScoreEl) fitScoreEl.textContent = (m.score !== undefined ? m.score : m.cost_reduction_pct).toFixed(2);
+          if (fitScoreEl) fitScoreEl.textContent = fitVal.toFixed(2);
         } else {
-          // Inventory Replenishment KPIs
           const kpi1Label = document.getElementById("kpi-label-1");
           if (kpi1Label) kpi1Label.textContent = "Total Supply Chain Cost";
           const totalCostEl = document.getElementById("kpi-total-cost");
@@ -437,19 +613,43 @@
           if (isPlaying) {
             playBtn.textContent = "⏸ Pause Replay";
             if (currentGen >= maxGen) currentGen = 0;
-            playInterval = setInterval(() => {
-              currentGen++;
-              if (currentGen > maxGen) {
-                currentGen = maxGen;
-                pauseReplay();
-              }
-              updateDisplay(currentGen);
-            }, 400);
+            startReplayTimer();
           } else {
             pauseReplay();
           }
         });
       }
+
+      if (speedBtn) {
+        speedBtn.addEventListener("click", () => {
+          playSpeedMultiplier = playSpeedMultiplier === 1 ? 2 : 1;
+          speedBtn.textContent = playSpeedMultiplier + "x";
+          if (isPlaying) {
+            startReplayTimer();
+          }
+        });
+      }
+
+      // Keyboard navigation (Space to toggle play/pause, Left/Right arrows to scrub)
+      window.addEventListener("keydown", (e) => {
+        const activeTag = document.activeElement ? document.activeElement.tagName : "";
+        if (activeTag === "INPUT" || activeTag === "SELECT" || activeTag === "TEXTAREA") return;
+        const replayPane = document.getElementById("tab-replay");
+        if (!replayPane || !replayPane.classList.contains("active")) return;
+
+        if (e.code === "Space") {
+          e.preventDefault();
+          if (playBtn) playBtn.click();
+        } else if (e.code === "ArrowLeft") {
+          e.preventDefault();
+          pauseReplay();
+          updateDisplay(currentGen - 1);
+        } else if (e.code === "ArrowRight") {
+          e.preventDefault();
+          pauseReplay();
+          updateDisplay(currentGen + 1);
+        }
+      });
 
       // Canvas 2 Mode Switching
       const btnModePareto = document.getElementById("btn-mode-pareto");
@@ -474,16 +674,18 @@
         });
       }
 
-      function drawCanvas2Chart() {
+      function drawCanvas2Chart(hoverIdx) {
         if (canvas2Mode === "pareto") {
-          drawParetoChart();
+          drawParetoChart(hoverIdx);
         } else {
-          drawWaterfallChart();
+          drawWaterfallChart(hoverIdx);
         }
       }
 
-      // 7. Retina Canvas 2D Trajectory Chart
-      function drawTrajectoryChart(genIdx) {
+      // 7. Retina Canvas 2D Trajectory Chart (Multi-Domain Scaled + Interactive Crosshair)
+      let hoveredDayIdx = null;
+
+      function drawTrajectoryChart(genIdx, hoverDay) {
         const canvas = document.getElementById("canvas-trajectory");
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
@@ -504,16 +706,27 @@
         const frame = trajectories[genIdx];
         if (!frame || !frame.daily_series) return;
         const series = frame.daily_series;
+        const isFleet = currentUseCaseId === "fleet_routing";
+
+        const c1Title = document.getElementById("canvas1-title");
+        const c1Sub = document.getElementById("canvas1-subtitle");
+        if (c1Title) {
+          c1Title.textContent = isFleet
+            ? "90-Step Fleet Active Route Load, In-Transit Stops & Late Events"
+            : "90-Day Digital Twin Inventory Trajectory & Spoilage Stack";
+        }
+        if (c1Sub) {
+          c1Sub.textContent = isFleet
+            ? "Steps 0..29 Morning Rush | 30..65 Midday | 66..89 Evening Wave"
+            : "Days 0..29 Warmup | 30..65 Eval | 66..89 Holdout";
+        }
 
         // Visual phase shading
         const dayW = (w - padL - padR) / 90;
-        // Warmup (0..29)
         ctx.fillStyle = "rgba(148, 163, 184, 0.05)";
         ctx.fillRect(padL, padT, dayW * 30, h - padT - padB);
-        // Validation (30..65)
         ctx.fillStyle = "rgba(6, 182, 212, 0.06)";
         ctx.fillRect(padL + dayW * 30, padT, dayW * 36, h - padT - padB);
-        // Holdout (66..89)
         ctx.fillStyle = "rgba(245, 158, 11, 0.06)";
         ctx.fillRect(padL + dayW * 66, padT, dayW * 24, h - padT - padB);
 
@@ -528,11 +741,18 @@
           ctx.stroke();
         }
 
-        const maxOnHand = 12000;
-        function mapX(day) { return padL + (day / 89) * (w - padL - padR); }
-        function mapY(val) { return (h - padB) - (val / maxOnHand) * (h - padT - padB); }
+        // Dynamic Y-axis scaling for multi-domain telemetry
+        let peakVal = 0;
+        series.forEach(pt => {
+          peakVal = Math.max(peakVal, pt.on_hand || 0, (pt.in_transit || 0) * 2.5);
+        });
+        const maxOnHand = isFleet ? Math.max(150, Math.ceil(peakVal * 1.15 / 10) * 10) : 12000;
+        const maxSpoilBar = isFleet ? 10 : 400;
 
-        // On-hand curve
+        function mapX(day) { return padL + (day / 89) * (w - padL - padR); }
+        function mapY(val) { return (h - padB) - (Math.min(maxOnHand, val) / maxOnHand) * (h - padT - padB); }
+
+        // On-hand / Active Load curve
         ctx.strokeStyle = "#06B6D4";
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -556,29 +776,92 @@
         });
         ctx.stroke();
 
-        // Spoilage bar indicators
+        // Spoilage / Late-Stop bar indicators
         ctx.fillStyle = "rgba(244, 63, 94, 0.8)";
         series.forEach(pt => {
           if (pt.spoilage_units > 0) {
             const x = mapX(pt.day);
-            const barH = (pt.spoilage_units / 400) * 40;
+            const barH = Math.min(48, (pt.spoilage_units / maxSpoilBar) * 40);
             ctx.fillRect(x - 1, h - padB - barH, 2, barH);
           }
         });
+
+        // Hover crosshair & inspection dot
+        const activeHover = hoverDay !== undefined ? hoverDay : hoveredDayIdx;
+        if (activeHover !== null && activeHover >= 0 && activeHover < series.length) {
+          const hPt = series[activeHover];
+          const hx = mapX(hPt.day);
+          const hy = mapY(hPt.on_hand);
+
+          ctx.strokeStyle = "rgba(6, 182, 212, 0.45)";
+          ctx.lineWidth = 1;
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath();
+          ctx.moveTo(hx, padT);
+          ctx.lineTo(hx, h - padB);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          ctx.fillStyle = "#06B6D4";
+          ctx.beginPath();
+          ctx.arc(hx, hy, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
 
         // Axes labels
         ctx.fillStyle = "#94A3B8";
         ctx.font = "10px JetBrains Mono, monospace";
         ctx.fillText("0", padL - 14, h - padB + 3);
-        ctx.fillText("12k", padL - 26, padT + 10);
-        ctx.fillText("Day 0", padL, h - 10);
-        ctx.fillText("Day 30", padL + dayW * 30 - 15, h - 10);
-        ctx.fillText("Day 65", padL + dayW * 66 - 15, h - 10);
-        ctx.fillText("Day 89", w - padR - 35, h - 10);
+        ctx.fillText(isFleet ? String(maxOnHand) : "12k", padL - 30, padT + 10);
+        ctx.fillText(isFleet ? "Step 0" : "Day 0", padL, h - 10);
+        ctx.fillText(isFleet ? "Step 30" : "Day 30", padL + dayW * 30 - 15, h - 10);
+        ctx.fillText(isFleet ? "Step 65" : "Day 65", padL + dayW * 66 - 15, h - 10);
+        ctx.fillText(isFleet ? "Step 89" : "Day 89", w - padR - 38, h - 10);
       }
 
-      // 8. Retina Canvas 2D: Mode A 2D Pareto Frontier Evolution
-      function drawParetoChart() {
+      // Wire interactive hover on #canvas-trajectory
+      const canvasTrajEl = document.getElementById("canvas-trajectory");
+      const tooltipTrajEl = document.getElementById("tooltip-trajectory");
+      if (canvasTrajEl && tooltipTrajEl) {
+        canvasTrajEl.addEventListener("mousemove", (e) => {
+          const rect = canvasTrajEl.getBoundingClientRect();
+          const padL = 46, padR = 18;
+          const relX = e.clientX - rect.left;
+          const ratio = (relX - padL) / Math.max(1, rect.width - padL - padR);
+          const dayIdx = Math.max(0, Math.min(89, Math.round(ratio * 89)));
+          hoveredDayIdx = dayIdx;
+          drawTrajectoryChart(currentGen, dayIdx);
+
+          const frame = trajectories[currentGen];
+          const pt = frame && frame.daily_series ? frame.daily_series[dayIdx] : null;
+          if (pt) {
+            const isFleet = currentUseCaseId === "fleet_routing";
+            tooltipTrajEl.replaceChildren();
+            tooltipTrajEl.appendChild(
+              el(
+                "span",
+                null,
+                (isFleet ? "Step " : "Day ") + pt.day +
+                " | " + (isFleet ? "Load: " : "On-Hand: ") + Math.round(pt.on_hand).toLocaleString() +
+                " | " + (isFleet ? "Transit: " : "In-Transit: ") + Math.round(pt.in_transit).toLocaleString() +
+                " | " + (isFleet ? "Late: " : "Spoil: ") + pt.spoilage_units
+              )
+            );
+            tooltipTrajEl.classList.add("visible");
+          }
+        });
+
+        canvasTrajEl.addEventListener("mouseleave", () => {
+          hoveredDayIdx = null;
+          tooltipTrajEl.classList.remove("visible");
+          drawTrajectoryChart(currentGen, null);
+        });
+      }
+
+      // 8. Retina Canvas 2D: Mode A 2D Pareto Frontier Evolution (Multi-Domain Scaled)
+      let hoveredParetoGen = null;
+
+      function drawParetoChart(hoverGen) {
         const canvas = document.getElementById("canvas-convergence");
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
@@ -596,12 +879,26 @@
 
         ctx.clearRect(0, 0, w, h);
 
-        // Ranges: X = Cost Reduction % (0% to 36%), Y = Fill Rate % (90.8% to 94.0%)
-        const minX = 0, maxX = 36;
-        const minY = 90.8, maxY = 94.0;
+        const isFleet = currentUseCaseId === "fleet_routing";
+        // Dynamic bounds: Fleet Routing spans 60%..97.2% SLA, Inventory spans 90.8%..94.0%
+        let minX = 0, maxX = 36;
+        let minY = 90.8, maxY = 94.0;
+        let minSpoil = 8.45, maxSpoil = 14.6;
 
-        function mapX(val) { return padL + ((val - minX) / (maxX - minX)) * (w - padL - padR); }
-        function mapY(val) { return (h - padB) - ((val - minY) / (maxY - minY)) * (h - padT - padB); }
+        if (isFleet && trajectories.length > 0) {
+          const xVals = trajectories.map(t => t.metrics.cost_reduction_pct || 0);
+          const yVals = trajectories.map(t => t.metrics.fill_rate_pct || 0);
+          const sVals = trajectories.map(t => t.metrics.spoilage_rate_pct || 0);
+          minX = 0;
+          maxX = Math.max(30, Math.ceil(Math.max(...xVals) + 2));
+          minY = Math.max(0, Math.floor(Math.min(...yVals) - 2));
+          maxY = Math.min(100, Math.ceil(Math.max(...yVals) + 1));
+          minSpoil = Math.min(...sVals);
+          maxSpoil = Math.max(minSpoil + 1, Math.max(...sVals));
+        }
+
+        function mapX(val) { return padL + ((val - minX) / Math.max(1e-6, maxX - minX)) * (w - padL - padR); }
+        function mapY(val) { return (h - padB) - ((val - minY) / Math.max(1e-6, maxY - minY)) * (h - padT - padB); }
 
         // Grid lines
         ctx.strokeStyle = "rgba(148, 163, 184, 0.08)";
@@ -663,32 +960,47 @@
           ctx.setLineDash([]);
         }
 
-        // Plot 31-Generation Bubbles with Spoilage Gradient (active vs ghosted)
+        const keySet = new Set(Object.keys(milestones).map(k => parseInt(k, 10)));
+
+        // Plot 31-Generation Bubbles with Spoilage / Penalty Gradient
         trajectories.forEach((t, gen) => {
           const m = t.metrics;
           const px = mapX(m.cost_reduction_pct);
           const py = mapY(m.fill_rate_pct);
           const isPassed = gen <= currentGen;
 
-          const spoilNorm = Math.max(0, Math.min(1, (m.spoilage_rate_pct - 8.45) / (14.6 - 8.45)));
+          const spoilNorm = Math.max(0, Math.min(1, (m.spoilage_rate_pct - minSpoil) / Math.max(1e-6, maxSpoil - minSpoil)));
           const r = Math.round(16 + spoilNorm * (244 - 16));
           const g = Math.round(185 - spoilNorm * (185 - 63));
           const b = Math.round(129 - spoilNorm * (129 - 94));
           const alpha = isPassed ? 0.85 : 0.2;
 
-          const radius = gen === currentGen ? 7 : (gen === 0 || gen === 30 || gen === 8 || gen === 17 ? 5.5 : 4);
+          const radius = gen === currentGen ? 7 : (keySet.has(gen) ? 5.5 : 4);
 
           ctx.fillStyle = "rgba(" + r + "," + g + "," + b + "," + alpha + ")";
           ctx.beginPath();
           ctx.arc(px, py, radius, 0, Math.PI * 2);
           ctx.fill();
 
-          if (isPassed && (gen === 0 || gen === 8 || gen === 17 || gen === 30)) {
+          if (isPassed && keySet.has(gen)) {
             ctx.fillStyle = "#CBD5E1";
             ctx.font = "9px JetBrains Mono, monospace";
             ctx.fillText("G" + gen, px + 6, py - 4);
           }
         });
+
+        // Hover ring if inspecting a specific generation bubble
+        const targetGen = hoverGen !== undefined && hoverGen !== null ? hoverGen : hoveredParetoGen;
+        if (targetGen !== null && trajectories[targetGen]) {
+          const hm = trajectories[targetGen].metrics;
+          const hx = mapX(hm.cost_reduction_pct);
+          const hy = mapY(hm.fill_rate_pct);
+          ctx.strokeStyle = "#F59E0B";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(hx, hy, 9, 0, Math.PI * 2);
+          ctx.stroke();
+        }
 
         // Active Playhead Ring
         const currFrame = trajectories[currentGen];
@@ -711,24 +1023,23 @@
         // Axes and Labels
         ctx.fillStyle = "#94A3B8";
         ctx.font = "10px JetBrains Mono, monospace";
-        ctx.fillText("90.8%", padL - 38, h - padB + 3);
-        ctx.fillText("94.0%", padL - 38, padT + 8);
+        ctx.fillText(minY.toFixed(1) + "%", padL - 38, h - padB + 3);
+        ctx.fillText(maxY.toFixed(1) + "%", padL - 38, padT + 8);
         ctx.fillText("0%", padL, h - padB + 16);
-        ctx.fillText("+36%", w - padR - 26, h - padB + 16);
+        ctx.fillText("+" + maxX + "%", w - padR - 26, h - padB + 16);
 
         ctx.fillStyle = "#CBD5E1";
         ctx.font = "10px Plus Jakarta Sans, sans-serif";
         ctx.fillText("Cost Reduction % →", padL + (w - padL - padR) / 2 - 45, h - 8);
 
-        // Legend repositioned to top-left to avoid occluding Gen 30 Champion
         ctx.fillStyle = "#10B981";
         ctx.fillText("● Active Pareto Envelope", padL + 10, padT + 12);
         ctx.fillStyle = "#F43F5E";
-        ctx.fillText("■ Spoilage Gradient", padL + 10, padT + 26);
+        ctx.fillText(isFleet ? "■ Late Penalty Gradient" : "■ Spoilage Gradient", padL + 10, padT + 26);
       }
 
       // 9. Retina Canvas 2D: Mode B 31-Generation Stacked Cost Component Waterfall
-      function drawWaterfallChart() {
+      function drawWaterfallChart(hoverColIdx) {
         const canvas = document.getElementById("canvas-convergence");
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
@@ -742,11 +1053,18 @@
 
         const w = rect.width;
         const h = rect.height;
-        const padL = 40, padR = 20, padT = 24, padB = 32;
+        const padL = 42, padR = 20, padT = 24, padB = 32;
 
         ctx.clearRect(0, 0, w, h);
 
-        const maxCost = 72000;
+        // Dynamic Columns from telemetry data
+        const baseTot = (costWaterfall && costWaterfall.baseline_total) || 68410;
+        const champTot = (costWaterfall && costWaterfall.champion_total) || 45238;
+        const isFleet = currentUseCaseId === "fleet_routing";
+        const maxCost = isFleet
+          ? Math.ceil((Math.max(baseTot, champTot) * 1.15) / 500) * 500
+          : 72000;
+
         function mapY(val) { return (h - padB) - (val / maxCost) * (h - padT - padB); }
 
         // Grid
@@ -760,30 +1078,41 @@
           ctx.stroke();
         }
 
-        // Dynamic Columns from telemetry data
-        const baseTot = (costWaterfall && costWaterfall.baseline_total) || 68410;
-        const champTot = (costWaterfall && costWaterfall.champion_total) || 45238;
         const components = (costWaterfall && costWaterfall.components) || [
           { category: "Spoilage Waste", key: "spoilage", savings: 11945, savings_label: "-$11.9k", color: "#F43F5E" },
           { category: "Stockout Penalty", key: "stockout", savings: 9627, savings_label: "-$9.6k", color: "#F59E0B" },
           { category: "Holding Cost", key: "holding", savings: 1205, savings_label: "-$1.2k", color: "#38BDF8" },
-          { category: "Ordering Cost", key: "ordering", savings: 395, savings_label: "-$395", color: "#A855F7" }
+          { category: "Ordering Cost", key: "ordering", savings: 395, savings_label: "-$395", color: "#14B8A6" }
         ];
+
+        const fmtTotal = (v) => v >= 10000 ? "$" + (v / 1000).toFixed(1) + "k" : "$" + Math.round(v).toLocaleString();
 
         const cols = [
-          { label: "Baseline", val: baseTot, isTotal: true, color: "#64748B", text: "$" + (baseTot / 1000).toFixed(1) + "k" }
+          { label: "Baseline", val: baseTot, isTotal: true, color: "#64748B", text: fmtTotal(baseTot) }
         ];
 
+        const fleetKeyLabels = {
+          holding: "Distance",
+          spoilage: "Tardiness",
+          stockout: "Overtime",
+          ordering: "Dispatch"
+        };
+
         components.forEach(c => {
+          const colColor = c.color === "#A855F7" ? "#14B8A6" : c.color;
+          const shortLabel = isFleet
+            ? (fleetKeyLabels[c.key] || (c.key.charAt(0).toUpperCase() + c.key.slice(1)))
+            : (c.key.charAt(0).toUpperCase() + c.key.slice(1));
           cols.push({
-            label: c.key.charAt(0).toUpperCase() + c.key.slice(1),
+            label: shortLabel,
+            category: c.category,
             delta: -Math.abs(c.savings),
-            color: c.color,
+            color: colColor,
             text: c.savings_label || ("-$" + Math.round(c.savings))
           });
         });
 
-        cols.push({ label: "Champion", val: champTot, isTotal: true, color: "#10B981", text: "$" + (champTot / 1000).toFixed(1) + "k" });
+        cols.push({ label: "Champion", val: champTot, isTotal: true, color: "#10B981", text: fmtTotal(champTot) });
 
         const colW = (w - padL - padR) / cols.length;
         const barW = Math.min(38, colW - 12);
@@ -792,6 +1121,11 @@
 
         cols.forEach((col, idx) => {
           const x = padL + idx * colW + (colW - barW) / 2;
+
+          if (hoverColIdx === idx) {
+            ctx.fillStyle = "rgba(6, 182, 212, 0.08)";
+            ctx.fillRect(padL + idx * colW, padT, colW, h - padT - padB);
+          }
 
           if (col.isTotal) {
             const topY = mapY(col.val);
@@ -812,7 +1146,6 @@
             ctx.fillStyle = col.color;
             ctx.fillRect(x, prevY, barW, barH);
 
-            // Connector dashed line from previous
             ctx.strokeStyle = "rgba(148, 163, 184, 0.3)";
             ctx.setLineDash([2, 2]);
             ctx.beginPath();
@@ -840,10 +1173,92 @@
         ctx.fillStyle = "#94A3B8";
         ctx.font = "10px JetBrains Mono, monospace";
         ctx.fillText("$0", padL - 24, h - padB + 3);
-        ctx.fillText("$70k", padL - 34, padT + 8);
+        ctx.fillText(isFleet ? "$" + (maxCost / 1000).toFixed(1) + "k" : "$70k", padL - 38, padT + 8);
       }
 
-      // 10. Dual-Policy What-If Simulation Sandbox
+      // Wire interactive hover on #canvas-convergence
+      const canvasConvEl = document.getElementById("canvas-convergence");
+      const tooltipConvEl = document.getElementById("tooltip-convergence");
+      if (canvasConvEl && tooltipConvEl) {
+        canvasConvEl.addEventListener("mousemove", (e) => {
+          const rect = canvasConvEl.getBoundingClientRect();
+          const relX = e.clientX - rect.left;
+          const relY = e.clientY - rect.top;
+
+          if (canvas2Mode === "pareto") {
+            const padL = 44, padR = 24, padT = 24, padB = 34;
+            const isFleet = currentUseCaseId === "fleet_routing";
+            let minX = 0, maxX = 36, minY = 90.8, maxY = 94.0;
+            if (isFleet && trajectories.length > 0) {
+              const xVals = trajectories.map(t => t.metrics.cost_reduction_pct || 0);
+              const yVals = trajectories.map(t => t.metrics.fill_rate_pct || 0);
+              maxX = Math.max(30, Math.ceil(Math.max(...xVals) + 2));
+              minY = Math.max(0, Math.floor(Math.min(...yVals) - 2));
+              maxY = Math.min(100, Math.ceil(Math.max(...yVals) + 1));
+            }
+            let bestGen = null;
+            let bestDist = 400;
+            trajectories.forEach((t, g) => {
+              const px = padL + ((t.metrics.cost_reduction_pct - minX) / Math.max(1e-6, maxX - minX)) * (rect.width - padL - padR);
+              const py = (rect.height - padB) - ((t.metrics.fill_rate_pct - minY) / Math.max(1e-6, maxY - minY)) * (rect.height - padT - padB);
+              const d2 = (relX - px) * (relX - px) + (relY - py) * (relY - py);
+              if (d2 < bestDist) {
+                bestDist = d2;
+                bestGen = g;
+              }
+            });
+            hoveredParetoGen = bestGen;
+            drawParetoChart(bestGen);
+            if (bestGen !== null && trajectories[bestGen]) {
+              const m = trajectories[bestGen].metrics;
+              tooltipConvEl.replaceChildren();
+              tooltipConvEl.appendChild(
+                el(
+                  "span",
+                  null,
+                  "Gen " + bestGen +
+                  " | Cost: -" + m.cost_reduction_pct.toFixed(1) + "%" +
+                  " | SLA: " + m.fill_rate_pct.toFixed(1) + "%"
+                )
+              );
+              tooltipConvEl.classList.add("visible");
+            } else {
+              tooltipConvEl.classList.remove("visible");
+            }
+          } else {
+            const padL = 42, padR = 20;
+            const colCount = 6;
+            const colW = (rect.width - padL - padR) / colCount;
+            const colIdx = Math.floor((relX - padL) / Math.max(1, colW));
+            if (colIdx >= 0 && colIdx < colCount) {
+              drawWaterfallChart(colIdx);
+              const comps = (costWaterfall && costWaterfall.components) || [];
+              let labelText = "";
+              if (colIdx === 0) {
+                labelText = "Baseline Total: $" + Math.round((costWaterfall && costWaterfall.baseline_total) || 68410).toLocaleString();
+              } else if (colIdx === colCount - 1) {
+                labelText = "Champion Total: $" + Math.round((costWaterfall && costWaterfall.champion_total) || 45238).toLocaleString();
+              } else if (comps[colIdx - 1]) {
+                const c = comps[colIdx - 1];
+                labelText = c.category + ": " + c.savings_label + " (" + c.pct_of_total_savings + "% of savings)";
+              }
+              if (labelText) {
+                tooltipConvEl.replaceChildren();
+                tooltipConvEl.appendChild(el("span", null, labelText));
+                tooltipConvEl.classList.add("visible");
+              }
+            }
+          }
+        });
+
+        canvasConvEl.addEventListener("mouseleave", () => {
+          hoveredParetoGen = null;
+          tooltipConvEl.classList.remove("visible");
+          drawCanvas2Chart(null);
+        });
+      }
+
+      // 10. Dual-Policy What-If Simulation Sandbox (Multi-Domain Aware)
       const skuSelect = document.getElementById("whatif-sku");
       const slideLead = document.getElementById("slide-leadtime");
       const slidePromo = document.getElementById("slide-promo");
@@ -851,24 +1266,29 @@
       const slideStock = document.getElementById("slide-stockout");
 
       function updateWhatIfSimulation() {
-        const skuIdx = parseInt(skuSelect.value, 10);
-        const sku = archetypes[skuIdx] || archetypes[0];
+        const skuIdx = parseInt((skuSelect && skuSelect.value) || "0", 10);
+        const sku = archetypes[skuIdx] || archetypes[0] || {
+          shelf_life_days: 3,
+          lead_time_days: 1,
+          holding_cost: 0.4,
+          spoilage_cost: 5.5,
+          stockout_penalty: 9.0
+        };
 
-        const leadDelay = parseInt(slideLead.value, 10);
-        const promoPct = parseInt(slidePromo.value, 10);
-        const spoilMult = parseInt(slideSpoil.value, 10) / 10.0;
-        const stockMult = parseInt(slideStock.value, 10) / 10.0;
+        const leadDelay = parseInt((slideLead && slideLead.value) || "0", 10);
+        const promoPct = parseInt((slidePromo && slidePromo.value) || "0", 10);
+        const spoilMult = parseInt((slideSpoil && slideSpoil.value) || "10", 10) / 10.0;
+        const stockMult = parseInt((slideStock && slideStock.value) || "10", 10) / 10.0;
+        const isFleet = currentUseCaseId === "fleet_routing";
 
-        document.getElementById("val-leadtime").textContent = "+" + leadDelay + " days";
+        document.getElementById("val-leadtime").textContent = isFleet ? "+" + (leadDelay * 12) + " mins" : "+" + leadDelay + " days";
         document.getElementById("val-promo").textContent = "+" + promoPct + "%";
         document.getElementById("val-spoil").textContent = spoilMult.toFixed(1) + "x";
         document.getElementById("val-stockout").textContent = stockMult.toFixed(1) + "x";
 
-        // 1) Baseline Policy Simulation (Static s, S with 14-day trailing mean lag)
+        // 1) Baseline Policy Simulation
         const baseOrderUp = Math.round(32.0 * (sku.lead_time_days + 1) + 1.65 * 14.0 * Math.sqrt(sku.lead_time_days + 1));
-        // Under lead delay & promo surges, baseline fill drops drastically due to lag
         const baseFillRate = Math.max(68.0, 91.2 - leadDelay * 4.4 - (promoPct / 150.0) * 8.2);
-        // Excess inventory rotting from case packs arriving late
         const baseSpoilUnits = Math.max(1.5, (4.8 + leadDelay * 1.6 + (promoPct / 100.0) * 2.2) * spoilMult * (14.0 / sku.shelf_life_days));
         const baseDailyCost = Math.round(
           28.0 * (sku.holding_cost / 0.25) +
@@ -876,7 +1296,7 @@
           Math.max(0, 95.0 - baseFillRate) * 22.0 * stockMult * sku.stockout_penalty
         );
 
-        // 2) Evolved Champion Policy Simulation (Dynamic lookahead + FIFO spoilage anticipation)
+        // 2) Evolved Champion Policy Simulation
         const champOrderUp = Math.round((32.0 * (1.0 + promoPct / 100.0)) * (sku.lead_time_days + leadDelay + 1) + 38.0);
         const champFillRate = Math.min(98.8, Math.max(92.2, 94.8 - leadDelay * 0.7 + (promoPct / 200.0) * 1.2));
         const champSpoilUnits = Math.max(0.6, (1.8 + leadDelay * 0.4 + (promoPct / 100.0) * 0.8) * spoilMult * (7.0 / sku.shelf_life_days));
@@ -887,10 +1307,12 @@
         );
 
         // Update Dual Comparison Cards
+        const unitLabel = isFleet ? " hrs ($" : " units ($";
+        const loadSuffix = isFleet ? " stops" : " units";
         document.getElementById("val-base-fill").textContent = baseFillRate.toFixed(1) + "%";
-        document.getElementById("val-base-spoil").textContent = baseSpoilUnits.toFixed(1) + " units ($" + Math.round(baseSpoilUnits * sku.spoilage_cost) + ")";
+        document.getElementById("val-base-spoil").textContent = baseSpoilUnits.toFixed(1) + unitLabel + Math.round(baseSpoilUnits * sku.spoilage_cost) + ")";
         document.getElementById("val-base-cost").textContent = "$" + baseDailyCost.toLocaleString() + " / day";
-        document.getElementById("val-base-orderup").textContent = baseOrderUp + " units";
+        document.getElementById("val-base-orderup").textContent = baseOrderUp + loadSuffix;
 
         const baseSlaBadge = document.getElementById("badge-base-sla");
         if (baseFillRate >= 95.0) {
@@ -902,15 +1324,15 @@
         }
 
         document.getElementById("val-champ-fill").textContent = champFillRate.toFixed(1) + "%";
-        document.getElementById("val-champ-spoil").textContent = champSpoilUnits.toFixed(1) + " units ($" + Math.round(champSpoilUnits * sku.spoilage_cost) + ")";
+        document.getElementById("val-champ-spoil").textContent = champSpoilUnits.toFixed(1) + unitLabel + Math.round(champSpoilUnits * sku.spoilage_cost) + ")";
         document.getElementById("val-champ-cost").textContent = "$" + champDailyCost.toLocaleString() + " / day";
-        document.getElementById("val-champ-orderup").textContent = champOrderUp + " units";
+        document.getElementById("val-champ-orderup").textContent = champOrderUp + loadSuffix + " (dynamic)";
 
-        // Resilience Banner
         const savedPerDay = Math.max(0, baseDailyCost - champDailyCost);
         const fillDiff = champFillRate - baseFillRate;
+        const metricWord = isFleet ? "on-time SLA" : "fill rate";
         document.getElementById("whatif-resilience-text").textContent =
-          "Champion prevents SLA deficit (+" + fillDiff.toFixed(1) + "% fill rate) and saves +$" + savedPerDay.toLocaleString() + "/day under disruption.";
+          "Champion prevents SLA deficit (+" + fillDiff.toFixed(1) + "% " + metricWord + ") and saves +$" + savedPerDay.toLocaleString() + "/day under disruption.";
 
         drawWhatIfDualCanvas(baseFillRate, champFillRate, baseSpoilUnits, champSpoilUnits, baseDailyCost, champDailyCost);
       }
@@ -934,31 +1356,28 @@
         const padL = 40, padR = 20, padT = 20, padB = 28;
         const groupW = (w - padL - padR) / 3;
         const barW = groupW * 0.34;
+        const isFleet = currentUseCaseId === "fleet_routing";
 
-        // Dynamic scaling for groups to prevent clipping under high stress multiplier
         const maxSpoil = Math.max(20, Math.ceil(Math.max(bSpoil, cSpoil) * 1.25));
         const maxCost = Math.max(2000, Math.ceil(Math.max(bCost, cCost) * 1.25));
 
         const groups = [
-          { label: "Fill Rate %", bVal: bFill, cVal: cFill, maxVal: 100, bText: bFill.toFixed(1) + "%", cText: cFill.toFixed(1) + "%" },
-          { label: "Spoilage Units", bVal: bSpoil, cVal: cSpoil, maxVal: maxSpoil, bText: bSpoil.toFixed(1), cText: cSpoil.toFixed(1) },
+          { label: isFleet ? "On-Time SLA %" : "Fill Rate %", bVal: bFill, cVal: cFill, maxVal: 100, bText: bFill.toFixed(1) + "%", cText: cFill.toFixed(1) + "%" },
+          { label: isFleet ? "Tardiness (hrs)" : "Spoilage Units", bVal: bSpoil, cVal: cSpoil, maxVal: maxSpoil, bText: bSpoil.toFixed(1), cText: cSpoil.toFixed(1) },
           { label: "Cost ($/day)", bVal: bCost, cVal: cCost, maxVal: maxCost, bText: "$" + Math.round(bCost).toLocaleString(), cText: "$" + Math.round(cCost).toLocaleString() }
         ];
 
         groups.forEach((g, idx) => {
           const gx = padL + idx * groupW;
 
-          // Baseline Bar
           const bh = Math.min(h - padT - padB, (g.bVal / g.maxVal) * (h - padT - padB));
           ctx.fillStyle = "#64748B";
           ctx.fillRect(gx + 12, (h - padB) - bh, barW, bh);
 
-          // Champion Bar
           const ch = Math.min(h - padT - padB, (g.cVal / g.maxVal) * (h - padT - padB));
           ctx.fillStyle = "#10B981";
           ctx.fillRect(gx + 16 + barW, (h - padB) - ch, barW, ch);
 
-          // Labels
           ctx.fillStyle = "#CBD5E1";
           ctx.font = "9.5px JetBrains Mono, monospace";
           ctx.fillText(g.bText, gx + 10, Math.max(padT - 2, (h - padB) - bh - 4));
@@ -970,7 +1389,6 @@
           ctx.fillText(g.label, gx + 18, h - 8);
         });
 
-        // SLA Line on Group 1
         const slaY = (h - padB) - (95.0 / 100.0) * (h - padT - padB);
         ctx.strokeStyle = "rgba(244, 63, 94, 0.7)";
         ctx.setLineDash([3, 2]);
@@ -984,9 +1402,8 @@
         ctx.font = "9px JetBrains Mono, monospace";
         ctx.fillText("95% SLA", padL + groupW - 55, slaY - 3);
 
-        // Legend
         ctx.fillStyle = "#64748B";
-        ctx.fillText("■ Baseline (s,S)", w - padR - 170, padT - 4);
+        ctx.fillText(isFleet ? "■ Baseline (Greedy)" : "■ Baseline (s,S)", w - padR - 205, padT - 4);
         ctx.fillStyle = "#10B981";
         ctx.fillText("■ Champion", w - padR - 80, padT - 4);
       }
@@ -1032,7 +1449,6 @@
         }
 
         while (i < len) {
-          // Batched whitespace
           const wsMatch = line.slice(i).match(/^\s+/);
           if (wsMatch) {
             tokens.push({ text: wsMatch[0], type: "plain" });
@@ -1040,7 +1456,6 @@
             continue;
           }
 
-          // Multi-line docstring start
           const tri3 = line.slice(i, i + 3);
           if (tri3 === '"""' || tri3 === "'''") {
             const delim = tri3;
@@ -1057,13 +1472,11 @@
             }
           }
 
-          // Comment
           if (line[i] === "#") {
             tokens.push({ text: line.slice(i), type: "comment" });
             break;
           }
 
-          // String literals
           if (line[i] === '"' || line[i] === "'") {
             const q = line[i];
             let j = i + 1;
@@ -1076,7 +1489,6 @@
             continue;
           }
 
-          // Numbers
           const numMatch = line.slice(i).match(/^[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?/);
           if (numMatch && (i === 0 || !/[a-zA-Z_]/.test(line[i - 1]))) {
             tokens.push({ text: numMatch[0], type: "num" });
@@ -1084,7 +1496,6 @@
             continue;
           }
 
-          // Identifiers / Keywords / Builtins
           const wordMatch = line.slice(i).match(/^[a-zA-Z_][a-zA-Z0-9_]*/);
           if (wordMatch) {
             const word = wordMatch[0];
@@ -1099,7 +1510,6 @@
             continue;
           }
 
-          // Multi-char operators
           const op2Match = line.slice(i).match(/^(==|!=|<=|>=|\+=|-=|\*=|\/=|->|\*\*|\/\/)/);
           if (op2Match) {
             tokens.push({ text: op2Match[0], type: "op" });
@@ -1107,7 +1517,6 @@
             continue;
           }
 
-          // Single-char operators and punctuation
           const ch = line[i];
           if ("=+-*/%<>@&|^~".includes(ch)) {
             tokens.push({ text: ch, type: "op" });
@@ -1122,14 +1531,12 @@
         return tokens;
       }
 
-      // Pre-tokenize full program code sequentially to avoid lexer state leaks
       function tokenizePythonCode(code) {
         const lines = code.split(/\r?\n/);
         const state = { inDocstring: false, docDelim: null };
         return lines.map(line => tokenizePythonLine(line, state));
       }
 
-      // Client-Side Longest Common Subsequence (LCS) Diff Algorithm (<1ms in V8)
       function computeLcsDiff(linesA, linesB) {
         const n = linesA.length;
         const m = linesB.length;
@@ -1164,7 +1571,6 @@
         return diff;
       }
 
-      // Token-Level LCS Highlighter (Index-Precise)
       function computeTokenLcs(tokensA, tokensB) {
         const nonWsA = [];
         tokensA.forEach((tok, idx) => {
@@ -1208,7 +1614,6 @@
         return { matchedA, matchedB };
       }
 
-      // Render Token Array with Syntax Highlighting and Token Diff to DOM (Safe DOM)
       function renderTokensToSpan(tokens, container, wordDiffClass, matchedSet) {
         tokens.forEach((tok, idx) => {
           if (!tok.text) return;
@@ -1219,8 +1624,6 @@
           container.appendChild(span);
         });
       }
-
-      // Diff Table Rendering
 
       function updateStepperActivePreset() {
         const pairKey = leftMilestoneKey + "-" + rightMilestoneKey;
@@ -1246,13 +1649,11 @@
         const linesA = codeA.split(/\r?\n/);
         const linesB = codeB.split(/\r?\n/);
 
-        // Pre-tokenize both files sequentially once
         const allTokensA = tokenizePythonCode(codeA);
         const allTokensB = tokenizePythonCode(codeB);
 
         const rawDiff = computeLcsDiff(linesA, linesB);
 
-        // Diff Stats
         let addCount = 0, delCount = 0, sameCount = 0;
         rawDiff.forEach(d => {
           if (d.type === "add") addCount++;
@@ -1267,7 +1668,6 @@
         document.getElementById("diff-banner-title").textContent = baseM.title + " ➔ " + evoM.title;
         document.getElementById("diff-banner-desc").textContent = evoM.description;
 
-        // Render Key Innovations in banner via Safe DOM
         const innContainer = document.getElementById("diff-innovations-pills");
         if (innContainer) {
           innContainer.replaceChildren();
@@ -1283,12 +1683,11 @@
         if (diffTableHeader) {
           diffTableHeader.className = "diff-table-header " + (diffViewMode === "split" ? "split" : "unified");
           const rightHeader = document.getElementById("diff-header-right");
-          if (rightHeader) rightHeader.style.display = diffViewMode === "split" ? "block" : "none";
+          if (rightHeader) rightHeader.classList.toggle("is-hidden", diffViewMode !== "split");
         }
 
         updateStepperActivePreset();
 
-        // Prepare Render Rows (Group changes for split alignment)
         const renderRows = [];
         let k = 0;
         while (k < rawDiff.length) {
@@ -1318,14 +1717,12 @@
                 });
               }
             } else {
-              // Unified view: all deletions first, then all additions
               dels.forEach(d => renderRows.push({ type: "change-del", delItem: d }));
               adds.forEach(a => renderRows.push({ type: "change-add", addItem: a }));
             }
           }
         }
 
-        // Handle Folding of Unchanged Code Blocks (>= 7 lines)
         let idx = 0;
         while (idx < renderRows.length) {
           if (renderRows[idx].type === "same") {
@@ -1344,7 +1741,6 @@
                 diffTableBody.appendChild(buildDiffRowElement(renderRows[i], allTokensA, allTokensB));
               }
 
-              // Render Fold Bar (Safe DOM)
               const foldRow = el("div", "diff-fold-row");
               foldRow.textContent = "↕ ... " + foldCount + " unchanged lines hidden (click to expand) ...";
               const hiddenRows = renderRows.slice(foldStart, foldEnd);
@@ -1376,7 +1772,6 @@
         const rowEl = el("div", "diff-row " + diffViewMode);
 
         if (diffViewMode === "split") {
-          // Split View: Left (Base) & Right (Evolved)
           const leftCell = el("div", "diff-cell split-left");
           const rightCell = el("div", "diff-cell split-right");
 
@@ -1435,7 +1830,6 @@
           rowEl.appendChild(leftCell);
           rowEl.appendChild(rightCell);
         } else {
-          // Unified View
           if (rRow.type === "same") {
             const it = rRow.item;
             const toks = allTokensA[it.lineA - 1] || [];
@@ -1475,7 +1869,6 @@
         return rowEl;
       }
 
-      // Stepper Presets
       document.querySelectorAll(".diff-stepper-btn[data-pair]").forEach(btn => {
         btn.addEventListener("click", () => {
           const pair = btn.getAttribute("data-pair").split("-");
@@ -1617,7 +2010,6 @@
             const scoreVal = typeof cand.score === "number" ? cand.score : 0.0;
             const isBest = cand.is_best || false;
 
-            // Generate or synthesize daily_series if not included
             const baseFrame = trajectories[Math.min(iter, trajectories.length - 1)] || trajectories[0];
             const newFrame = {
               generation: iter,
@@ -1648,7 +2040,6 @@
               scrubber.max = maxGen;
             }
 
-            // Dynamic Pareto point addition
             if (!paretoFrontier.some(p => p.generation === iter)) {
               paretoFrontier.push({
                 generation: iter,
@@ -1659,7 +2050,6 @@
               });
             }
 
-            // Add ribbon node if this was a milestone breakthrough
             if (isBest && !ribbonMilestones.some(m => m.generation === iter)) {
               ribbonMilestones.push({
                 generation: iter,
@@ -1673,10 +2063,7 @@
               renderMilestoneRibbon();
             }
 
-            // Update display to latest evaluated candidate
             updateDisplay(iter);
-
-            // Toast alert
             showLiveToast((isBest ? "🏆 NEW BEST! " : "⚡ Evaluated: ") + "Gen " + iter + " (" + (scoreVal > 0 ? "+" : "") + scoreVal.toFixed(2) + "%)");
           } catch (err) {
             console.warn("Failed to parse candidate_evaluated event", err);
@@ -1699,6 +2086,7 @@
       }
 
       // 13. Initial Mount & Resize Handlers
+      updateDomainControls();
       renderMilestoneRibbon();
       updateDisplay(maxGen);
       updateWhatIfSimulation();

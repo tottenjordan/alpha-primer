@@ -381,3 +381,37 @@ def test_dashboard_template_modularity() -> None:
         asset_path = templates_dir / filename
         assert asset_path.exists(), f"Missing template asset: {filename}"
         assert "innerHTML" not in asset_path.read_text(encoding="utf-8")
+
+
+def test_web_app_development_design_and_multi_domain_standards(tmp_path: Path) -> None:
+    """Verify HSL token discipline, zero inline styles, ARIA semantics, and multi-domain scaling."""
+    templates_dir = ROOT_DIR / "src" / "alpha_evolve" / "dashboard" / "templates"
+    css_text = (templates_dir / "styles.css").read_text(encoding="utf-8")
+    body_text = (templates_dir / "body.html").read_text(encoding="utf-8")
+    js_text = (templates_dir / "app.js").read_text(encoding="utf-8")
+
+    # 1. Design system hygiene: HSL tokens, tabular numerals, no purple-on-dark, zero inline styles
+    assert "hsl(" in css_text
+    assert "--surface-gradient:" in css_text
+    assert "font-variant-numeric: tabular-nums" in css_text
+    assert "--accent-purple" not in css_text
+    assert "#A855F7" not in css_text
+    assert 'style="' not in body_text
+    assert ".style." not in js_text
+
+    # 2. Semantic HTML5 & WAI-ARIA landmarks and unique interactive control IDs
+    html_path = build_dashboard_html(output_dir=tmp_path)
+    content = html_path.read_text(encoding="utf-8")
+    assert '<main id="dashboard-main">' in content
+    assert 'role="tablist"' in content
+    assert 'role="tab"' in content
+    assert 'role="tabpanel"' in content
+    assert 'id="btn-speed-toggle"' in content
+    assert 'id="btn-preset-0"' in content
+    assert 'id="btn-diff-0-8"' in content
+
+    # 3. Interactive canvas tooltip HUDs & multi-domain synchronization hooks
+    assert 'id="tooltip-trajectory"' in content
+    assert 'id="tooltip-convergence"' in content
+    assert 'id="thead-archetypes-row"' in content
+    assert "updateDomainControls" in content

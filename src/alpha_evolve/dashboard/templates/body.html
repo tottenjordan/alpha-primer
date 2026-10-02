@@ -36,347 +36,351 @@
     </div>
 
     <!-- Real-time Candidate Evaluation Toast -->
-    <div id="live-toast">
+    <div id="live-toast" role="status" aria-live="polite">
       <span class="status-dot pulse"></span>
       <span id="live-toast-text">New Candidate Evaluated</span>
     </div>
 
     <div class="controls-row">
-      <div class="nav-tabs" id="nav-tabs">
-        <button class="tab-btn active" data-tab="tab-replay">1. Digital Twin &amp; Evolution</button>
-        <button class="tab-btn" data-tab="tab-whatif">2. What-If Sandbox</button>
-        <button class="tab-btn" data-tab="tab-benchmark">3. Benchmark &amp; Math</button>
-        <button class="tab-btn" data-tab="tab-diffs">4. Evolved Code Diffs</button>
+      <div class="nav-tabs" id="nav-tabs" role="tablist" aria-label="Dashboard Views">
+        <button class="tab-btn active" id="tab-btn-replay" role="tab" aria-selected="true" aria-controls="tab-replay" data-tab="tab-replay">1. Digital Twin &amp; Evolution</button>
+        <button class="tab-btn" id="tab-btn-whatif" role="tab" aria-selected="false" aria-controls="tab-whatif" data-tab="tab-whatif">2. What-If Sandbox</button>
+        <button class="tab-btn" id="tab-btn-benchmark" role="tab" aria-selected="false" aria-controls="tab-benchmark" data-tab="tab-benchmark">3. Benchmark &amp; Math</button>
+        <button class="tab-btn" id="tab-btn-diffs" role="tab" aria-selected="false" aria-controls="tab-diffs" data-tab="tab-diffs">4. Evolved Code Diffs</button>
       </div>
 
       <div class="playback-bar">
         <button class="btn-play" id="btn-play">▶ Play Evolution</button>
-        <button class="btn-preset" data-gen="0">Gen 0</button>
-        <button class="btn-preset" data-gen="8">Gen 8</button>
-        <button class="btn-preset" data-gen="17">Gen 17</button>
-        <button class="btn-preset" data-gen="30">Gen 30</button>
-        <input type="range" class="scrubber-slider" id="scrubber" min="0" max="30" value="30" />
+        <button class="btn-speed" id="btn-speed-toggle" title="Toggle Replay Speed (1x / 2x)">1x</button>
+        <button class="btn-preset" id="btn-preset-0" data-gen="0">Gen 0</button>
+        <button class="btn-preset" id="btn-preset-8" data-gen="8">Gen 8</button>
+        <button class="btn-preset" id="btn-preset-17" data-gen="17">Gen 17</button>
+        <button class="btn-preset" id="btn-preset-30" data-gen="30">Gen 30</button>
+        <input type="range" class="scrubber-slider" id="scrubber" min="0" max="30" value="30" aria-label="Evolution Generation Scrubber" />
         <span class="gen-badge" id="scrubber-label">GEN 30 / 30</span>
       </div>
     </div>
   </header>
 
-  <!-- TAB 1: Digital Twin & Evolution Replay -->
-  <section id="tab-replay" class="tab-pane active">
-    <div class="kpi-grid">
-      <div class="kpi-card highlight">
-        <div class="kpi-label" id="kpi-label-1">Total Supply Chain Cost</div>
-        <div class="kpi-val" id="kpi-total-cost">$45,238</div>
-        <div class="kpi-sub">
-          <span class="badge-diff positive" id="kpi-cost-reduc">-33.9%</span>
-          <span id="kpi-baseline-comp">vs. $68,410 baseline</span>
-        </div>
-      </div>
-
-      <div class="kpi-card">
-        <div class="kpi-label" id="kpi-label-2">Perishable Spoilage Waste</div>
-        <div class="kpi-val" id="kpi-spoilage-cost">$16,145</div>
-        <div class="kpi-sub">
-          <span class="badge-diff positive" id="kpi-spoilage-rate">8.45% rate</span>
-          <span id="kpi-sub-comp-2">vs. 14.6% baseline</span>
-        </div>
-      </div>
-
-      <div class="kpi-card">
-        <div class="kpi-label" id="kpi-label-3">Service Fill Rate</div>
-        <div class="kpi-val" id="kpi-fill-rate">93.49%</div>
-        <div class="kpi-sub">
-          <span class="badge-diff neutral" id="kpi-badge-3">SLA: &ge;95.0%</span>
-          <span id="kpi-sub-comp-3">stockout penalty: <span id="kpi-stockout-cost">$14,573</span></span>
-        </div>
-      </div>
-
-      <div class="kpi-card">
-        <div class="kpi-label" id="kpi-label-4">Evaluation Fitness Score</div>
-        <div class="kpi-val" id="kpi-fitness-score">33.87</div>
-        <div class="kpi-sub">
-          <span class="badge-diff positive">+33.87 pts</span>
-          <span>latency: <b>79 ms</b> rollout</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Interactive Milestone Ribbon -->
-    <div class="milestone-ribbon-container">
-      <div class="milestone-ribbon-header">
-        <span>Interactive Milestone Progression Ribbon</span>
-        <span style="color: var(--accent-cyan); font-weight: 600;">Click node to sync trajectory playhead</span>
-      </div>
-      <div class="milestone-ribbon-scroll">
-        <div class="milestone-ribbon" id="milestone-ribbon-nodes">
-          <!-- Populated via Safe DOM -->
-        </div>
-      </div>
-    </div>
-
-    <!-- Active Generation Milestone Banner -->
-    <div class="card-box" style="margin-bottom: 16px; padding: 12px 16px; background: rgba(6, 182, 212, 0.08); border-color: rgba(6, 182, 212, 0.3);">
-      <div style="display: flex; align-items: center; justify-content: space-between; font-family: var(--font-mono); font-size: 12px;">
-        <span style="color: var(--accent-cyan);" id="milestone-title">GEN 30 CHAMPION</span>
-        <span style="color: var(--text-secondary);" id="milestone-desc">Unified multi-echelon perishable heuristic (-33.9% cost reduction)</span>
-      </div>
-    </div>
-
-    <div class="canvas-grid">
-      <div class="card-box">
-        <div class="card-title">
-          <span>90-Day Digital Twin Inventory Trajectory &amp; Spoilage Stack</span>
-          <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);">Days 0..29 Warmup | 30..65 Eval | 66..89 Holdout</span>
-        </div>
-        <div class="canvas-container">
-          <canvas id="canvas-trajectory"></canvas>
-        </div>
-      </div>
-
-      <div class="card-box">
-        <div class="card-title">
-          <span id="canvas2-title">Mode A: 2D Pareto Frontier Evolution</span>
-          <div class="canvas-mode-toggle" id="canvas2-mode-toggles">
-            <button class="btn-mode active" id="btn-mode-pareto" data-mode="pareto">Mode A: Pareto</button>
-            <button class="btn-mode" id="btn-mode-waterfall" data-mode="waterfall">Mode B: Waterfall</button>
+  <main id="dashboard-main">
+    <!-- TAB 1: Digital Twin & Evolution Replay -->
+    <section id="tab-replay" class="tab-pane active" role="tabpanel" aria-labelledby="tab-btn-replay">
+      <div class="kpi-grid">
+        <div class="kpi-card highlight">
+          <div class="kpi-label" id="kpi-label-1">Total Supply Chain Cost</div>
+          <div class="kpi-val" id="kpi-total-cost">$45,238</div>
+          <div class="kpi-sub">
+            <span class="badge-diff positive" id="kpi-cost-reduc">-33.9%</span>
+            <span id="kpi-baseline-comp">vs. $68,410 baseline</span>
           </div>
         </div>
-        <div class="canvas-container">
-          <canvas id="canvas-convergence"></canvas>
+
+        <div class="kpi-card">
+          <div class="kpi-label" id="kpi-label-2">Perishable Spoilage Waste</div>
+          <div class="kpi-val" id="kpi-spoilage-cost">$16,145</div>
+          <div class="kpi-sub">
+            <span class="badge-diff positive" id="kpi-spoilage-rate">8.45% rate</span>
+            <span id="kpi-sub-comp-2">vs. 14.6% baseline</span>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label" id="kpi-label-3">Service Fill Rate</div>
+          <div class="kpi-val" id="kpi-fill-rate">93.49%</div>
+          <div class="kpi-sub">
+            <span class="badge-diff neutral" id="kpi-badge-3">SLA: &ge;95.0%</span>
+            <span id="kpi-sub-comp-3">stockout penalty: <span id="kpi-stockout-cost">$14,573</span></span>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label" id="kpi-label-4">Evaluation Fitness Score</div>
+          <div class="kpi-val" id="kpi-fitness-score">33.87</div>
+          <div class="kpi-sub">
+            <span class="badge-diff positive" id="kpi-fitness-badge">+33.87 pts</span>
+            <span>latency: <b id="kpi-latency-val">79 ms</b> rollout</span>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="card-box">
-      <div class="card-title">
-        <span>SKU Archetype Cost &amp; Spoilage Performance Breakdown</span>
-      </div>
-      <div class="table-container">
-        <table id="table-archetypes">
-          <thead>
-            <tr>
-              <th>SKU Category Archetype</th>
-              <th>Shelf Life</th>
-              <th>Lead Time</th>
-              <th>Baseline Spoilage</th>
-              <th>Champion Spoilage</th>
-              <th>Holding Cost</th>
-              <th>Spoilage Cost</th>
-              <th>Stockout Penalty</th>
-            </tr>
-          </thead>
-          <tbody id="tbody-archetypes">
+      <!-- Interactive Milestone Ribbon -->
+      <div class="milestone-ribbon-container">
+        <div class="milestone-ribbon-header">
+          <span>Interactive Milestone Progression Ribbon</span>
+          <span class="ribbon-hint">Click node or press ← / → to sync trajectory playhead</span>
+        </div>
+        <div class="milestone-ribbon-scroll">
+          <div class="milestone-ribbon" id="milestone-ribbon-nodes">
             <!-- Populated via Safe DOM -->
-          </tbody>
-        </table>
+          </div>
+        </div>
       </div>
-    </div>
-  </section>
 
-  <!-- TAB 2: Interactive What-If Sandbox (Dual-Policy Simulation) -->
-  <section id="tab-whatif" class="tab-pane">
-    <div class="sandbox-layout">
-      <div class="card-box">
-        <div class="card-title">
-          <span>Policy Stress-Test Parameters</span>
+      <!-- Active Generation Milestone Banner -->
+      <div class="card-box milestone-banner-card">
+        <div class="milestone-banner-row">
+          <span class="milestone-title-text" id="milestone-title">GEN 30 CHAMPION</span>
+          <span class="milestone-desc-text" id="milestone-desc">Unified multi-echelon perishable heuristic (-33.9% cost reduction)</span>
+        </div>
+      </div>
+
+      <div class="canvas-grid">
+        <div class="card-box">
+          <div class="card-title">
+            <span id="canvas1-title">90-Day Digital Twin Inventory Trajectory &amp; Spoilage Stack</span>
+            <span class="card-subtitle-mono" id="canvas1-subtitle">Days 0..29 Warmup | 30..65 Eval | 66..89 Holdout</span>
+          </div>
+          <div class="canvas-container">
+            <canvas id="canvas-trajectory"></canvas>
+            <div id="tooltip-trajectory" class="canvas-tooltip" role="status" aria-live="polite"></div>
+          </div>
         </div>
 
-        <label class="slider-header" for="whatif-sku">SKU Category Archetype</label>
-        <select id="whatif-sku" class="archetype-select">
-          <option value="0">Ultra-Perishables (Berries / Pre-cut Salads - 3 Days)</option>
-          <option value="1">Chilled Dairy &amp; Fresh Meats (7 Days)</option>
-          <option value="2">Ambient Grocery &amp; Packaged Goods (21 Days)</option>
-        </select>
-
-        <div class="slider-group">
-          <div class="slider-header">
-            <span>Supplier Lead Time Delay</span>
-            <span id="val-leadtime">+0 days</span>
+        <div class="card-box">
+          <div class="card-title">
+            <span id="canvas2-title">Mode A: 2D Pareto Frontier Evolution</span>
+            <div class="canvas-mode-toggle" id="canvas2-mode-toggles">
+              <button class="btn-mode active" id="btn-mode-pareto" data-mode="pareto">Mode A: Pareto</button>
+              <button class="btn-mode" id="btn-mode-waterfall" data-mode="waterfall">Mode B: Waterfall</button>
+            </div>
           </div>
-          <input type="range" class="slider-input" id="slide-leadtime" min="0" max="5" value="0" />
-        </div>
-
-        <div class="slider-group">
-          <div class="slider-header">
-            <span>Promotional Demand Spike</span>
-            <span id="val-promo">+0%</span>
+          <div class="canvas-container">
+            <canvas id="canvas-convergence"></canvas>
+            <div id="tooltip-convergence" class="canvas-tooltip" role="status" aria-live="polite"></div>
           </div>
-          <input type="range" class="slider-input" id="slide-promo" min="0" max="150" value="0" />
-        </div>
-
-        <div class="slider-group">
-          <div class="slider-header">
-            <span>Spoilage Cost Multiplier</span>
-            <span id="val-spoil">1.0x</span>
-          </div>
-          <input type="range" class="slider-input" id="slide-spoil" min="5" max="30" value="10" />
-        </div>
-
-        <div class="slider-group">
-          <div class="slider-header">
-            <span>Stockout Penalty Multiplier</span>
-            <span id="val-stockout">1.0x</span>
-          </div>
-          <input type="range" class="slider-input" id="slide-stockout" min="5" max="30" value="10" />
         </div>
       </div>
 
       <div class="card-box">
         <div class="card-title">
-          <span>Dual-Policy Stress Simulation: Baseline (s, S) vs AlphaEvolve Champion</span>
-          <span style="font-family: var(--font-mono); font-size: 11px; color: var(--accent-emerald);">&lt;2ms In-Browser Recalculation</span>
+          <span id="table-archetypes-title">SKU Archetype Cost &amp; Spoilage Performance Breakdown</span>
         </div>
-
-        <!-- Resilience Advantage Callout Banner -->
-        <div class="whatif-resilience-banner" id="whatif-resilience-banner">
-          <div>
-            <span style="color: var(--accent-emerald); font-weight: 700; margin-right: 6px;">RESILIENCE ADVANTAGE:</span>
-            <span id="whatif-resilience-text" style="color: var(--text-primary);">Champion maintains 94.8% SLA and saves $536/day under disruption</span>
-          </div>
-          <span class="badge-diff positive" id="whatif-resilience-badge">High Robustness</span>
+        <div class="table-container">
+          <table id="table-archetypes">
+            <thead id="thead-archetypes">
+              <tr id="thead-archetypes-row">
+                <th>SKU Category Archetype</th>
+                <th>Shelf Life</th>
+                <th>Lead Time</th>
+                <th>Baseline Spoilage</th>
+                <th>Champion Spoilage</th>
+                <th>Holding Cost</th>
+                <th>Spoilage Cost</th>
+                <th>Stockout Penalty</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-archetypes">
+              <!-- Populated via Safe DOM -->
+            </tbody>
+          </table>
         </div>
+      </div>
+    </section>
 
-        <!-- Side-by-Side Policy Comparison Cards -->
-        <div class="whatif-dual-grid">
-          <div class="whatif-policy-card baseline">
-            <div class="whatif-policy-header">
-              <span class="whatif-policy-title" style="color: var(--text-secondary);">1. Baseline Static (s, S)</span>
-              <span class="badge-diff neutral" id="badge-base-sla">SLA: 91.2%</span>
-            </div>
-            <div class="whatif-stat-row">
-              <span style="color: var(--text-muted);">Fill Rate:</span>
-              <b id="val-base-fill" style="color: var(--text-primary);">91.2%</b>
-            </div>
-            <div class="whatif-stat-row">
-              <span style="color: var(--text-muted);">Daily Spoilage:</span>
-              <span id="val-base-spoil">8.6 units ($47.30)</span>
-            </div>
-            <div class="whatif-stat-row">
-              <span style="color: var(--text-muted);">Est. Daily Cost:</span>
-              <b id="val-base-cost" style="color: var(--accent-coral);">$1,210 / day</b>
-            </div>
-            <div class="whatif-stat-row">
-              <span style="color: var(--text-muted);">Order-Up-To Level:</span>
-              <span id="val-base-orderup">160 units</span>
-            </div>
+    <!-- TAB 2: Interactive What-If Sandbox (Dual-Policy Simulation) -->
+    <section id="tab-whatif" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-whatif">
+      <div class="sandbox-layout">
+        <div class="card-box">
+          <div class="card-title">
+            <span>Policy Stress-Test Parameters</span>
           </div>
 
-          <div class="whatif-policy-card champion">
-            <div class="whatif-policy-header">
-              <span class="whatif-policy-title" style="color: var(--accent-emerald);">2. AlphaEvolve Champion</span>
-              <span class="badge-diff positive" id="badge-champ-sla">SLA: Resilient</span>
+          <label class="slider-header" id="whatif-sku-label" for="whatif-sku">SKU Category Archetype</label>
+          <select id="whatif-sku" class="archetype-select">
+            <option value="0">Ultra-Perishables (Berries / Pre-cut Salads - 3 Days)</option>
+            <option value="1">Chilled Dairy &amp; Fresh Meats (7 Days)</option>
+            <option value="2">Ambient Grocery &amp; Packaged Goods (21 Days)</option>
+          </select>
+
+          <div class="slider-group">
+            <div class="slider-header">
+              <span id="label-slide-1">Supplier Lead Time Delay</span>
+              <span id="val-leadtime">+0 days</span>
             </div>
-            <div class="whatif-stat-row">
-              <span style="color: var(--text-muted);">Fill Rate:</span>
-              <b id="val-champ-fill" style="color: var(--accent-emerald);">94.8%</b>
+            <input type="range" class="slider-input" id="slide-leadtime" min="0" max="5" value="0" />
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-header">
+              <span id="label-slide-2">Promotional Demand Spike</span>
+              <span id="val-promo">+0%</span>
             </div>
-            <div class="whatif-stat-row">
-              <span style="color: var(--text-muted);">Daily Spoilage:</span>
-              <span id="val-champ-spoil">3.8 units ($20.90)</span>
+            <input type="range" class="slider-input" id="slide-promo" min="0" max="150" value="0" />
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-header">
+              <span id="label-slide-3">Spoilage Cost Multiplier</span>
+              <span id="val-spoil">1.0x</span>
             </div>
-            <div class="whatif-stat-row">
-              <span style="color: var(--text-muted);">Est. Daily Cost:</span>
-              <b id="val-champ-cost" style="color: var(--accent-emerald);">$674 / day</b>
+            <input type="range" class="slider-input" id="slide-spoil" min="5" max="30" value="10" />
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-header">
+              <span id="label-slide-4">Stockout Penalty Multiplier</span>
+              <span id="val-stockout">1.0x</span>
             </div>
-            <div class="whatif-stat-row">
-              <span style="color: var(--text-muted);">Order-Up-To Level:</span>
-              <span id="val-champ-orderup">184 units (dynamic)</span>
-            </div>
+            <input type="range" class="slider-input" id="slide-stockout" min="5" max="30" value="10" />
           </div>
         </div>
 
-        <div class="canvas-container" style="height: 220px;">
-          <canvas id="canvas-whatif"></canvas>
+        <div class="card-box">
+          <div class="card-title">
+            <span id="whatif-card-title">Dual-Policy Stress Simulation: Baseline (s, S) vs AlphaEvolve Champion</span>
+            <span class="card-subtitle-emerald">&lt;2ms In-Browser Recalculation</span>
+          </div>
+
+          <!-- Resilience Advantage Callout Banner -->
+          <div class="whatif-resilience-banner" id="whatif-resilience-banner">
+            <div>
+              <span class="resilience-label">RESILIENCE ADVANTAGE:</span>
+              <span class="resilience-text" id="whatif-resilience-text">Champion maintains 94.8% SLA and saves $536/day under disruption</span>
+            </div>
+            <span class="badge-diff positive" id="whatif-resilience-badge">High Robustness</span>
+          </div>
+
+          <!-- Side-by-Side Policy Comparison Cards -->
+          <div class="whatif-dual-grid">
+            <div class="whatif-policy-card baseline">
+              <div class="whatif-policy-header">
+                <span class="whatif-policy-title policy-title-baseline" id="whatif-base-title">1. Baseline Static (s, S)</span>
+                <span class="badge-diff neutral" id="badge-base-sla">SLA: 91.2%</span>
+              </div>
+              <div class="whatif-stat-row">
+                <span class="stat-label" id="label-base-stat1">Fill Rate:</span>
+                <b class="stat-val-primary" id="val-base-fill">91.2%</b>
+              </div>
+              <div class="whatif-stat-row">
+                <span class="stat-label" id="label-base-stat2">Daily Spoilage:</span>
+                <span id="val-base-spoil">8.6 units ($47.30)</span>
+              </div>
+              <div class="whatif-stat-row">
+                <span class="stat-label" id="label-base-stat3">Est. Daily Cost:</span>
+                <b class="stat-val-coral" id="val-base-cost">$1,210 / day</b>
+              </div>
+              <div class="whatif-stat-row">
+                <span class="stat-label" id="label-base-stat4">Order-Up-To Level:</span>
+                <span id="val-base-orderup">160 units</span>
+              </div>
+            </div>
+
+            <div class="whatif-policy-card champion">
+              <div class="whatif-policy-header">
+                <span class="whatif-policy-title policy-title-champion" id="whatif-champ-title">2. AlphaEvolve Champion</span>
+                <span class="badge-diff positive" id="badge-champ-sla">SLA: Resilient</span>
+              </div>
+              <div class="whatif-stat-row">
+                <span class="stat-label" id="label-champ-stat1">Fill Rate:</span>
+                <b class="stat-val-emerald" id="val-champ-fill">94.8%</b>
+              </div>
+              <div class="whatif-stat-row">
+                <span class="stat-label" id="label-champ-stat2">Daily Spoilage:</span>
+                <span id="val-champ-spoil">3.8 units ($20.90)</span>
+              </div>
+              <div class="whatif-stat-row">
+                <span class="stat-label" id="label-champ-stat3">Est. Daily Cost:</span>
+                <b class="stat-val-emerald" id="val-champ-cost">$674 / day</b>
+              </div>
+              <div class="whatif-stat-row">
+                <span class="stat-label" id="label-champ-stat4">Order-Up-To Level:</span>
+                <span id="val-champ-orderup">184 units (dynamic)</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="canvas-container canvas-container-whatif">
+            <canvas id="canvas-whatif"></canvas>
+          </div>
         </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- TAB 3: Benchmark & Math -->
-  <section id="tab-benchmark" class="tab-pane">
-    <div class="card-box" style="margin-bottom: 16px;">
-      <div class="card-title">
-        <span>Evaluation Objective &amp; Digital Twin Architecture</span>
-      </div>
-      <div style="font-size: 13.5px; color: var(--text-secondary); line-height: 1.7;">
-        <p style="margin-bottom: 10px;">
-          The multi-echelon replenishment digital twin models stochastic customer demand across 50 heterogeneous SKU nodes over a 90-day causal horizon.
-          The evaluation strictly enforces causal isolation: policy functions only have access to history <code>t &le; now</code>.
-        </p>
-        <p style="margin-bottom: 12px; font-family: var(--font-mono); background: var(--bg-canvas); padding: 12px; border-radius: 6px; border: 1px solid var(--border-subtle);">
-          <b>Objective Function:</b><br />
-          Score = Cost_Reduction_% - 50.0 &times; max(0, 0.95 - Fill_Rate)^2<br /><br />
-          Total_Cost = C_holding + C_spoilage + C_stockout + C_ordering
-        </p>
-        <ul style="padding-left: 20px;">
-          <li><b>Days 0..29 (Warmup):</b> Digital twin initializes FIFO age cohorts and in-transit pipelines under fixed seed demand.</li>
-          <li><b>Days 30..65 (Validation Window):</b> AlphaEvolve scores candidate policies over 35 active business days.</li>
-          <li><b>Days 66..89 (Holdout Window):</b> Out-of-sample stress test with promotional demand surges and lead-time shocks.</li>
-        </ul>
-      </div>
-    </div>
-  </section>
-
-  <!-- TAB 4: High-Visibility Code Diff Engine -->
-  <section id="tab-diffs" class="tab-pane">
-    <div class="diff-toolbar">
-      <div class="diff-stepper-group">
-        <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Milestone AST Diff Stepper:</span>
-        <button class="diff-stepper-btn active" data-pair="0-8">Gen 0 ↔ Gen 8</button>
-        <button class="diff-stepper-btn" data-pair="8-17">Gen 8 ↔ Gen 17</button>
-        <button class="diff-stepper-btn" data-pair="17-30">Gen 17 ↔ Gen 30</button>
-        <button class="diff-stepper-btn" data-pair="0-30">Gen 0 ↔ Gen 30 (Full)</button>
-
-        <span style="color: var(--border-subtle); margin: 0 4px;">|</span>
-        <label for="diff-select-base" style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">Base:</label>
-        <select id="diff-select-base" class="diff-select">
-          <option value="0" selected>Gen 0 (Baseline)</option>
-          <option value="8">Gen 8 (Imputation)</option>
-          <option value="17">Gen 17 (FIFO)</option>
-          <option value="30">Gen 30 (Champion)</option>
-        </select>
-        <label for="diff-select-evolved" style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">Evolved:</label>
-        <select id="diff-select-evolved" class="diff-select">
-          <option value="0">Gen 0 (Baseline)</option>
-          <option value="8" selected>Gen 8 (Imputation)</option>
-          <option value="17">Gen 17 (FIFO)</option>
-          <option value="30">Gen 30 (Champion)</option>
-        </select>
-      </div>
-
-      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-        <div class="diff-view-toggle">
-          <button class="diff-stepper-btn active" id="btn-view-split">Split (Side-by-Side)</button>
-          <button class="diff-stepper-btn" id="btn-view-unified">Unified View</button>
+    <!-- TAB 3: Benchmark & Math -->
+    <section id="tab-benchmark" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-benchmark">
+      <div class="card-box card-box-spaced">
+        <div class="card-title">
+          <span id="benchmark-title">Evaluation Objective &amp; Digital Twin Architecture</span>
         </div>
-        <button class="diff-stepper-btn" id="btn-toggle-fold">Collapse Unchanged</button>
-        <button class="btn-copy" id="btn-copy-diff">Copy Evolved Block</button>
+        <div class="benchmark-prose">
+          <p class="benchmark-p" id="benchmark-desc">
+            The multi-echelon replenishment digital twin models stochastic customer demand across 50 heterogeneous SKU nodes over a 90-day causal horizon.
+            The evaluation strictly enforces causal isolation: policy functions only have access to history <code>t &le; now</code>.
+          </p>
+          <p class="formula-box" id="benchmark-formula">
+            <b>Objective Function:</b><br />
+            Score = Cost_Reduction_% - 50.0 &times; max(0, 0.95 - Fill_Rate)^2<br /><br />
+            Total_Cost = C_holding + C_spoilage + C_stockout + C_ordering
+          </p>
+          <ul class="benchmark-list" id="benchmark-phases-list">
+            <li><b>Days 0..29 (Warmup):</b> Digital twin initializes FIFO age cohorts and in-transit pipelines under fixed seed demand.</li>
+            <li><b>Days 30..65 (Validation Window):</b> AlphaEvolve scores candidate policies over 35 active business days.</li>
+            <li><b>Days 66..89 (Holdout Window):</b> Out-of-sample stress test with promotional demand surges and lead-time shocks.</li>
+          </ul>
+        </div>
       </div>
-    </div>
+    </section>
 
-    <!-- Milestone Mutation Callout Banner -->
-    <div class="diff-mutation-banner" id="diff-mutation-banner">
-      <div>
-        <div class="diff-mutation-title" id="diff-banner-title">Gen 0 Baseline ➔ Gen 8 Censored Demand Imputation</div>
-        <div class="diff-mutation-desc" id="diff-banner-desc">Detects historical stockout periods and imputes unobserved customer demand using raw_mean + 1.2*raw_std.</div>
-        <div class="diff-innovations-pills" id="diff-innovations-pills" style="margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap;"></div>
-      </div>
-      <div class="diff-stats-pills">
-        <span class="pill-add" id="diff-stat-add">+14 additions</span>
-        <span class="pill-del" id="diff-stat-del">-2 deletions</span>
-        <span class="pill-same" id="diff-stat-same">48 unchanged</span>
-      </div>
-    </div>
+    <!-- TAB 4: High-Visibility Code Diff Engine -->
+    <section id="tab-diffs" class="tab-pane" role="tabpanel" aria-labelledby="tab-btn-diffs">
+      <div class="diff-toolbar">
+        <div class="diff-stepper-group">
+          <span class="diff-toolbar-label">Milestone AST Diff Stepper:</span>
+          <button class="diff-stepper-btn active" id="btn-diff-0-8" data-pair="0-8">Gen 0 ↔ Gen 8</button>
+          <button class="diff-stepper-btn" id="btn-diff-8-17" data-pair="8-17">Gen 8 ↔ Gen 17</button>
+          <button class="diff-stepper-btn" id="btn-diff-17-30" data-pair="17-30">Gen 17 ↔ Gen 30</button>
+          <button class="diff-stepper-btn" id="btn-diff-0-30" data-pair="0-30">Gen 0 ↔ Gen 30 (Full)</button>
 
-    <!-- Code Diff Table Container -->
-    <div class="diff-table-wrapper">
-      <div class="diff-table-header split" id="diff-table-header">
-        <div id="diff-header-left">Gen 0: Baseline Static (s, S)</div>
-        <div id="diff-header-right">Gen 8: Censored Demand Imputation</div>
-      </div>
-      <div class="diff-table-body" id="diff-table-body">
-        <!-- Rendered via Safe DOM -->
-      </div>
-    </div>
-  </section>
+          <span class="diff-toolbar-sep">|</span>
+          <label class="diff-select-label" for="diff-select-base">Base:</label>
+          <select id="diff-select-base" class="diff-select">
+            <option value="0" selected>Gen 0 (Baseline)</option>
+            <option value="8">Gen 8 (Imputation)</option>
+            <option value="17">Gen 17 (FIFO)</option>
+            <option value="30">Gen 30 (Champion)</option>
+          </select>
+          <label class="diff-select-label" for="diff-select-evolved">Evolved:</label>
+          <select id="diff-select-evolved" class="diff-select">
+            <option value="0">Gen 0 (Baseline)</option>
+            <option value="8" selected>Gen 8 (Imputation)</option>
+            <option value="17">Gen 17 (FIFO)</option>
+            <option value="30">Gen 30 (Champion)</option>
+          </select>
+        </div>
 
+        <div class="diff-actions-group">
+          <div class="diff-view-toggle">
+            <button class="diff-stepper-btn active" id="btn-view-split">Split (Side-by-Side)</button>
+            <button class="diff-stepper-btn" id="btn-view-unified">Unified View</button>
+          </div>
+          <button class="diff-stepper-btn" id="btn-toggle-fold">Collapse Unchanged</button>
+          <button class="btn-copy" id="btn-copy-diff">Copy Evolved Block</button>
+        </div>
+      </div>
+
+      <!-- Milestone Mutation Callout Banner -->
+      <div class="diff-mutation-banner" id="diff-mutation-banner">
+        <div>
+          <div class="diff-mutation-title" id="diff-banner-title">Gen 0 Baseline ➔ Gen 8 Censored Demand Imputation</div>
+          <div class="diff-mutation-desc" id="diff-banner-desc">Detects historical stockout periods and imputes unobserved customer demand using raw_mean + 1.2*raw_std.</div>
+          <div class="diff-innovations-pills" id="diff-innovations-pills"></div>
+        </div>
+        <div class="diff-stats-pills">
+          <span class="pill-add" id="diff-stat-add">+14 additions</span>
+          <span class="pill-del" id="diff-stat-del">-2 deletions</span>
+          <span class="pill-same" id="diff-stat-same">48 unchanged</span>
+        </div>
+      </div>
+
+      <!-- Code Diff Table Container -->
+      <div class="diff-table-wrapper">
+        <div class="diff-table-header split" id="diff-table-header">
+          <div id="diff-header-left">Gen 0: Baseline Static (s, S)</div>
+          <div id="diff-header-right">Gen 8: Censored Demand Imputation</div>
+        </div>
+        <div class="diff-table-body" id="diff-table-body">
+          <!-- Rendered via Safe DOM -->
+        </div>
+      </div>
+    </section>
+  </main>
