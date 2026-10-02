@@ -53,21 +53,81 @@ SECURITY_HEADERS: dict[str, str] = {
 }
 
 
+MAX_REQUEST_BODY_BYTES = 1_048_576  # 1 MB limit for POST payloads
+
+_TEXT_CACHE: dict[Path, tuple[int, str]] = {}
+_JSON_CACHE: dict[Path, tuple[int, Any]] = {}
+
+
+def _read_text_cached(path: Path) -> str:
+    """Read UTF-8 text from disk with mtime-keyed in-memory caching."""
+    resolved = path.resolve()
+    mtime_ns = resolved.stat().st_mtime_ns
+    cached = _TEXT_CACHE.get(resolved)
+    if cached is not None and cached[0] == mtime_ns:
+        return cached[1]
+    content = resolved.read_text(encoding="utf-8")
+    _TEXT_CACHE[resolved] = (mtime_ns, content)
+    return content
+
+
+def _read_json_cached(path: Path) -> Any:
+    """Read and parse JSON from disk with mtime-keyed in-memory caching."""
+    resolved = path.resolve()
+    mtime_ns = resolved.stat().st_mtime_ns
+    cached = _JSON_CACHE.get(resolved)
+    if cached is not None and cached[0] == mtime_ns:
+        return cached[1]
+    parsed = json.loads(resolved.read_text(encoding="utf-8"))
+    _JSON_CACHE[resolved] = (mtime_ns, parsed)
+    return parsed
+
+
+def parse_bounded_json_body(
+    raw_body: bytes,
+    content_length_header: str | None = None,
+    max_bytes: int = MAX_REQUEST_BODY_BYTES,
+) -> tuple[int, dict[str, Any]]:
+    """Validate payload byte size against max_bytes and parse JSON dict safely.
+
+    Returns:
+        (200, parsed_dict) when within max_bytes, or (413, {"detail": ...}) when oversized.
+    """
+    if content_length_header is not None:
+        try:
+            if int(content_length_header) > max_bytes:
+                return 413, {"detail": f"Request payload exceeds {max_bytes} byte limit."}
+        except (ValueError, TypeError):
+            pass
+
+    if len(raw_body) > max_bytes:
+        return 413, {"detail": f"Request payload exceeds {max_bytes} byte limit."}
+
+    if not raw_body:
+        return 200, {}
+
+    try:
+        parsed = json.loads(raw_body.decode("utf-8"))
+        return 200, parsed if isinstance(parsed, dict) else {}
+    except Exception:
+        return 200, {}
+
+
 def build_cloud_status_payload() -> dict[str, Any]:
     """Build telemetry summary payload for Discovery Engine AlphaEvolve status."""
     master_file = RECORDS_DIR / "master_trajectories.json"
     experiments_summary = {}
     engine_info = {
-        "project_id": "934903580331",
-        "location": "global",
-        "collection_id": "default_collection",
-        "engine_id": "alpha-evolve-experiment-engine",
+        "project_id": os.getenv("PROJECT_ID", "934903580331"),
+        "location": os.getenv("LOCATION", "global"),
+        "collection_id": os.getenv("COLLECTION", "default_collection"),
+        "engine_id": os.getenv("ENGINE_ID", "alpha-evolve-experiment-engine"),
         "auth_mode": "Application Default Credentials (ADC - google.auth.default)",
     }
 
     if master_file.exists():
         try:
-            bundle = json.loads(master_file.read_text(encoding="utf-8"))
+            bundle = _read_json_cached(master_file)
             engine_info.update(bundle.get("engine_info", {}))
             for uc_id, uc_data in bundle.get("use_cases", {}).items():
                 champ = uc_data.get("champion_summary", {})
@@ -111,7 +171,7 @@ def handle_api_request(
             {
                 "status": "healthy",
                 "service": "alpha-evolve-inventory-digital-twin",
-                "engine_id": "alpha-evolve-experiment-engine",
+                "engine_id": os.getenv("ENGINE_ID", "alpha-evolve-experiment-engine"),
                 "auth_mode": "ADC (google.auth.default)",
                 "secrets_leaked": False,
             },
@@ -125,14 +185,14 @@ def handle_api_request(
         if not index_file.exists():
             return 404, headers, {"detail": "Dashboard index.html not found."}
         headers["Content-Type"] = "text/html; charset=utf-8"
-        return 200, headers, index_file.read_text(encoding="utf-8")
+        return 200, headers, _read_text_cached(index_file)
 
     if path == "/api/data":
         data_file = DASHBOARD_DIR / "data.json"
         if not data_file.exists():
             return 404, headers, {"detail": "Dashboard data.json not found."}
         headers["Content-Type"] = "application/json"
-        return 200, headers, json.loads(data_file.read_text(encoding="utf-8"))
+        return 200, headers, _read_json_cached(data_file)
 
     if path.startswith("/api/trajectories/"):
         uc_id = path.split("/api/trajectories/", 1)[1].strip("/")
@@ -144,14 +204,15 @@ def handle_api_request(
         if not target_path.exists():
             return 404, headers, {"detail": "Trajectory file not found."}
         headers["Content-Type"] = "application/json"
-        return 200, headers, json.loads(target_path.read_text(encoding="utf-8"))
+        return 200, headers, _read_json_cached(target_path)
 
     if path == "/api/agent/replenish-query":
         # Grounding endpoint for Gemini Enterprise StreamAssist & external agent webhooks
         target_path = (RECORDS_DIR / ALLOWED_USE_CASES["inventory_replenishment"]).resolve()
         if not target_path.exists():
             return 404, headers, {"detail": "Inventory replenishment trajectory not found."}
-        data = json.loads(target_path.read_text(encoding="utf-8"))
+        data = _read_json_cached(target_path)
+
         champ = data.get("champion_summary", {})
         baseline = data.get("baseline_summary", {})
         headers["Content-Type"] = "application/json"
@@ -316,12 +377,29 @@ try:
         code, _, body = handle_api_request("/api/live/state")
         return JSONResponse(content=body)
 
+    async def _read_bounded_json(
+        request: Request,
+        max_bytes: int = MAX_REQUEST_BODY_BYTES,
+    ) -> dict[str, Any]:
+        """Read and parse JSON request body while enforcing a strict byte-size cap."""
+        content_len_header = request.headers.get("content-length")
+        status_code, result = parse_bounded_json_body(
+            b"", content_length_header=content_len_header, max_bytes=max_bytes
+        )
+        if status_code == 413:
+            raise HTTPException(status_code=413, detail=result["detail"])
+
+        raw_body = await request.body()
+        status_code, result = parse_bounded_json_body(
+            raw_body, content_length_header=content_len_header, max_bytes=max_bytes
+        )
+        if status_code == 413:
+            raise HTTPException(status_code=413, detail=result["detail"])
+        return result
+
     @app.post("/api/live/candidates", tags=["Telemetry"])
     async def post_live_candidate(request: Request) -> Any:
-        try:
-            payload = await request.json()
-        except Exception:
-            payload = {}
+        payload = await _read_bounded_json(request)
         code, _, body = handle_api_request("/api/live/candidates", payload=payload)
         return JSONResponse(content=body, status_code=code)
 
@@ -367,16 +445,14 @@ try:
         "/api/agent/replenish-query", methods=["GET", "POST"], tags=["Gemini Enterprise"]
     )
     async def agent_replenish_query(request: Request) -> Any:
-        payload = {}
+        payload: dict[str, Any] = {}
         if request.method == "POST":
-            try:
-                payload = await request.json()
-            except Exception:
-                payload = {}
+            payload = await _read_bounded_json(request)
         code, _, body = handle_api_request("/api/agent/replenish-query", payload=payload)
         if code != 200:
             raise HTTPException(status_code=code, detail=body.get("detail", "Error"))
         return JSONResponse(content=body)
+
 
 except ImportError:
     app = None  # type: ignore
@@ -462,23 +538,28 @@ if __name__ == "__main__":
 
             def do_POST(self) -> None:
                 if self.path in ("/api/agent/replenish-query", "/api/live/candidates"):
-                    try:
-                        content_len = int(self.headers.get("Content-Length", 0))
-                    except (ValueError, TypeError):
-                        content_len = 0
-
-                    if content_len > 1_048_576:  # 1MB max payload limit
+                    content_len_hdr = self.headers.get("Content-Length")
+                    status_code, check_res = parse_bounded_json_body(
+                        b"", content_length_header=content_len_hdr
+                    )
+                    if status_code == 413:
                         self.send_response(413)
                         self.end_headers()
                         return
 
-                    payload = {}
-                    if content_len > 0:
-                        try:
-                            raw = self.rfile.read(content_len).decode("utf-8")
-                            payload = json.loads(raw)
-                        except Exception:
-                            payload = {}
+                    try:
+                        content_len = max(0, int(content_len_hdr or 0))
+                    except (ValueError, TypeError):
+                        content_len = 0
+
+                    raw_bytes = self.rfile.read(content_len) if content_len > 0 else b""
+                    status_code, payload = parse_bounded_json_body(
+                        raw_bytes, content_length_header=content_len_hdr
+                    )
+                    if status_code == 413:
+                        self.send_response(413)
+                        self.end_headers()
+                        return
                     self._handle_json_route(payload=payload)
                     return
                 self.send_response(404)
