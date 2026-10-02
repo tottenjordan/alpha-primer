@@ -53,6 +53,80 @@ def test_master_trajectories_contains_all_use_cases(tmp_path: Path) -> None:
     assert "fleet_routing" in master["use_cases"]
 
 
+def test_all_use_cases_schema_parity(tmp_path: Path) -> None:
+    """Verify every use case in master_trajectories.json implements the full UI data contract."""
+    from alpha_evolve.dashboard.fleet_routing_trajectory_generator import (
+        generate_fleet_routing_trajectory_dataset,
+    )
+    from alpha_evolve.dashboard.trajectory_generator import generate_inventory_trajectory_dataset
+
+    generate_inventory_trajectory_dataset(output_dir=tmp_path)
+    generate_fleet_routing_trajectory_dataset(output_dir=tmp_path)
+
+    master = json.loads((tmp_path / "master_trajectories.json").read_text(encoding="utf-8"))
+    required_top_keys = {
+        "use_case_id",
+        "title",
+        "subtitle",
+        "recorded_at_utc",
+        "baseline_summary",
+        "champion_summary",
+        "milestones",
+        "ribbon_milestones",
+        "cost_waterfall",
+        "pareto_frontier",
+        "sku_archetypes",
+        "trajectory_generations",
+    }
+    required_metrics_keys = {
+        "total_cost",
+        "fill_rate_pct",
+        "spoilage_rate_pct",
+        "holding_cost",
+        "stockout_penalty",
+        "spoilage_cost",
+        "ordering_cost",
+        "cost_reduction_pct",
+        "fitness_score",
+    }
+    required_series_item_keys = {
+        "day",
+        "phase",
+        "on_hand",
+        "in_transit",
+        "sales",
+        "demand",
+        "spoilage_units",
+        "cost",
+    }
+
+    for uc_id, uc_data in master["use_cases"].items():
+        missing_top = required_top_keys - set(uc_data.keys())
+        assert not missing_top, f"{uc_id} missing top-level keys: {missing_top}"
+        assert len(uc_data["ribbon_milestones"]) >= 4
+        assert len(uc_data["cost_waterfall"]["components"]) == 4
+        assert len(uc_data["sku_archetypes"]) >= 1
+        assert len(uc_data["pareto_frontier"]) == 31
+        assert len(uc_data["trajectory_generations"]) == 31
+
+        for gen_entry in uc_data["trajectory_generations"]:
+            assert "metrics" in gen_entry, f"{uc_id} gen {gen_entry['generation']} missing metrics"
+            missing_m = required_metrics_keys - set(gen_entry["metrics"].keys())
+            assert not missing_m, f"{uc_id} missing metric keys: {missing_m}"
+            assert "daily_series" in gen_entry, f"{uc_id} missing daily_series"
+            assert isinstance(gen_entry["daily_series"], list)
+            assert len(gen_entry["daily_series"]) == 90
+            missing_s = required_series_item_keys - set(gen_entry["daily_series"][0].keys())
+            assert not missing_s, f"{uc_id} missing daily_series item keys: {missing_s}"
+
+        for m_gen, m_data in uc_data["milestones"].items():
+            assert len(m_data["evolve_block"].splitlines()) >= 10, (
+                f"{uc_id} milestone {m_gen} should have a realistic multi-line evolve_block"
+            )
+            assert "metrics" in m_data
+            assert "key_innovations" in m_data
+
+
 def test_dashboard_multi_use_case_switcher_elements(tmp_path: Path) -> None:
     """Verify index.html contains use-case switcher pills and navigation elements."""
     html_path = build_dashboard_html(output_dir=tmp_path)

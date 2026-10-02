@@ -23,22 +23,18 @@ from examples.inventory_replenishment.src.simulator import (
     generate_benchmark_dataset,
 )
 
+from alpha_evolve.dashboard.trajectory_utils import (
+    interpolate_s_curve as _interpolate_series,
+)
+from alpha_evolve.dashboard.trajectory_utils import (
+    s_curve_progress,
+    update_master_trajectories_bundle,
+)
 from alpha_evolve.utils import extract_evolve_blocks
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent.parent
 RECORDS_DIR = ROOT_DIR / "records"
 ARTIFACTS_DIR = ROOT_DIR / "artifacts" / "inventory_replenishment"
-
-
-def _interpolate_series(start_val: float, end_val: float, gen: int, max_gen: int = 30) -> float:
-    """Smooth evolutionary S-curve progression from Gen 0 baseline to Gen 30 champion."""
-    if gen <= 0:
-        return start_val
-    if gen >= max_gen:
-        return end_val
-    t = gen / float(max_gen)
-    s_curve = (t**1.45) / ((t**1.45) + ((1.0 - t) ** 1.65))
-    return start_val + (end_val - start_val) * s_curve
 
 
 def run_full_simulation(
@@ -213,7 +209,7 @@ def generate_inventory_trajectory_dataset(
     trajectory_generations: list[dict[str, Any]] = []
 
     for gen in range(31):
-        s_curve_val = _interpolate_series(0.0, 1.0, gen, max_gen=30)
+        s_curve_val = s_curve_progress(gen, max_gen=30)
         gen_cost = round(
             _interpolate_series(gen0_metrics["total_cost"], gen30_metrics["total_cost"], gen, 30), 0
         )
@@ -738,45 +734,16 @@ def generate_inventory_trajectory_dataset(
         "trajectory_generations": trajectory_generations,
     }
 
-    master_bundle = {
-        "platform_title": "AlphaEvolve Supply Chain & Digital Twin Intelligence Suite",
-        "generated_at_utc": datetime.datetime.now(datetime.UTC).isoformat(),
-        "engine_info": {
-            "project_id": "934903580331",
-            "engine_id": "alpha-evolve-experiment-engine",
-            "collection_id": "default_collection",
-            "location": "global",
-            "api_endpoint": "https://discoveryengine.googleapis.com",
-            "auth_mode": "Application Default Credentials (ADC - google.auth.default)",
-        },
-        "use_cases": {
-            "inventory_replenishment": use_case_data,
-        },
-    }
-
     target_dir = output_dir if output_dir is not None else RECORDS_DIR
-    fleet_trajectory_path = target_dir / "fleet_routing_trajectory.json"
-    if not fleet_trajectory_path.exists():
-        fleet_trajectory_path = RECORDS_DIR / "fleet_routing_trajectory.json"
-
-    if fleet_trajectory_path.exists():
-        try:
-            fleet_data = json.loads(fleet_trajectory_path.read_text(encoding="utf-8"))
-            master_bundle["use_cases"]["fleet_routing"] = fleet_data
-        except Exception:
-            pass
-
-    # Save to records/ (or custom output_dir if specified)
-    if write_files:
-        target_dir.mkdir(parents=True, exist_ok=True)
-        (target_dir / "inventory_replenishment_trajectory.json").write_text(
-            json.dumps(use_case_data, indent=2), encoding="utf-8"
-        )
-        (target_dir / "master_trajectories.json").write_text(
-            json.dumps(master_bundle, indent=2), encoding="utf-8"
-        )
-
-    return master_bundle
+    return update_master_trajectories_bundle(
+        use_case_id="inventory_replenishment",
+        use_case_data=use_case_data,
+        target_dir=target_dir,
+        default_records_dir=RECORDS_DIR,
+        use_case_filename="inventory_replenishment_trajectory.json",
+        companion_use_cases={"fleet_routing": "fleet_routing_trajectory.json"},
+        write_files=write_files,
+    )
 
 
 if __name__ == "__main__":
