@@ -4,24 +4,46 @@ This document details the architectural reference designs and workflows powering
 
 ---
 
-## 1. End-to-End AlphaEvolve Multi-Island Architecture
+## 1. End-to-End AlphaEvolve Closed-Loop Process (PaperBanana NeurIPS Visualization)
 
-The AlphaEvolve platform follows a **hybrid, causally-isolated architecture** connecting Google Cloud's serverless Gemini Enterprise engine with a local, data-private evaluation runtime.
+The AlphaEvolve platform operates as a **three-zone closed-loop evolutionary algorithm discovery pipeline**, coupling problem specification & seed initialization with Google Cloud's serverless Discovery Engine (`v1alpha`) and a client-side, data-private evaluation harness.
 
-![AlphaEvolve Architecture](diagrams/alphaevolve_architecture.jpg)
+![AlphaEvolve: Closed-Loop Evolutionary Algorithm Discovery Process](diagrams/alphaevolve_process_paperbanana.png)
 
-### Architecture Highlights:
-- **Local Execution Environment (Data Private)**:
-  - **Asynchronous Multi-Island Population**: Four asynchronous evolutionary sub-populations (Islands 0..3) exploring parallel heuristic trajectories with ring migration topologies.
-  - **Evaluation Controller**: Coordinates mutation candidate polling, program extraction, and worker dispatching.
-  - **Isolated Worker Pool**: Process-isolated sandbox executing candidate algorithms against 90-day causal inventory datasets. Proprietary customer demand data never leaves the local environment.
-- **Google Cloud Discovery Engine v1alpha**:
-  - **Session & Experiment Entities**: Dynamic, episodic metadata management tracking generation lineage and candidate programs.
-  - **Gemini 3.5 Flash Search & Mutation Engine**: Discovers non-linear, multi-echelon replenishment policies via AST code mutations.
+### Three-Zone Process Breakdown:
+1. **Zone 1 — Problem Specification & Seed (`program.py`)**:
+   - **Initial Seed Program (`program.py`)**: Isolates mutable heuristic logic inside `# EVOLVE-BLOCK` markers while locking surrounding simulation contracts.
+   - **Problem Context & Scoring Objective**: Defines operational constraints and the monotonic multi-objective fitness function.
+   - **Causal Evaluation Dataset**: Partitioned into **Warmup**, **Validation**, and locked **Holdout** windows.
+2. **Zone 2 — Server-Side Cloud Evolutionary Engine (`Discovery Engine v1alpha`)**:
+   - **Evolutionary Database**: Combines **Multi-Island Topology** (parallel sub-populations with periodic ring migration) and a **MAP-Elites Grid** (retaining elite performers across orthogonal metric dimensions).
+   - **(A) Parent & Crossover Sampling** → **(B) Stochastic Prompt Diversification** → **(C) Weighted LLM Ensemble Mutation (`Gemini 2.5 Flash` | `Gemini 2.5 Pro`)** → **(D) Candidate Synthesis (`EVALUATION_PENDING`)**.
+3. **Zone 3 — Client-Side Data-Private Evaluation Loop**:
+   - **(E) Sandboxed Worker Pool**: Acquires pending candidates via `AcquireNextProgram` and executes them in process-isolated workers enforced by `RLIMIT_AS` memory limits and hard `SIGKILL` timeouts.
+   - **(F) Three-Tier Evaluation Cascade (`BaseEvaluator`)**:
+     - **Tier 0**: Syntax & Contract Gate (`<1 ms`)
+     - **Tier 1**: Fast Smoke Test (`<10 ms`)
+     - **Tier 2**: Causal Digital Twin Simulation
+   - **(G) Score Submission & Pareto Update**: Streams live SSE telemetry, submits **Fitness Scores & Evaluator Diagnostics** via `SubmitEvaluation` back to the Evolutionary Database, and promotes the **Champion Program** (validated on the locked holdout split).
 
 ---
 
-## 2. Google Cloud Run & Gemini Enterprise Integration Workflow
+## 2. 31-Generation Multi-Island Optimization Trajectories
+
+![AlphaEvolve 31-Generation Evolutionary Optimization Trajectories](diagrams/alphaevolve_trajectory_plot_paperbanana.png)
+
+- **Panel (a) — Perishable Inventory Replenishment (90-Day Causal Twin)**: Best-so-far operational cost drops from **$68.4k** (`Gen 0: Static (s, S)`) to **$45.2k** (`Gen 30 Champion`, **-33.9% cost reduction**) while Customer Service Fill Rate rises from **91.2%** to **93.5%** and perishable spoilage drops to **8.45%**.
+- **Panel (b) — Dynamic Fleet Routing with Time Windows (VRPTW Twin)**: Best-so-far fleet dispatch cost drops from **$4.10k** (`Gen 0: Greedy NN`) to **$2.93k** (`Gen 30 Champion`, **-28.5% cost reduction**) while On-Time Delivery SLA improves from **60.0%** to **97.2%**.
+
+---
+
+## 3. Hybrid Cloud-to-Edge Deployment Topology
+
+![AlphaEvolve Architecture](diagrams/alphaevolve_architecture.jpg)
+
+---
+
+## 4. Google Cloud Run & Gemini Enterprise Integration Workflow
 
 The production deployment provides a decoupled web dashboard and bidirectional agent grounding with Gemini Enterprise assistants.
 
@@ -42,7 +64,7 @@ The production deployment provides a decoupled web dashboard and bidirectional a
 
 ---
 
-## 3. Multi-Echelon Perishable Inventory Evaluation Loop
+## 5. Multi-Echelon Perishable Inventory Evaluation Loop
 
 The evaluation harness implements a rigorous 4-phase closed-loop cycle executing within process-isolated worker sandboxes.
 

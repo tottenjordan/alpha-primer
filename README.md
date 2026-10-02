@@ -133,10 +133,12 @@ The repository includes a decoupled web dashboard (`dashboard/index.html` + `ser
 
 ## 🏛️ System Architecture & Reference Designs
 
-For complete high-resolution architecture diagrams and execution workflows, see [docs/architecture/README.md](docs/architecture/README.md):
-- **Hybrid Evolutionary Architecture**: Visual breakdown of the local data-isolated worker sandbox and Gemini Enterprise Discovery Engine integration.
+![AlphaEvolve: Closed-Loop Evolutionary Algorithm Discovery Process](docs/architecture/diagrams/alphaevolve_process_paperbanana.png)
+
+For complete high-resolution architecture diagrams, PaperBanana statistical trajectory plots, and execution workflows, see [docs/architecture/README.md](docs/architecture/README.md):
+- **Closed-Loop AlphaEvolve Evolutionary Process (`alphaevolve_process_paperbanana.png`)**: 3-zone methodology diagram covering Problem Specification & Seed (`# EVOLVE-BLOCK`), the Server-Side Cloud Evolutionary Engine (`Multi-Island Topology` + `MAP-Elites Grid`, weighted Gemini ensemble mutation), and the Client-Side Data-Private Evaluation Loop (`RLIMIT_AS` sandboxed worker pool + 3-tier causal evaluation cascade).
+- **31-Generation Multi-Island Trajectory Plot (`alphaevolve_trajectory_plot_paperbanana.png`)**: Dual-benchmark Pareto cost and SLA convergence across Perishable Inventory Replenishment (`-33.9%` cost) and Dynamic Fleet Routing VRPTW (`-28.5%` cost).
 - **Cloud Run & Gemini Assistant Grounding**: Production deployment topology and external agent webhook routing.
-- **Digital Twin Closed-Loop Evaluation**: 4-phase simulation cycle (causal state ingestion, policy execution, FIFO age depletion, multi-objective fitness).
 
 ---
 
