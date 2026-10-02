@@ -36,15 +36,13 @@ class TelemetryEvent(TypedDict):
 class LiveTelemetryBroker:
     """Thread-safe event broker managing dashboard SSE subscribers and run state."""
 
-    def __init__(self, buffer_size: int = 500) -> None:
-        self.buffer_size = buffer_size
-        self._lock = threading.RLock()
-        self._subscribers: set[queue.Queue[TelemetryEvent]] = set()
-        self._history: collections.deque[TelemetryEvent] = collections.deque(maxlen=buffer_size)
-        self._current_state: dict[str, Any] = {
+    @staticmethod
+    def _default_state() -> dict[str, Any]:
+        return {
             "status": "IDLE",
             "experiment_name": None,
             "max_programs": 0,
+            "primary_metric": "cost_reduction_pct",
             "evaluated_count": 0,
             "best_score": -float("inf"),
             "best_candidate_id": None,
@@ -52,6 +50,13 @@ class LiveTelemetryBroker:
             "started_at": None,
             "completed_at": None,
         }
+
+    def __init__(self, buffer_size: int = 500) -> None:
+        self.buffer_size = buffer_size
+        self._lock = threading.RLock()
+        self._subscribers: set[queue.Queue[TelemetryEvent]] = set()
+        self._history: collections.deque[TelemetryEvent] = collections.deque(maxlen=buffer_size)
+        self._current_state: dict[str, Any] = self._default_state()
 
     def subscribe(self) -> queue.Queue[TelemetryEvent]:
         """Subscribe to the event stream, receiving a dedicated thread-safe queue."""
@@ -137,17 +142,7 @@ class LiveTelemetryBroker:
         with self._lock:
             self._history.clear()
             self._subscribers.clear()
-            self._current_state = {
-                "status": "IDLE",
-                "experiment_name": None,
-                "max_programs": 0,
-                "evaluated_count": 0,
-                "best_score": -float("inf"),
-                "best_candidate_id": None,
-                "latest_candidate": None,
-                "started_at": None,
-                "completed_at": None,
-            }
+            self._current_state = self._default_state()
 
 
 _GLOBAL_BROKER: LiveTelemetryBroker | None = None

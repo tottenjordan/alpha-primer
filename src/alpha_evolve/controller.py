@@ -13,7 +13,7 @@ from rich.table import Table
 
 from .client import AlphaEvolveClient, MockAlphaEvolveClient
 from .dashboard.telemetry_broker import LiveTelemetryBroker, get_global_broker
-from .evaluators import BaseEvaluator
+from .evaluators import BaseEvaluator, resolve_evaluator
 from .models import (
     AlphaEvolveEvaluationSubmission,
     AlphaEvolveProgramEvaluation,
@@ -47,21 +47,18 @@ class EvolutionController:
             telemetry_broker if telemetry_broker is not None else get_global_broker()
         )
 
-        resolved_evaluator = evaluator if evaluator is not None else evaluator_fn
-        if resolved_evaluator is None:
-            raise ValueError("Either 'evaluator' or 'evaluator_fn' must be provided.")
-
-        self.evaluator: BaseEvaluator | Callable[[Any], EvaluationResult] = resolved_evaluator
-        if isinstance(resolved_evaluator, BaseEvaluator):
-            self.evaluator_fn: Callable[[Any], EvaluationResult] = resolved_evaluator.evaluate
-            self.target_function_name: str = (
-                target_function_name or resolved_evaluator.target_function_name
-            )
-            self.primary_metric: str = primary_metric or resolved_evaluator.primary_metric
-        else:
-            self.evaluator_fn = resolved_evaluator
-            self.target_function_name = target_function_name or "compute"
-            self.primary_metric = primary_metric or "cost_reduction_pct"
+        (
+            self.evaluator,
+            self.evaluator_fn,
+            self.target_function_name,
+            self.primary_metric,
+            self.higher_is_better,
+        ) = resolve_evaluator(
+            evaluator=evaluator,
+            evaluator_fn=evaluator_fn,
+            target_function_name=target_function_name,
+            primary_metric=primary_metric,
+        )
 
         self.worker_pool = WorkerPool(
             max_workers=config.run_settings.parallel_workers,
@@ -75,7 +72,18 @@ class EvolutionController:
 
         self.candidates_history: list[ProgramCandidate] = []
         self.best_candidate: ProgramCandidate | None = None
-        self.best_score: float = -float("inf")
+        self.best_score: float = -float("inf") if self.higher_is_better else float("inf")
+
+    def _is_better(self, candidate_score: float, reference_score: float) -> bool:
+        """Compare candidate_score against reference_score honoring higher_is_better."""
+        if self.higher_is_better:
+            return candidate_score > reference_score
+        return candidate_score < reference_score
+
+    def _format_score(self, score: float) -> str:
+        """Format metric value with '%' suffix only when metric name ends with '_pct'."""
+        suffix = "%" if self.primary_metric.endswith("_pct") else ""
+        return f"{score:+.2f}{suffix}"
 
     def run(self) -> ProgramCandidate:
         """Execute the end-to-end evolutionary search loop."""
@@ -130,7 +138,7 @@ class EvolutionController:
         self.best_score = baseline_score
 
         console.print(
-            f"   Baseline {self.primary_metric}: [bold]{baseline_score:+.2f}%[/bold] "
+            f"   Baseline {self.primary_metric}: [bold]{self._format_score(baseline_score)}[/bold] "
             f"(Runtime: {seed_eval.execution_time_s:.2f}s)"
         )
 
@@ -177,8 +185,8 @@ class EvolutionController:
             "0",
             "seed_program",
             f"[{'green' if seed_eval.status == 'SUCCESS' else 'red'}]{seed_eval.status}[/]",
-            f"{baseline_score:+.2f}%",
-            f"{self.best_score:+.2f}%",
+            self._format_score(baseline_score),
+            self._format_score(self.best_score),
             f"{seed_eval.execution_time_s:.2f}",
         )
 
@@ -212,9 +220,15 @@ class EvolutionController:
                     evaluated_count += 1
 
                     score_map = eval_res.scores.to_dict()
-                    curr_score = score_map.get(self.primary_metric, -1e9)
+                    fallback_score = -1e9 if self.higher_is_better else 1e9
+                    has_valid_score = (
+                        eval_res.status == "SUCCESS" and self.primary_metric in score_map
+                    )
+                    curr_score = (
+                        score_map[self.primary_metric] if has_valid_score else fallback_score
+                    )
 
-                    is_new_best = curr_score > self.best_score
+                    is_new_best = has_valid_score and self._is_better(curr_score, self.best_score)
                     if is_new_best:
                         self.best_score = curr_score
                         self.best_candidate = cand
@@ -223,8 +237,8 @@ class EvolutionController:
                         str(evaluated_count - 1),
                         cand.program_id.split("/")[-1],
                         f"[{'green' if eval_res.status == 'SUCCESS' else 'red'}]{eval_res.status}[/]",
-                        f"{curr_score:+.2f}%" if curr_score > -1e8 else "ERR",
-                        f"{self.best_score:+.2f}%",
+                        self._format_score(curr_score) if has_valid_score else "ERR",
+                        self._format_score(self.best_score),
                         f"{eval_res.execution_time_s:.2f}",
                     )
 
@@ -288,7 +302,7 @@ class EvolutionController:
             f"\n[bold green]✅ Evolution Completed![/bold green] Total Evaluated: {evaluated_count} programs."
         )
         console.print(
-            f"🏆 Best {self.primary_metric}: [bold green]{self.best_score:+.2f}%[/bold green] "
+            f"🏆 Best {self.primary_metric}: [bold green]{self._format_score(self.best_score)}[/bold green] "
             f"(Candidate: {self.best_candidate.program_id if self.best_candidate else 'None'})"
         )
 

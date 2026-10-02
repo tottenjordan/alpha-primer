@@ -164,3 +164,42 @@ def test_server_live_state_and_candidates() -> None:
     code, headers, body = handle_api_request("/api/live/candidates", payload={})
     assert code == 400
     assert "Missing candidate" in body["detail"]
+
+
+def test_server_mtime_cache_and_invalidation(tmp_path) -> None:
+    """Verify _read_json_cached serves cached content and invalidates when file mtime changes."""
+    import time
+
+    from server import _read_json_cached
+
+    sample_file = tmp_path / "sample.json"
+    sample_file.write_text('{"version": 1}', encoding="utf-8")
+    assert _read_json_cached(sample_file) == {"version": 1}
+
+    # Ensure mtime advances before rewriting
+    time.sleep(0.01)
+    sample_file.write_text('{"version": 2}', encoding="utf-8")
+    assert _read_json_cached(sample_file) == {"version": 2}
+
+
+def test_bounded_json_payload_enforces_1mb_limit() -> None:
+    """Verify POST payload parser enforces the 1 MB request body limit with HTTP 413."""
+    from server import MAX_REQUEST_BODY_BYTES, parse_bounded_json_body
+
+    # 1. Valid payload within limit
+    status_ok, parsed = parse_bounded_json_body(b'{"query": "what-if"}', content_length_header="19")
+    assert status_ok == 200
+    assert parsed == {"query": "what-if"}
+
+    # 2. Oversized Content-Length header rejected immediately with 413
+    status_hdr, err_hdr = parse_bounded_json_body(
+        b"", content_length_header=str(MAX_REQUEST_BODY_BYTES + 1)
+    )
+    assert status_hdr == 413
+    assert "exceeds" in err_hdr["detail"]
+
+    # 3. Oversized raw body rejected with 413 even without Content-Length header
+    oversized_bytes = b"x" * (MAX_REQUEST_BODY_BYTES + 128)
+    status_raw, err_raw = parse_bounded_json_body(oversized_bytes)
+    assert status_raw == 413
+    assert "exceeds" in err_raw["detail"]

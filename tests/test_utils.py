@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from alpha_evolve.utils import compute_code_complexity, extract_evolve_blocks
+import pytest
+
+from alpha_evolve.utils import (
+    compile_candidate_callable,
+    compute_code_complexity,
+    extract_evolve_blocks,
+)
 
 
 def test_extract_evolve_blocks() -> None:
@@ -39,3 +45,11 @@ def func_b(y):
     invalid_code = "def syntax_error("
     bad_complexity = compute_code_complexity(invalid_code)
     assert bad_complexity["ast_nodes"] == -1
+
+
+def test_compile_candidate_callable() -> None:
+    fn = compile_candidate_callable("def double_it(x):\n    return x * 2\n", "double_it")
+    assert fn(21) == 42
+
+    with pytest.raises(KeyError, match="not found or not callable"):
+        compile_candidate_callable("x = 10\n", "missing_fn")

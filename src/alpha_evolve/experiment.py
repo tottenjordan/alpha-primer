@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from collections.abc import Callable
@@ -13,7 +14,7 @@ from dotenv import load_dotenv
 from .client import AlphaEvolveClient, MockAlphaEvolveClient
 from .controller import EvolutionController
 from .dashboard.telemetry_broker import LiveTelemetryBroker
-from .evaluators import BaseEvaluator
+from .evaluators import BaseEvaluator, resolve_evaluator
 from .models import EvaluationResult, ExperimentConfig, ProgramCandidate, RunSettings
 from .utils import export_artifact
 
@@ -34,21 +35,18 @@ class AlphaEvolveExperiment:
     ) -> None:
         self.config = config
         self.telemetry_broker = telemetry_broker
-        resolved_evaluator = evaluator if evaluator is not None else evaluator_fn
-        if resolved_evaluator is None:
-            raise ValueError("Either 'evaluator' or 'evaluator_fn' must be provided.")
-
-        self.evaluator: BaseEvaluator | Callable[[Any], EvaluationResult] = resolved_evaluator
-        if isinstance(resolved_evaluator, BaseEvaluator):
-            self.evaluator_fn: Callable[[Any], EvaluationResult] = resolved_evaluator.evaluate
-            self.target_function_name: str = (
-                target_function_name or resolved_evaluator.target_function_name
-            )
-            self.primary_metric: str = primary_metric or resolved_evaluator.primary_metric
-        else:
-            self.evaluator_fn = resolved_evaluator
-            self.target_function_name = target_function_name or "compute"
-            self.primary_metric = primary_metric or "cost_reduction_pct"
+        (
+            self.evaluator,
+            self.evaluator_fn,
+            self.target_function_name,
+            self.primary_metric,
+            self.higher_is_better,
+        ) = resolve_evaluator(
+            evaluator=evaluator,
+            evaluator_fn=evaluator_fn,
+            target_function_name=target_function_name,
+            primary_metric=primary_metric,
+        )
 
     @classmethod
     def from_files(
@@ -109,6 +107,7 @@ class AlphaEvolveExperiment:
 
     def run(self, output_dir: str | Path = "artifacts") -> ProgramCandidate:
         """Run the experiment and save the best evolved program to artifacts."""
+        client: AlphaEvolveClient | MockAlphaEvolveClient
         if self.config.run_settings.mock_mode:
             client = MockAlphaEvolveClient(seed_code=self.config.seed_code)
         else:
@@ -120,17 +119,17 @@ class AlphaEvolveExperiment:
                 assistant_id=self.config.assistant_id,
             )
 
-        controller = EvolutionController(
-            config=self.config,
-            client=client,
-            evaluator=self.evaluator,
-            evaluator_fn=self.evaluator_fn,
-            target_function_name=self.target_function_name,
-            primary_metric=self.primary_metric,
-            telemetry_broker=self.telemetry_broker,
-        )
-
-        best_candidate = controller.run()
+        with client:
+            controller = EvolutionController(
+                config=self.config,
+                client=client,
+                evaluator=self.evaluator,
+                evaluator_fn=self.evaluator_fn,
+                target_function_name=self.target_function_name,
+                primary_metric=self.primary_metric,
+                telemetry_broker=self.telemetry_broker,
+            )
+            best_candidate = controller.run()
 
         # Save best program artifact
         out_dir = Path(output_dir)
@@ -138,12 +137,12 @@ class AlphaEvolveExperiment:
         if best_candidate.evaluation_result:
             summary = {
                 "program_id": best_candidate.program_id,
+                "primary_metric": self.primary_metric,
+                "higher_is_better": self.higher_is_better,
                 "scores": best_candidate.evaluation_result.scores.to_dict(),
                 "insights": best_candidate.evaluation_result.insights.to_dict(),
                 "execution_time_s": best_candidate.evaluation_result.execution_time_s,
             }
-            import json
-
             export_artifact(out_dir, "best_evaluation_summary.json", json.dumps(summary, indent=2))
 
         return best_candidate
