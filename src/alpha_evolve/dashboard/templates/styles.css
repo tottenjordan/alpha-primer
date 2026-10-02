@@ -725,10 +725,23 @@
       color: var(--accent-cyan);
     }
 
+    .hidden {
+      display: none !important;
+    }
+
+    .btn-fleet-filter {
+      padding: 2px 7px;
+      font-size: 10px;
+    }
+
     .canvas-container {
       position: relative;
       width: 100%;
       height: 280px;
+    }
+
+    .canvas-container.fleet-spatial-mode {
+      height: 310px;
     }
 
     .canvas-container-whatif {

@@ -129,8 +129,19 @@
           <div class="card-title">
             <span id="canvas1-title">90-Day Digital Twin Inventory Trajectory &amp; Spoilage Stack</span>
             <span class="card-subtitle-mono" id="canvas1-subtitle">Days 0..29 Warmup | 30..65 Eval | 66..89 Holdout</span>
+            <div class="canvas-mode-toggle hidden" id="fleet-map-controls">
+              <button class="btn-mode btn-fleet-filter active" data-fleet-filter="all">All Waves</button>
+              <button class="btn-mode btn-fleet-filter" data-fleet-filter="wave0">Wave 0 (Static)</button>
+              <button class="btn-mode btn-fleet-filter" data-fleet-filter="dynamic">Waves 1–4 (Dynamic)</button>
+              <button class="btn-mode btn-fleet-filter" data-fleet-filter="late">SLA Breaches</button>
+              <button class="btn-mode btn-fleet-filter" data-fleet-filter="v0">V0</button>
+              <button class="btn-mode btn-fleet-filter" data-fleet-filter="v1">V1</button>
+              <button class="btn-mode btn-fleet-filter" data-fleet-filter="v2">V2</button>
+              <button class="btn-mode btn-fleet-filter" data-fleet-filter="v3">V3</button>
+              <button class="btn-mode btn-fleet-filter" data-fleet-filter="v4">V4</button>
+            </div>
           </div>
-          <div class="canvas-container">
+          <div class="canvas-container" id="canvas1-container">
             <canvas id="canvas-trajectory"></canvas>
             <div id="tooltip-trajectory" class="canvas-tooltip" role="status" aria-live="polite"></div>
           </div>

@@ -176,6 +176,7 @@ class FleetRoutingDigitalTwin:
         served_mask: np.ndarray | None = None,
         vehicle_positions: np.ndarray | None = None,
         vehicle_capacities: np.ndarray | None = None,
+        vehicle_available_times: np.ndarray | None = None,
     ) -> dict[str, Any]:
         """Extract causally isolated state visible to the dispatch policy at current_time.
 
@@ -195,12 +196,16 @@ class FleetRoutingDigitalTwin:
                 self.config.n_vehicles, self.config.vehicle_capacity, dtype=np.float64
             )
 
+        if vehicle_available_times is None:
+            vehicle_available_times = np.zeros(self.config.n_vehicles, dtype=np.float64)
+
         return {
             "current_time": current_time,
             "visible_order_indices": visible_indices,
             "traffic_factor": self.traffic_congestion_factor(current_time),
             "vehicle_positions": vehicle_positions.copy(),
             "vehicle_remaining_capacities": vehicle_capacities.copy(),
+            "vehicle_busy_until": vehicle_available_times.copy(),
             "customer_locations": self.config.customer_locations[visible_indices],
             "demands": self.config.demands[visible_indices],
             "time_windows": self.config.time_windows[visible_indices],
@@ -232,6 +237,7 @@ class FleetRoutingDigitalTwin:
                 current_time=current_time,
                 served_mask=served_mask,
                 vehicle_positions=vehicle_locations,
+                vehicle_available_times=vehicle_available_times,
             )
 
             # Check if there are orders to assign
