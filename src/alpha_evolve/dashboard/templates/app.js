@@ -1265,6 +1265,75 @@
       const slideSpoil = document.getElementById("slide-spoil");
       const slideStock = document.getElementById("slide-stockout");
 
+      let whatIfReqSeq = 0;
+      let whatIfDebounceTimer = null;
+
+      function applyWhatIfMetrics(
+        isFleet,
+        baseFillRate,
+        baseSpoilUnits,
+        baseSpoilCost,
+        baseDailyCost,
+        baseOrderUp,
+        champFillRate,
+        champSpoilUnits,
+        champSpoilCost,
+        champDailyCost,
+        champOrderUp,
+        resilienceText
+      ) {
+        const unitLabel = isFleet ? " hrs ($" : " units ($";
+        const loadSuffix = isFleet ? " stops" : " units";
+        document.getElementById("val-base-fill").textContent = baseFillRate.toFixed(1) + "%";
+        document.getElementById("val-base-spoil").textContent =
+          baseSpoilUnits.toFixed(1) + unitLabel + Math.round(baseSpoilCost) + ")";
+        document.getElementById("val-base-cost").textContent =
+          "$" + Math.round(baseDailyCost).toLocaleString() + " / day";
+        document.getElementById("val-base-orderup").textContent = baseOrderUp + loadSuffix;
+
+        const baseSlaBadge = document.getElementById("badge-base-sla");
+        if (baseFillRate >= 95.0) {
+          baseSlaBadge.textContent = "SLA Compliant";
+          baseSlaBadge.className = "badge-diff positive";
+        } else {
+          baseSlaBadge.textContent = "SLA Breach (-" + (95.0 - baseFillRate).toFixed(1) + "%)";
+          baseSlaBadge.className = "badge-diff negative";
+        }
+
+        document.getElementById("val-champ-fill").textContent = champFillRate.toFixed(1) + "%";
+        document.getElementById("val-champ-spoil").textContent =
+          champSpoilUnits.toFixed(1) + unitLabel + Math.round(champSpoilCost) + ")";
+        document.getElementById("val-champ-cost").textContent =
+          "$" + Math.round(champDailyCost).toLocaleString() + " / day";
+        document.getElementById("val-champ-orderup").textContent =
+          champOrderUp + loadSuffix + " (dynamic)";
+
+        if (resilienceText) {
+          document.getElementById("whatif-resilience-text").textContent = resilienceText;
+        } else {
+          const savedPerDay = Math.max(0, Math.round(baseDailyCost - champDailyCost));
+          const fillDiff = champFillRate - baseFillRate;
+          const metricWord = isFleet ? "on-time SLA" : "fill rate";
+          document.getElementById("whatif-resilience-text").textContent =
+            "Champion prevents SLA deficit (+" +
+            fillDiff.toFixed(1) +
+            "% " +
+            metricWord +
+            ") and saves +$" +
+            savedPerDay.toLocaleString() +
+            "/day under disruption.";
+        }
+
+        drawWhatIfDualCanvas(
+          baseFillRate,
+          champFillRate,
+          baseSpoilUnits,
+          champSpoilUnits,
+          baseDailyCost,
+          champDailyCost
+        );
+      }
+
       function updateWhatIfSimulation() {
         const skuIdx = parseInt((skuSelect && skuSelect.value) || "0", 10);
         const sku = archetypes[skuIdx] || archetypes[0] || {
@@ -1281,60 +1350,118 @@
         const stockMult = parseInt((slideStock && slideStock.value) || "10", 10) / 10.0;
         const isFleet = currentUseCaseId === "fleet_routing";
 
-        document.getElementById("val-leadtime").textContent = isFleet ? "+" + (leadDelay * 12) + " mins" : "+" + leadDelay + " days";
+        document.getElementById("val-leadtime").textContent = isFleet
+          ? "+" + leadDelay * 12 + " mins"
+          : "+" + leadDelay + " days";
         document.getElementById("val-promo").textContent = "+" + promoPct + "%";
         document.getElementById("val-spoil").textContent = spoilMult.toFixed(1) + "x";
         document.getElementById("val-stockout").textContent = stockMult.toFixed(1) + "x";
 
-        // 1) Baseline Policy Simulation
-        const baseOrderUp = Math.round(32.0 * (sku.lead_time_days + 1) + 1.65 * 14.0 * Math.sqrt(sku.lead_time_days + 1));
+        // 1) Immediate Client-Side Fallback Calculation (Offline-Ready)
+        const baseOrderUp = Math.round(
+          32.0 * (sku.lead_time_days + 1) + 1.65 * 14.0 * Math.sqrt(sku.lead_time_days + 1)
+        );
         const baseFillRate = Math.max(68.0, 91.2 - leadDelay * 4.4 - (promoPct / 150.0) * 8.2);
-        const baseSpoilUnits = Math.max(1.5, (4.8 + leadDelay * 1.6 + (promoPct / 100.0) * 2.2) * spoilMult * (14.0 / sku.shelf_life_days));
+        const baseSpoilUnits = Math.max(
+          1.5,
+          (4.8 + leadDelay * 1.6 + (promoPct / 100.0) * 2.2) *
+            spoilMult *
+            (14.0 / sku.shelf_life_days)
+        );
+        const baseSpoilCost = baseSpoilUnits * sku.spoilage_cost;
         const baseDailyCost = Math.round(
           28.0 * (sku.holding_cost / 0.25) +
-          baseSpoilUnits * sku.spoilage_cost +
-          Math.max(0, 95.0 - baseFillRate) * 22.0 * stockMult * sku.stockout_penalty
+            baseSpoilCost +
+            Math.max(0, 95.0 - baseFillRate) * 22.0 * stockMult * sku.stockout_penalty
         );
 
-        // 2) Evolved Champion Policy Simulation
-        const champOrderUp = Math.round((32.0 * (1.0 + promoPct / 100.0)) * (sku.lead_time_days + leadDelay + 1) + 38.0);
-        const champFillRate = Math.min(98.8, Math.max(92.2, 94.8 - leadDelay * 0.7 + (promoPct / 200.0) * 1.2));
-        const champSpoilUnits = Math.max(0.6, (1.8 + leadDelay * 0.4 + (promoPct / 100.0) * 0.8) * spoilMult * (7.0 / sku.shelf_life_days));
+        const champOrderUp = Math.round(
+          32.0 * (1.0 + promoPct / 100.0) * (sku.lead_time_days + leadDelay + 1) + 38.0
+        );
+        const champFillRate = Math.min(
+          98.8,
+          Math.max(92.2, 94.8 - leadDelay * 0.7 + (promoPct / 200.0) * 1.2)
+        );
+        const champSpoilUnits = Math.max(
+          0.6,
+          (1.8 + leadDelay * 0.4 + (promoPct / 100.0) * 0.8) *
+            spoilMult *
+            (7.0 / sku.shelf_life_days)
+        );
+        const champSpoilCost = champSpoilUnits * sku.spoilage_cost;
         const champDailyCost = Math.round(
           24.0 * (sku.holding_cost / 0.25) +
-          champSpoilUnits * sku.spoilage_cost +
-          Math.max(0, 95.0 - champFillRate) * 22.0 * stockMult * sku.stockout_penalty
+            champSpoilCost +
+            Math.max(0, 95.0 - champFillRate) * 22.0 * stockMult * sku.stockout_penalty
         );
 
-        // Update Dual Comparison Cards
-        const unitLabel = isFleet ? " hrs ($" : " units ($";
-        const loadSuffix = isFleet ? " stops" : " units";
-        document.getElementById("val-base-fill").textContent = baseFillRate.toFixed(1) + "%";
-        document.getElementById("val-base-spoil").textContent = baseSpoilUnits.toFixed(1) + unitLabel + Math.round(baseSpoilUnits * sku.spoilage_cost) + ")";
-        document.getElementById("val-base-cost").textContent = "$" + baseDailyCost.toLocaleString() + " / day";
-        document.getElementById("val-base-orderup").textContent = baseOrderUp + loadSuffix;
+        applyWhatIfMetrics(
+          isFleet,
+          baseFillRate,
+          baseSpoilUnits,
+          baseSpoilCost,
+          baseDailyCost,
+          baseOrderUp,
+          champFillRate,
+          champSpoilUnits,
+          champSpoilCost,
+          champDailyCost,
+          champOrderUp,
+          null
+        );
 
-        const baseSlaBadge = document.getElementById("badge-base-sla");
-        if (baseFillRate >= 95.0) {
-          baseSlaBadge.textContent = "SLA Compliant";
-          baseSlaBadge.className = "badge-diff positive";
-        } else {
-          baseSlaBadge.textContent = "SLA Breach (-" + (95.0 - baseFillRate).toFixed(1) + "%)";
-          baseSlaBadge.className = "badge-diff negative";
+        // 2) Live Backend Digital Twin Simulation (POST /api/simulate) when online
+        if (
+          typeof fetch === "function" &&
+          window.location &&
+          (window.location.protocol === "http:" || window.location.protocol === "https:")
+        ) {
+          whatIfReqSeq += 1;
+          const reqId = whatIfReqSeq;
+          const targetUseCase = currentUseCaseId;
+          if (whatIfDebounceTimer) {
+            clearTimeout(whatIfDebounceTimer);
+          }
+          whatIfDebounceTimer = setTimeout(() => {
+            fetch("/api/simulate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                use_case: targetUseCase,
+                archetype_index: skuIdx,
+                lead_time_delay: leadDelay,
+                promo_spike_pct: promoPct,
+                spoilage_multiplier: spoilMult,
+                stockout_multiplier: stockMult
+              })
+            })
+              .then(res => (res.ok ? res.json() : Promise.reject(new Error("Simulate HTTP error"))))
+              .then(sim => {
+                if (reqId !== whatIfReqSeq || targetUseCase !== currentUseCaseId) return;
+                if (!sim || !sim.baseline || !sim.champion) return;
+                const b = sim.baseline;
+                const c = sim.champion;
+                const comp = sim.comparison || {};
+                applyWhatIfMetrics(
+                  targetUseCase === "fleet_routing",
+                  Number(b.fill_rate_pct ?? baseFillRate),
+                  Number(b.spoilage_units ?? baseSpoilUnits),
+                  Number(b.spoilage_cost ?? baseSpoilCost),
+                  Number(b.daily_cost ?? baseDailyCost),
+                  Number(b.order_up_to ?? baseOrderUp),
+                  Number(c.fill_rate_pct ?? champFillRate),
+                  Number(c.spoilage_units ?? champSpoilUnits),
+                  Number(c.spoilage_cost ?? champSpoilCost),
+                  Number(c.daily_cost ?? champDailyCost),
+                  Number(c.order_up_to ?? champOrderUp),
+                  comp.resilience_summary || null
+                );
+              })
+              .catch(() => {
+                // Keep client-side fallback metrics when offline
+              });
+          }, 50);
         }
-
-        document.getElementById("val-champ-fill").textContent = champFillRate.toFixed(1) + "%";
-        document.getElementById("val-champ-spoil").textContent = champSpoilUnits.toFixed(1) + unitLabel + Math.round(champSpoilUnits * sku.spoilage_cost) + ")";
-        document.getElementById("val-champ-cost").textContent = "$" + champDailyCost.toLocaleString() + " / day";
-        document.getElementById("val-champ-orderup").textContent = champOrderUp + loadSuffix + " (dynamic)";
-
-        const savedPerDay = Math.max(0, baseDailyCost - champDailyCost);
-        const fillDiff = champFillRate - baseFillRate;
-        const metricWord = isFleet ? "on-time SLA" : "fill rate";
-        document.getElementById("whatif-resilience-text").textContent =
-          "Champion prevents SLA deficit (+" + fillDiff.toFixed(1) + "% " + metricWord + ") and saves +$" + savedPerDay.toLocaleString() + "/day under disruption.";
-
-        drawWhatIfDualCanvas(baseFillRate, champFillRate, baseSpoilUnits, champSpoilUnits, baseDailyCost, champDailyCost);
       }
 
       function drawWhatIfDualCanvas(bFill, cFill, bSpoil, cSpoil, bCost, cCost) {
