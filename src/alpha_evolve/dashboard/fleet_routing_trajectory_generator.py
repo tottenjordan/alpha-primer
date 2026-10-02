@@ -81,12 +81,15 @@ def _build_spatial_topology(config: Any) -> dict[str, Any]:
         customers.append(
             {
                 "id": int(i),
+                "x": x_km,
+                "y": y_km,
                 "x_km": x_km,
                 "y_km": y_km,
                 "demand": round(float(config.demands[i]), 1),
                 "tw_start": tw_start,
                 "tw_end": tw_end,
                 "tw_width": round(tw_end - tw_start, 2),
+                "time_window": [tw_start, tw_end],
                 "service_time": round(float(config.service_times[i]), 2),
                 "arrival_hour": arr_hr,
                 "is_dynamic": bool(arr_hr > 0.0),
@@ -97,13 +100,21 @@ def _build_spatial_topology(config: Any) -> dict[str, Any]:
 
     return {
         "grid_bounds_km": [0.0, 100.0, 0.0, 100.0],
-        "depot": {"x_km": depot_x, "y_km": depot_y, "label": "Central Hub"},
+        "depot": {
+            "x": depot_x,
+            "y": depot_y,
+            "x_km": depot_x,
+            "y_km": depot_y,
+            "label": "Central Hub",
+        },
         "cluster_centers": [
             {"id": 0, "label": "NW Sector", "x_km": 25.0, "y_km": 75.0},
             {"id": 1, "label": "NE Sector", "x_km": 75.0, "y_km": 75.0},
             {"id": 2, "label": "SW Sector", "x_km": 25.0, "y_km": 25.0},
             {"id": 3, "label": "SE Sector", "x_km": 75.0, "y_km": 25.0},
         ],
+        "customer_coordinates": [[c["x_km"], c["y_km"]] for c in customers],
+        "time_windows": [[c["tw_start"], c["tw_end"]] for c in customers],
         "customers": customers,
     }
 
@@ -285,6 +296,24 @@ def _trace_simulation_episode(
     res = twin.run_simulation(policy_callable, dispatch_interval_hours=dispatch_interval_hours)
     late_stops_count = sum(1 for v in stop_outcomes.values() if v["status"] == "late")
 
+    route_sequences: dict[str, list[int]] = {str(v_idx): [] for v_idx in range(cfg.n_vehicles)}
+    for tour in tours:
+        v_key = str(int(tour["vehicle_id"]))
+        route_sequences.setdefault(v_key, []).extend(int(s) for s in tour["stops"])
+
+    vehicle_routes: list[dict[str, Any]] = []
+    for v_idx in range(cfg.n_vehicles):
+        v_stops = route_sequences[str(v_idx)]
+        vehicle_routes.append(
+            {
+                "vehicle_id": int(v_idx),
+                "stops": v_stops,
+                "stop_count": len(v_stops),
+                "distance_km": round(float(vehicle_odometers[v_idx]), 2),
+                "waves_dispatched": sum(1 for t in tours if int(t["vehicle_id"]) == v_idx),
+            }
+        )
+
     return {
         "generation": generation,
         "label": label,
@@ -299,6 +328,8 @@ def _trace_simulation_episode(
             "inter_route_crossings": inter_crossings_count,
             "vehicles_used": res.vehicles_used,
         },
+        "route_sequences": route_sequences,
+        "vehicle_routes": vehicle_routes,
         "tours": tours,
         "crossings": intra_crossings,
         "stop_outcomes": stop_outcomes,
@@ -847,6 +878,17 @@ def generate_fleet_routing_trajectory_dataset(
         "16": _trace_simulation_episode(twin, fn16, 16, "Gen 16: Traffic-Aware Sector Dispatch"),
         "30": _trace_simulation_episode(twin, fn30, 30, "Gen 30: Regret-2 + 2-Opt Uncrossing"),
     }
+    route_sequences = {
+        "gen_0": dispatch_snapshots["0"]["route_sequences"],
+        "gen_7": dispatch_snapshots["7"]["route_sequences"],
+        "gen_16": dispatch_snapshots["16"]["route_sequences"],
+        "gen_30": dispatch_snapshots["30"]["route_sequences"],
+        "0": dispatch_snapshots["0"]["route_sequences"],
+        "7": dispatch_snapshots["7"]["route_sequences"],
+        "16": dispatch_snapshots["16"]["route_sequences"],
+        "30": dispatch_snapshots["30"]["route_sequences"],
+    }
+    spatial_topology["route_sequences"] = route_sequences
 
     milestones = {
         "0": {
@@ -857,6 +899,7 @@ def generate_fleet_routing_trajectory_dataset(
             "description": "Standard greedy nearest-neighbor clustering sorted by window start time.",
             "evolve_block": baseline_evolve_block,
             "metrics": trajectory_generations[0]["metrics"],
+            "route_sequences": dispatch_snapshots["0"]["route_sequences"],
             "key_innovations": [
                 "Greedy nearest neighbor assignment",
                 "Earliest window start tie-breaking",
@@ -871,6 +914,7 @@ def generate_fleet_routing_trajectory_dataset(
             "description": "Prioritizes stops by remaining delivery slack (deadline minus current travel time).",
             "evolve_block": gen7_block,
             "metrics": trajectory_generations[7]["metrics"],
+            "route_sequences": dispatch_snapshots["7"]["route_sequences"],
             "key_innovations": [
                 "Time window slack urgency ordering",
                 "Reduced tardiness during midday shift",
@@ -884,6 +928,7 @@ def generate_fleet_routing_trajectory_dataset(
             "description": "Schedules perimeter stops during traffic lulls and clusters depot stops during peak rush hours.",
             "evolve_block": gen16_block,
             "metrics": trajectory_generations[16]["metrics"],
+            "route_sequences": dispatch_snapshots["16"]["route_sequences"],
             "key_innovations": [
                 "Traffic-profile speed factor integration",
                 "Peak-hour highway transit avoidance",
@@ -897,6 +942,7 @@ def generate_fleet_routing_trajectory_dataset(
             "description": "Combines 2-opt trajectory smoothing, regret-2 insertion for dynamic orders, and slack ranking.",
             "evolve_block": gen30_block,
             "metrics": trajectory_generations[30]["metrics"],
+            "route_sequences": dispatch_snapshots["30"]["route_sequences"],
             "key_innovations": [
                 "Regret-2 dynamic stop insertion",
                 "2-opt local search path uncrossing",
@@ -1049,8 +1095,11 @@ def generate_fleet_routing_trajectory_dataset(
         "horizon_days": 30,
         "num_skus": 50,
         "total_generations": 30,
+        "customer_coordinates": spatial_topology["customer_coordinates"],
+        "time_windows": spatial_topology["time_windows"],
         "spatial_topology": spatial_topology,
         "dispatch_snapshots": dispatch_snapshots,
+        "route_sequences": route_sequences,
         "baseline_summary": {
             "total_cost": gen0_cost,
             "holding_cost": m0["holding_cost"],
@@ -1064,6 +1113,7 @@ def generate_fleet_routing_trajectory_dataset(
             "vehicles_used": base_res.vehicles_used,
             "served_orders_count": base_res.served_orders_count,
             "unserved_orders_count": base_res.unserved_orders_count,
+            "route_sequences": dispatch_snapshots["0"]["route_sequences"],
             "program_code": program_code,
             "evolve_block": baseline_evolve_block,
         },
@@ -1079,6 +1129,7 @@ def generate_fleet_routing_trajectory_dataset(
             "total_tardiness_hours": gen30_tardiness,
             "cost_reduction_pct": gen30_cost_reduction_pct,
             "score": 28.5,
+            "route_sequences": dispatch_snapshots["30"]["route_sequences"],
             "program_code": program_code.replace(baseline_evolve_block, gen30_block)
             if baseline_evolve_block
             else program_code,
