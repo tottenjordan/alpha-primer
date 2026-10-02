@@ -129,6 +129,10 @@
           <div class="card-title">
             <span id="canvas1-title">90-Day Digital Twin Inventory Trajectory &amp; Spoilage Stack</span>
             <span class="card-subtitle-mono" id="canvas1-subtitle">Days 0..29 Warmup | 30..65 Eval | 66..89 Holdout</span>
+            <div class="canvas-mode-toggle hidden" id="canvas1-mode-toggles">
+              <button class="btn-mode active" id="btn-mode-topology" data-canvas1-mode="topology">2D Route Topology Map</button>
+              <button class="btn-mode" id="btn-mode-trajectory" data-canvas1-mode="trajectory">90-Step Shift Trajectory</button>
+            </div>
             <div class="canvas-mode-toggle hidden" id="fleet-map-controls">
               <button class="btn-mode btn-fleet-filter active" data-fleet-filter="all">All Waves</button>
               <button class="btn-mode btn-fleet-filter" data-fleet-filter="wave0">Wave 0 (Static)</button>

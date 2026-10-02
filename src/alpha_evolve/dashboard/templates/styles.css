@@ -699,6 +699,7 @@
     .canvas-mode-toggle {
       display: flex;
       gap: 6px;
+      flex-wrap: wrap;
     }
 
     .btn-mode {

@@ -425,19 +425,44 @@ def test_fleet_routing_spatial_topology_and_canvas_rendering(tmp_path: Path) -> 
 
     fr = generate_fleet_routing_trajectory_dataset(output_dir=tmp_path)
 
-    # 1. Verify spatial_topology schema (50 customers, (50, 50) depot, 4 quadrants)
+    # 1. Verify spatial_topology schema (50 customers, (50, 50) depot, 4 quadrants, coordinates & windows)
     topo = fr["spatial_topology"]
     assert topo["grid_bounds_km"] == [0.0, 100.0, 0.0, 100.0]
     assert topo["depot"]["x_km"] == 50.0 and topo["depot"]["y_km"] == 50.0
+    assert topo["depot"]["x"] == 50.0 and topo["depot"]["y"] == 50.0
     assert len(topo["cluster_centers"]) == 4
     assert len(topo["customers"]) == 50
+    assert len(topo["customer_coordinates"]) == 50
+    assert len(topo["time_windows"]) == 50
+
+    for idx, c in enumerate(topo["customers"]):
+        assert c["id"] == idx
+        assert 0.0 <= c["x_km"] <= 100.0 and 0.0 <= c["y_km"] <= 100.0
+        assert [c["x_km"], c["y_km"]] == topo["customer_coordinates"][idx]
+        assert c["tw_end"] > c["tw_start"] >= 0.0
+        assert c["time_window"] == [c["tw_start"], c["tw_end"]]
+        assert c["time_window"] == topo["time_windows"][idx]
 
     static_customers = [c for c in topo["customers"] if not c["is_dynamic"]]
     dynamic_customers = [c for c in topo["customers"] if c["is_dynamic"]]
     assert len(static_customers) == 30
     assert len(dynamic_customers) == 20
 
-    # 2. Verify dispatch_snapshots ("0", "7", "16", "30") and 2-opt uncrossing progression
+    # 2. Verify Gen 0 vs Gen 30 route_sequences and dispatch_snapshots ("0", "7", "16", "30")
+    assert "customer_coordinates" in fr
+    assert "time_windows" in fr
+    assert fr["customer_coordinates"] == topo["customer_coordinates"]
+    assert fr["time_windows"] == topo["time_windows"]
+    assert "route_sequences" in fr
+    assert "route_sequences" in topo
+    assert fr["route_sequences"]["gen_0"] == fr["route_sequences"]["0"]
+    assert fr["route_sequences"]["gen_30"] == fr["route_sequences"]["30"]
+    assert fr["route_sequences"]["gen_0"] != fr["route_sequences"]["gen_30"]
+    assert fr["baseline_summary"]["route_sequences"] == fr["route_sequences"]["gen_0"]
+    assert fr["champion_summary"]["route_sequences"] == fr["route_sequences"]["gen_30"]
+    assert fr["milestones"]["0"]["route_sequences"] == fr["route_sequences"]["gen_0"]
+    assert fr["milestones"]["30"]["route_sequences"] == fr["route_sequences"]["gen_30"]
+
     snaps = fr["dispatch_snapshots"]
     for key in ("0", "7", "16", "30"):
         assert key in snaps
@@ -446,6 +471,12 @@ def test_fleet_routing_spatial_topology_and_canvas_rendering(tmp_path: Path) -> 
         total_stops = sum(len(t["stops"]) for t in snap["tours"])
         assert total_stops == 50
         assert len(snap["stop_outcomes"]) == 50
+        assert "route_sequences" in snap
+        assert "vehicle_routes" in snap
+        assert len(snap["vehicle_routes"]) == 5
+        seq_stops = [s for v in ("0", "1", "2", "3", "4") for s in snap["route_sequences"][v]]
+        assert len(seq_stops) == 50
+        assert set(seq_stops) == set(range(50))
 
     assert snaps["0"]["summary"]["intra_route_crossings"] > 0
     assert snaps["16"]["summary"]["intra_route_crossings"] == 0
@@ -453,11 +484,290 @@ def test_fleet_routing_spatial_topology_and_canvas_rendering(tmp_path: Path) -> 
     assert snaps["30"]["summary"]["late_stops_count"] < snaps["0"]["summary"]["late_stops_count"]
     assert snaps["30"]["summary"]["total_cost"] < snaps["0"]["summary"]["total_cost"]
 
-    # 3. Verify compiled dashboard HTML contains spatial topology renderer and filter controls
+    # 3. Verify compiled dashboard HTML contains spatial topology renderer, mode toggle, and filter controls
     html_path = build_dashboard_html(output_dir=tmp_path)
     content = html_path.read_text(encoding="utf-8")
+    assert 'id="canvas1-mode-toggles"' in content
+    assert 'id="btn-mode-topology"' in content
+    assert 'id="btn-mode-trajectory"' in content
     assert 'id="fleet-map-controls"' in content
     assert 'data-fleet-filter="wave0"' in content
     assert 'data-fleet-filter="dynamic"' in content
     assert 'data-fleet-filter="late"' in content
     assert "drawFleetSpatialCanvas" in content
+
+
+def test_fleet_routing_2d_route_topology_map_canvas_mode_js_execution() -> None:
+    """Execute app.js in Node.js to verify 2D Route Topology Map rendering, filters, hover HUD, SSE, and mode toggling."""
+    node_path = shutil.which("node")
+    if not node_path:
+        return
+
+    app_js_path = ROOT_DIR / "src" / "alpha_evolve" / "dashboard" / "templates" / "app.js"
+    master_path = ROOT_DIR / "records" / "master_trajectories.json"
+
+    node_harness = f"""
+    const fs = require('fs');
+    const masterData = fs.readFileSync({json.dumps(str(master_path))}, 'utf8');
+    const appJs = fs.readFileSync({json.dumps(str(app_js_path))}, 'utf8');
+
+    const elements = new Map();
+    const canvasTexts = [];
+    const rectCalls = [];
+    let arcCalls = 0;
+    let lineToCalls = 0;
+    let mockCanvasWidth = 760;
+    let mockCanvasHeight = 310;
+    let sseListeners = {{}};
+
+    function makeEl(tag, id) {{
+      return {{
+        tagName: tag,
+        id: id || '',
+        className: '',
+        textContent: '',
+        value: '0',
+        children: [],
+        attributes: new Map(),
+        listeners: {{}},
+        classList: {{
+          classes: new Set(),
+          add(c) {{ this.classes.add(c); }},
+          remove(c) {{ this.classes.delete(c); }},
+          toggle(c, force) {{
+            if (force === undefined) {{
+              if (this.classes.has(c)) this.classes.delete(c); else this.classes.add(c);
+            }} else if (force) {{
+              this.classes.add(c);
+            }} else {{
+              this.classes.delete(c);
+            }}
+          }},
+          contains(c) {{ return this.classes.has(c); }}
+        }},
+        appendChild(child) {{ this.children.push(child); return child; }},
+        replaceChildren(...nodes) {{ this.children = nodes; }},
+        insertBefore(node) {{ this.children.push(node); }},
+        remove() {{}},
+        setAttribute(k, v) {{ this.attributes.set(k, String(v)); }},
+        getAttribute(k) {{ return this.attributes.get(k) || null; }},
+        addEventListener(ev, fn) {{
+          if (!this.listeners[ev]) this.listeners[ev] = [];
+          this.listeners[ev].push(fn);
+        }},
+        querySelectorAll() {{ return []; }},
+        getBoundingClientRect() {{ return {{ left: 0, top: 0, width: mockCanvasWidth, height: mockCanvasHeight }}; }},
+        getContext() {{
+          return {{
+            scale() {{}}, clearRect() {{}},
+            fillRect(x, y, w, h) {{ rectCalls.push({{ x, y, w, h }}); }},
+            beginPath() {{}},
+            moveTo() {{}}, lineTo() {{ lineToCalls++; }}, stroke() {{}}, fill() {{}},
+            arc() {{ arcCalls++; }}, setLineDash() {{}},
+            strokeRect(x, y, w, h) {{ rectCalls.push({{ x, y, w, h }}); }},
+            fillText(txt) {{ canvasTexts.push(String(txt)); }},
+            createLinearGradient() {{ return {{ addColorStop() {{}} }}; }}
+          }};
+        }}
+      }};
+    }}
+
+    function getEl(id) {{
+      if (!elements.has(id)) {{
+        const e = makeEl('div', id);
+        if (id === 'master-trajectory-data') e.textContent = masterData;
+        if (id === 'canvas1-mode-toggles' || id === 'fleet-map-controls') e.classList.add('hidden');
+        if (id === 'btn-mode-topology') e.classList.add('active');
+        elements.set(id, e);
+      }}
+      return elements.get(id);
+    }}
+
+    const useCaseBtns = ['inventory_replenishment', 'fleet_routing'].map(uc => {{
+      const b = makeEl('button', 'btn-' + uc);
+      b.setAttribute('data-use-case', uc);
+      return b;
+    }});
+
+    const filterBtns = ['all', 'wave0', 'dynamic', 'late', 'v0', 'v1', 'v2', 'v3', 'v4'].map(f => {{
+      const b = makeEl('button', 'filter-' + f);
+      b.setAttribute('data-fleet-filter', f);
+      if (f === 'all') b.classList.add('active');
+      return b;
+    }});
+
+    class MockEventSource {{
+      constructor() {{ sseListeners = {{}}; }}
+      addEventListener(ev, fn) {{ sseListeners[ev] = fn; }}
+    }}
+
+    global.EventSource = MockEventSource;
+    global.window = {{
+      location: {{ protocol: 'file:' }},
+      devicePixelRatio: 2,
+      EventSource: MockEventSource,
+      addEventListener() {{}}
+    }};
+    global.document = {{
+      createElement(tag) {{ return makeEl(tag, ''); }},
+      createTextNode(txt) {{ return {{ textContent: String(txt) }}; }},
+      createDocumentFragment() {{ return makeEl('fragment', ''); }},
+      getElementById(id) {{ return getEl(id); }},
+      querySelectorAll(sel) {{
+        if (sel === '.use-case-btn') return useCaseBtns;
+        if (sel === '.btn-fleet-filter') return filterBtns;
+        return [];
+      }}
+    }};
+
+    global.setTimeout = () => 1;
+    global.clearTimeout = () => {{}};
+    global.setInterval = () => 1;
+    global.clearInterval = () => {{}};
+
+    eval(appJs);
+
+    // 1. Switch to fleet_routing and verify 2D Route Topology Map mode is active
+    useCaseBtns[1].listeners['click'][0]();
+    if (getEl('canvas1-mode-toggles').classList.contains('hidden')) {{
+      throw new Error('canvas1-mode-toggles should be visible in fleet_routing');
+    }}
+    if (getEl('fleet-map-controls').classList.contains('hidden')) {{
+      throw new Error('fleet-map-controls should be visible in topology mode');
+    }}
+    if (!getEl('canvas1-container').classList.contains('fleet-spatial-mode')) {{
+      throw new Error('canvas1-container missing fleet-spatial-mode class');
+    }}
+    if (!getEl('canvas1-title').textContent.includes('2D Route Topology Map')) {{
+      throw new Error('Unexpected canvas1-title: ' + getEl('canvas1-title').textContent);
+    }}
+    if (!canvasTexts.includes('GEN 0: GREEDY BASELINE') || !canvasTexts.includes('DELTA HUD')) {{
+      throw new Error('Missing expected 2D topology viewport headers on canvas');
+    }}
+    if (!canvasTexts.includes('GEN 30: REGRET-2 + 2-OPT')) {{
+      throw new Error('Missing GEN 30: REGRET-2 + 2-OPT header on right viewport');
+    }}
+    if (arcCalls < 100 || lineToCalls < 50) {{
+      throw new Error('Expected customer arcs and route polylines to be drawn');
+    }}
+
+    // Verify Gen 16 distinct right-viewport header
+    canvasTexts.length = 0;
+    getEl('scrubber').listeners['input'][0]({{ target: {{ value: '16' }} }});
+    if (!canvasTexts.includes('GEN 16: TRAFFIC + 2-OPT')) {{
+      throw new Error('Expected GEN 16: TRAFFIC + 2-OPT header when scrubbing to Gen 16');
+    }}
+    getEl('scrubber').listeners['input'][0]({{ target: {{ value: '30' }} }});
+
+    // 2. Test interactive customer hover on #canvas-trajectory in topology mode
+    const parsedMaster = JSON.parse(masterData);
+    const c0 = parsedMaster.use_cases.fleet_routing.spatial_topology.customers[0];
+    const centerW = Math.min(116, Math.max(48, Math.round(760 * 0.16)));
+    const boxW = Math.max(36, Math.floor((760 - centerW - 24) / 2));
+    const mapTop = 24, mapBot = 302, mapH = mapBot - mapTop;
+    const cx = 6 + 10 + (c0.x_km / 100.0) * (boxW - 20);
+    const cy = mapBot - 10 - (c0.y_km / 100.0) * (mapH - 20);
+
+    const moveFn = getEl('canvas-trajectory').listeners['mousemove'][0];
+    moveFn({{ clientX: cx, clientY: cy }});
+    const tipEl = getEl('tooltip-trajectory');
+    if (!tipEl.classList.contains('visible') || tipEl.children.length === 0) {{
+      throw new Error('Expected tooltip-trajectory to become visible on stop hover');
+    }}
+    const tipText = tipEl.children[0].textContent;
+    if (!tipText.includes('Stop #0') || !tipText.includes('Gen 0:') || !tipText.includes('Gen 30:')) {{
+      throw new Error('Unexpected stop hover tooltip text: ' + tipText);
+    }}
+
+    // 3. Test filter buttons (wave0, dynamic, late, v0)
+    filterBtns[1].listeners['click'][0]();
+    if (!filterBtns[1].classList.contains('active') || filterBtns[0].classList.contains('active')) {{
+      throw new Error('Wave 0 filter button did not activate properly');
+    }}
+    filterBtns[0].listeners['click'][0]();
+
+    // 4. Toggle Canvas 1 mode to 90-Step Shift Trajectory and back to 2D Route Topology Map
+    getEl('btn-mode-trajectory').listeners['click'][0]();
+    if (!getEl('fleet-map-controls').classList.contains('hidden')) {{
+      throw new Error('fleet-map-controls should hide when 90-Step Shift Trajectory mode is active');
+    }}
+    if (getEl('canvas1-subtitle').classList.contains('hidden')) {{
+      throw new Error('canvas1-subtitle should be visible in 90-Step Shift Trajectory mode');
+    }}
+    if (!getEl('canvas1-title').textContent.includes('90-Step Fleet Active Route Load')) {{
+      throw new Error('Expected 90-Step trajectory title, got: ' + getEl('canvas1-title').textContent);
+    }}
+
+    getEl('btn-mode-topology').listeners['click'][0]();
+    if (getEl('fleet-map-controls').classList.contains('hidden')) {{
+      throw new Error('fleet-map-controls should reappear when switching back to 2D Route Topology Map');
+    }}
+    if (!getEl('canvas1-title').textContent.includes('2D Route Topology Map')) {{
+      throw new Error('Expected 2D Route Topology Map title after switching back');
+    }}
+
+    // 5. Test SSE candidate_evaluated at iteration 35 while in 2D Route Topology Map mode
+    if (sseListeners['candidate_evaluated']) {{
+      canvasTexts.length = 0;
+      sseListeners['candidate_evaluated']({{
+        data: JSON.stringify({{
+          iteration: 35,
+          score: 31.4,
+          is_best: true,
+          scores: {{ on_time_delivery_pct: 98.0, total_distance_km: 1090 }}
+        }})
+      }});
+      if (!canvasTexts.includes('GEN 35: REGRET-2 + 2-OPT')) {{
+        throw new Error('Expected SSE iteration 35 to render GEN 35: REGRET-2 + 2-OPT in topology mode');
+      }}
+    }}
+
+    // 6. Test ultra-narrow mobile viewport (<320px) stays within canvas width
+    mockCanvasWidth = 240;
+    mockCanvasHeight = 220;
+    rectCalls.length = 0;
+    getEl('scrubber').listeners['input'][0]({{ target: {{ value: '30' }} }});
+    const outOfBounds = rectCalls.some(r => (r.x + r.w) > mockCanvasWidth + 1);
+    if (outOfBounds) {{
+      throw new Error('Viewport or HUD box overflowed ultra-narrow 240px canvas width');
+    }}
+
+    // 7. Test pure route_sequences fallback (without tours/stop_outcomes) and coincident stop coordinates
+    mockCanvasWidth = 760;
+    mockCanvasHeight = 310;
+    const customMaster = JSON.parse(masterData);
+    const frCustom = customMaster.use_cases.fleet_routing;
+    // Place customer 1 at identical coordinates to customer 0
+    frCustom.spatial_topology.customers[1].x_km = c0.x_km;
+    frCustom.spatial_topology.customers[1].y_km = c0.y_km;
+    frCustom.spatial_topology.customers[1].is_dynamic = false;
+    // Strip tours and stop_outcomes to exercise pure route_sequences fallback
+    delete frCustom.dispatch_snapshots['0'].tours;
+    delete frCustom.dispatch_snapshots['0'].stop_outcomes;
+    delete frCustom.dispatch_snapshots['30'].tours;
+    delete frCustom.dispatch_snapshots['30'].stop_outcomes;
+
+    elements.clear();
+    useCaseBtns.forEach(b => {{ b.listeners = {{}}; }});
+    filterBtns.forEach(b => {{ b.listeners = {{}}; }});
+    getEl('master-trajectory-data').textContent = JSON.stringify(customMaster);
+    eval(appJs);
+    useCaseBtns[1].listeners['click'][0]();
+    const moveFn2 = getEl('canvas-trajectory').listeners['mousemove'][0];
+    moveFn2({{ clientX: cx, clientY: cy }});
+    const tipText2 = getEl('tooltip-trajectory').children[0].textContent;
+    if (!tipText2.includes('Stop #1') || tipText2.includes('Unassigned')) {{
+      throw new Error('Expected topmost coincident Stop #1 with route_sequences vehicle fallback, got: ' + tipText2);
+    }}
+
+    console.log('TOPOLOGY_MAP_JS_CHECKS_PASSED');
+    """
+
+    proc = subprocess.run(
+        [node_path, "-e", node_harness],
+        cwd=str(ROOT_DIR),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "TOPOLOGY_MAP_JS_CHECKS_PASSED" in proc.stdout

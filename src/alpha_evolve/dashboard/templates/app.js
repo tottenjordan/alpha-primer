@@ -38,6 +38,7 @@
       let paretoFrontier = uc.pareto_frontier || [];
       let spatialTopology = uc.spatial_topology || null;
       let dispatchSnapshots = uc.dispatch_snapshots || null;
+      let canvas1Mode = "topology"; // "topology" or "trajectory"
       let fleetMapFilter = "all";
       let hoveredCustomerId = null;
       let fleetHitRegions = [];
@@ -276,18 +277,48 @@
           });
         }
 
+        const c1ModeToggles = document.getElementById("canvas1-mode-toggles");
         const fleetMapCtrl = document.getElementById("fleet-map-controls");
         const c1SubEl = document.getElementById("canvas1-subtitle");
         const c1ContainerEl = document.getElementById("canvas1-container");
+        const isTopologyMode = isFleet && canvas1Mode === "topology";
+        if (c1ModeToggles) {
+          c1ModeToggles.classList.toggle("hidden", !isFleet);
+        }
         if (fleetMapCtrl) {
-          fleetMapCtrl.classList.toggle("hidden", !isFleet);
+          fleetMapCtrl.classList.toggle("hidden", !isTopologyMode);
         }
         if (c1SubEl) {
-          c1SubEl.classList.toggle("hidden", isFleet);
+          c1SubEl.classList.toggle("hidden", isTopologyMode);
         }
         if (c1ContainerEl) {
-          c1ContainerEl.classList.toggle("fleet-spatial-mode", isFleet);
+          c1ContainerEl.classList.toggle("fleet-spatial-mode", isTopologyMode);
         }
+      }
+
+      const btnModeTopology = document.getElementById("btn-mode-topology");
+      const btnModeTrajectory = document.getElementById("btn-mode-trajectory");
+      if (btnModeTopology && btnModeTrajectory) {
+        btnModeTopology.addEventListener("click", () => {
+          canvas1Mode = "topology";
+          btnModeTopology.classList.add("active");
+          btnModeTrajectory.classList.remove("active");
+          hoveredDayIdx = null;
+          const tipEl = document.getElementById("tooltip-trajectory");
+          if (tipEl) tipEl.classList.remove("visible");
+          updateDomainControls();
+          drawTrajectoryChart(currentGen, null);
+        });
+        btnModeTrajectory.addEventListener("click", () => {
+          canvas1Mode = "trajectory";
+          btnModeTrajectory.classList.add("active");
+          btnModeTopology.classList.remove("active");
+          hoveredCustomerId = null;
+          const tipEl = document.getElementById("tooltip-trajectory");
+          if (tipEl) tipEl.classList.remove("visible");
+          updateDomainControls();
+          drawTrajectoryChart(currentGen, null);
+        });
       }
 
       document.querySelectorAll(".btn-fleet-filter").forEach(btn => {
@@ -386,6 +417,14 @@
         spatialTopology = uc.spatial_topology || null;
         dispatchSnapshots = uc.dispatch_snapshots || null;
         hoveredCustomerId = null;
+        hoveredDayIdx = null;
+        if (useCaseId === "fleet_routing") {
+          canvas1Mode = "topology";
+          if (btnModeTopology && btnModeTrajectory) {
+            btnModeTopology.classList.add("active");
+            btnModeTrajectory.classList.remove("active");
+          }
+        }
         maxGen = Math.max(0, trajectories.length - 1);
 
         const titleEl = document.getElementById("active-use-case-title");
@@ -739,7 +778,7 @@
 
         const c1Title = document.getElementById("canvas1-title");
         if (c1Title) {
-          c1Title.textContent = "2D Spatial Dispatch Topology: Greedy Nearest-Neighbor vs Evolved Regret-2 + 2-Opt";
+          c1Title.textContent = "2D Route Topology Map: Greedy Nearest-Neighbor vs Evolved Regret-2 + 2-Opt";
         }
 
         const frame = trajectories[genIdx] || trajectories[0];
@@ -752,9 +791,9 @@
 
         fleetHitRegions = [];
 
-        const centerW = Math.min(116, Math.max(88, Math.round(w * 0.16)));
-        const padSide = 6;
-        const boxW = Math.max(120, Math.floor((w - centerW - padSide * 4) / 2));
+        const padSide = w < 360 ? 3 : 6;
+        const centerW = Math.min(116, Math.max(48, Math.round(w * 0.16)));
+        const boxW = Math.max(36, Math.floor((w - centerW - padSide * 4) / 2));
         const leftBoxX = padSide;
         const centerX = leftBoxX + boxW + padSide;
         const rightBoxX = centerX + centerW + padSide;
@@ -762,11 +801,17 @@
         const mapBot = h - 8;
         const mapH = Math.max(80, mapBot - mapTop);
 
+        const bounds = spatialTopology.grid_bounds_km || [0.0, 100.0, 0.0, 100.0];
+        const minXKm = Number(bounds[0]) || 0.0;
+        const spanXKm = Math.max(1e-6, (Number(bounds[1]) || 100.0) - minXKm);
+        const minYKm = Number(bounds[2]) || 0.0;
+        const spanYKm = Math.max(1e-6, (Number(bounds[3]) || 100.0) - minYKm);
+
         function projX(boxX, xKm) {
-          return boxX + 10 + (xKm / 100.0) * (boxW - 20);
+          return boxX + 10 + ((xKm - minXKm) / spanXKm) * (boxW - 20);
         }
         function projY(yKm) {
-          return mapBot - 10 - (yKm / 100.0) * (mapH - 20);
+          return mapBot - 10 - ((yKm - minYKm) / spanYKm) * (mapH - 20);
         }
 
         const custById = {};
@@ -774,7 +819,22 @@
           custById[c.id] = c;
         });
 
-        function renderViewport(boxX, snap, titleText, accentColor) {
+        function buildVehLookup(snap) {
+          const lookup = {};
+          const seqMap = snap.route_sequences || {};
+          Object.keys(seqMap).forEach(vKey => {
+            const vNum = parseInt(vKey, 10) || 0;
+            (seqMap[vKey] || []).forEach((cid, sIdx) => {
+              lookup[String(cid)] = { vehicle_id: vNum, stop_seq: sIdx, status: "on_time" };
+            });
+          });
+          return lookup;
+        }
+
+        const leftFallbackStops = buildVehLookup(leftSnap);
+        const rightFallbackStops = buildVehLookup(rightSnap);
+
+        function renderViewport(boxX, snap, fallbackStops, titleText, accentColor) {
           const sum = snap.summary || {};
           // Viewport background & border
           ctx.fillStyle = "rgba(15, 23, 42, 0.55)";
@@ -797,7 +857,7 @@
 
           // Quadrant cluster rings
           const quads = spatialTopology.cluster_centers || [];
-          const qRadPx = (14.0 / 100.0) * Math.min(boxW - 20, mapH - 20);
+          const qRadPx = (14.0 / spanXKm) * Math.min(boxW - 20, mapH - 20);
           ctx.strokeStyle = "rgba(148, 163, 184, 0.13)";
           ctx.lineWidth = 1;
           ctx.setLineDash([2, 3]);
@@ -814,12 +874,19 @@
           ctx.setLineDash([]);
 
           const depot = spatialTopology.depot || { x_km: 50, y_km: 50 };
-          const hubX = projX(boxX, depot.x_km);
-          const hubY = projY(depot.y_km);
+          const hubX = projX(boxX, depot.x_km !== undefined ? depot.x_km : depot.x);
+          const hubY = projY(depot.y_km !== undefined ? depot.y_km : depot.y);
           const outcomes = snap.stop_outcomes || {};
 
           // Layer 1: Vehicle Route Polylines & Directional Chevrons
-          (snap.tours || []).forEach(tour => {
+          const tourList = (snap.tours && snap.tours.length > 0)
+            ? snap.tours
+            : Object.keys(snap.route_sequences || {}).map(vid => ({
+                vehicle_id: parseInt(vid, 10) || 0,
+                wave_index: 0,
+                stops: snap.route_sequences[vid] || []
+              }));
+          tourList.forEach(tour => {
             const vid = tour.vehicle_id || 0;
             const vColor = FLEET_VEHICLE_COLORS[vid % FLEET_VEHICLE_COLORS.length];
             const isVehFilter = fleetMapFilter.indexOf("v") === 0;
@@ -833,18 +900,19 @@
             stops.forEach(cid => {
               const cust = custById[cid];
               if (!cust) return;
-              const out = outcomes[String(cid)] || {};
-              const currX = projX(boxX, cust.x_km);
-              const currY = projY(cust.y_km);
+              const out = outcomes[String(cid)] || fallbackStops[String(cid)] || {};
+              const currX = projX(boxX, cust.x_km !== undefined ? cust.x_km : cust.x);
+              const currY = projY(cust.y_km !== undefined ? cust.y_km : cust.y);
+              const isDynamicStop = isDynamicWave || Boolean(cust.is_dynamic);
 
               let legActive = vehSelected;
-              if (fleetMapFilter === "wave0" && isDynamicWave) legActive = false;
-              if (fleetMapFilter === "dynamic" && !isDynamicWave) legActive = false;
+              if (fleetMapFilter === "wave0" && isDynamicStop) legActive = false;
+              if (fleetMapFilter === "dynamic" && !isDynamicStop) legActive = false;
               if (fleetMapFilter === "late" && out.status !== "late") legActive = false;
 
               ctx.strokeStyle = vColor;
               ctx.lineWidth = legActive ? 1.65 : 0.55;
-              if (isDynamicWave) {
+              if (isDynamicStop) {
                 ctx.setLineDash([3, 3]);
               } else {
                 ctx.setLineDash([]);
@@ -918,9 +986,9 @@
 
           // Layer 3 & 4: Time-Window Urgency / SLA Breach Halos & Customer Glyphs
           (spatialTopology.customers || []).forEach(c => {
-            const cx = projX(boxX, c.x_km);
-            const cy = projY(c.y_km);
-            const st = outcomes[String(c.id)] || null;
+            const cx = projX(boxX, c.x_km !== undefined ? c.x_km : c.x);
+            const cy = projY(c.y_km !== undefined ? c.y_km : c.y);
+            const st = outcomes[String(c.id)] || fallbackStops[String(c.id)] || null;
             const vid = st ? st.vehicle_id : 0;
             const isLate = st && st.status === "late";
 
@@ -937,7 +1005,7 @@
               ctx.beginPath();
               ctx.arc(cx, cy, haloR, 0, Math.PI * 2);
               ctx.stroke();
-            } else if (c.tw_width <= 1.65 && nodeActive) {
+            } else if ((c.tw_width || 2.0) <= 1.65 && nodeActive) {
               ctx.strokeStyle = "rgba(245, 158, 11, 0.45)";
               ctx.lineWidth = 1;
               ctx.beginPath();
@@ -978,8 +1046,9 @@
 
             fleetHitRegions.push({
               customer: c,
-              leftStop: (leftSnap.stop_outcomes || {})[String(c.id)] || null,
-              rightStop: (rightSnap.stop_outcomes || {})[String(c.id)] || null,
+              leftStop: (leftSnap.stop_outcomes || {})[String(c.id)] || leftFallbackStops[String(c.id)] || null,
+              rightStop: (rightSnap.stop_outcomes || {})[String(c.id)] || rightFallbackStops[String(c.id)] || null,
+              active: nodeActive,
               x: cx,
               y: cy
             });
@@ -998,11 +1067,15 @@
           ctx.strokeRect(hubX - 3.5, hubY - 3.5, 7, 7);
         }
 
-        renderViewport(leftBoxX, leftSnap, "GEN 0: GREEDY BASELINE", "#F43F5E");
+        const rightModeLabel = genIdx >= 30
+          ? "REGRET-2 + 2-OPT"
+          : (genIdx >= 16 ? "TRAFFIC + 2-OPT" : (genIdx >= 7 ? "SLACK URGENCY" : "GREEDY SEED"));
+        renderViewport(leftBoxX, leftSnap, leftFallbackStops, "GEN 0: GREEDY BASELINE", "#F43F5E");
         renderViewport(
           rightBoxX,
           rightSnap,
-          "GEN " + genIdx + ": " + (genIdx >= 16 ? "REGRET-2 + 2-OPT" : (genIdx >= 7 ? "SLACK URGENCY" : "GREEDY SEED")),
+          rightFallbackStops,
+          "GEN " + genIdx + ": " + rightModeLabel,
           "#10B981"
         );
 
@@ -1048,12 +1121,17 @@
           ctx.font = "8px JetBrains Mono, monospace";
           ctx.fillText("V" + vIdx, centerX + 8, vy + 6);
 
-          const barMaxW = Math.max(24, centerW - 32);
+          const barMaxW = Math.max(16, centerW - 32);
           ctx.fillStyle = "rgba(148, 163, 184, 0.16)";
           ctx.fillRect(centerX + 24, vy, barMaxW, 6);
 
           const vTours = (rightSnap.tours || []).filter(t => t.vehicle_id === vIdx);
-          const peakCap = vTours.reduce((mx, t) => Math.max(mx, t.capacity_pct || 0), 0);
+          let peakCap = vTours.reduce((mx, t) => Math.max(mx, t.capacity_pct || 0), 0);
+          if (peakCap === 0 && rightSnap.route_sequences && rightSnap.route_sequences[String(vIdx)]) {
+            const stopIds = rightSnap.route_sequences[String(vIdx)] || [];
+            const totalDem = stopIds.reduce((acc, sid) => acc + ((custById[sid] && custById[sid].demand) || 4.0), 0);
+            peakCap = Math.min(100, Math.round((totalDem / 45.0) * 100));
+          }
           const fillW = Math.min(barMaxW, Math.round((peakCap / 100.0) * barMaxW));
           ctx.fillStyle = vCol;
           ctx.fillRect(centerX + 24, vy, fillW, 6);
@@ -1061,7 +1139,12 @@
       }
 
       function drawTrajectoryChart(genIdx, hoverDay) {
-        if (currentUseCaseId === "fleet_routing" && spatialTopology && dispatchSnapshots) {
+        if (
+          currentUseCaseId === "fleet_routing" &&
+          canvas1Mode === "topology" &&
+          spatialTopology &&
+          dispatchSnapshots
+        ) {
           drawFleetSpatialCanvas(genIdx);
           return;
         }
@@ -1208,20 +1291,37 @@
           const relX = e.clientX - rect.left;
           const relY = e.clientY - rect.top;
 
-          if (currentUseCaseId === "fleet_routing" && spatialTopology && dispatchSnapshots) {
+          if (
+            currentUseCaseId === "fleet_routing" &&
+            canvas1Mode === "topology" &&
+            spatialTopology &&
+            dispatchSnapshots
+          ) {
             let bestHit = null;
             let bestDist = 14;
             fleetHitRegions.forEach(reg => {
+              if (!reg.active) return;
               const d = Math.hypot(relX - reg.x, relY - reg.y);
-              if (d < bestDist) {
+              if (d <= bestDist) {
                 bestDist = d;
                 bestHit = reg;
               }
             });
+            if (!bestHit) {
+              fleetHitRegions.forEach(reg => {
+                const d = Math.hypot(relX - reg.x, relY - reg.y);
+                if (d <= bestDist) {
+                  bestDist = d;
+                  bestHit = reg;
+                }
+              });
+            }
 
             if (bestHit) {
-              hoveredCustomerId = bestHit.customer.id;
-              drawFleetSpatialCanvas(currentGen);
+              if (hoveredCustomerId !== bestHit.customer.id) {
+                hoveredCustomerId = bestHit.customer.id;
+                drawFleetSpatialCanvas(currentGen);
+              }
               const c = bestHit.customer;
               const ls = bestHit.leftStop;
               const rs = bestHit.rightStop;
@@ -2605,9 +2705,15 @@
             const isBest = cand.is_best || false;
 
             const baseFrame = trajectories[Math.min(iter, trajectories.length - 1)] || trajectories[0];
+            const defaultMilestoneKey = currentUseCaseId === "fleet_routing"
+              ? (iter < 7 ? "0" : (iter < 16 ? "7" : (iter < 30 ? "16" : "30")))
+              : (iter < 8 ? "0" : (iter < 17 ? "8" : (iter < 30 ? "17" : "30")));
+            const iterMilestoneKey = (baseFrame && baseFrame.generation === iter && baseFrame.milestone_key)
+              ? String(baseFrame.milestone_key)
+              : defaultMilestoneKey;
             const newFrame = {
               generation: iter,
-              milestone_key: baseFrame.milestone_key || "30",
+              milestone_key: iterMilestoneKey,
               event_summary: isBest
                 ? ("★ New Breakthrough Candidate (Iter " + iter + ") | Score: " + scoreVal.toFixed(2) + "%")
                 : ("Evaluated Candidate (Iter " + iter + ") | Score: " + scoreVal.toFixed(2) + "%"),
@@ -2629,6 +2735,19 @@
             };
 
             if (iter >= trajectories.length) {
+              while (trajectories.length < iter) {
+                const fillIdx = trajectories.length;
+                const fillKey = currentUseCaseId === "fleet_routing"
+                  ? (fillIdx < 7 ? "0" : (fillIdx < 16 ? "7" : (fillIdx < 30 ? "16" : "30")))
+                  : (fillIdx < 8 ? "0" : (fillIdx < 17 ? "8" : (fillIdx < 30 ? "17" : "30")));
+                trajectories.push({
+                  generation: fillIdx,
+                  milestone_key: fillKey,
+                  event_summary: baseFrame.event_summary || ("Gen " + fillIdx),
+                  metrics: Object.assign({}, baseFrame.metrics),
+                  daily_series: baseFrame.daily_series
+                });
+              }
               trajectories.push(newFrame);
             } else {
               trajectories[iter] = newFrame;
