@@ -279,7 +279,7 @@ def run_digital_twin_simulation(payload: dict[str, Any]) -> tuple[int, dict[str,
         base_cfg, base_demand, base_promo = _INV_BENCHMARK
         prof = INVENTORY_ARCHETYPES[arch_idx]
 
-        delay_int = int(round(lead_time_delay))
+        delay_int = max(1, int(round(lead_time_delay))) if lead_time_delay > 0.0 else 0
         eff_delay = min(delay_int, 6)
         shelf_life = np.maximum(
             3, np.round(base_cfg.shelf_life_days * float(prof["shelf_scale"])).astype(int)
@@ -310,8 +310,8 @@ def run_digital_twin_simulation(payload: dict[str, Any]) -> tuple[int, dict[str,
             promo_mask = base_promo[:, 30:] > 0
             demand[:, 30:] = np.where(
                 promo_mask,
-                np.round(demand[:, 30:] * (1.0 + 1.5 * promo_frac)),
-                np.round(demand[:, 30:] * (1.0 + 0.35 * promo_frac)),
+                demand[:, 30:] * (1.0 + 1.5 * promo_frac),
+                demand[:, 30:] * (1.0 + 0.35 * promo_frac),
             )
 
         b_twin = InventoryDigitalTwin(sim_cfg, demand.copy(), promo.copy())
@@ -319,7 +319,11 @@ def run_digital_twin_simulation(payload: dict[str, Any]) -> tuple[int, dict[str,
         champ_fn = _get_champion_policy("inventory_replenishment")
 
         b_cfg = sim_cfg.to_dict()
-        b_cfg["case_pack_size"] = sim_cfg.case_pack_size * (2 + eff_delay * 2)
+        pack_scale = 2.0 + max(float(eff_delay), lead_time_delay) * 2.0 + promo_frac * 1.5
+        b_cfg["case_pack_size"] = sim_cfg.case_pack_size * pack_scale
+        b_cfg["moq"] = sim_cfg.moq * (
+            1.0 + max(0.08, 0.85 * promo_frac) if promo_frac > 0.0 else 1.0
+        )
         b_cfg["lead_time_days"] = nom_lead.copy()
 
         c_cfg = sim_cfg.to_dict()
@@ -670,10 +674,16 @@ def build_agent_query_response(
         )
         nom_base_cost = float(nom_sim["baseline"]["total_cost"])
         stress_base_cost = float(stress_sim["baseline"]["total_cost"])
-        cost_inc_pct = round(
-            max(0.1, ((stress_base_cost - nom_base_cost) / max(1e-6, nom_base_cost)) * 100.0),
-            2,
-        )
+        raw_cost_delta_pct = ((stress_base_cost - nom_base_cost) / max(1e-6, nom_base_cost)) * 100.0
+        if (
+            lead_time_delay > 0.0
+            or promo_frac > 0.0
+            or spoilage_multiplier > 1.0
+            or stockout_multiplier > 1.0
+        ):
+            cost_inc_pct = round(max(0.01, raw_cost_delta_pct), 2)
+        else:
+            cost_inc_pct = round(raw_cost_delta_pct, 2)
         response_body["what_if_stress_test"] = {
             "lead_time_delay_days": round(lead_time_delay, 2),
             "promo_demand_spike_pct": round(promo_frac * 100.0, 2),
@@ -975,7 +985,9 @@ try:
 
     @app.post("/api/simulate", tags=["Digital Twin Simulation"])
     async def post_simulate(request: Request) -> Any:
-        payload = await _read_bounded_json(request)
+        payload: dict[str, Any] = dict(request.query_params)
+        post_payload = await _read_bounded_json(request)
+        payload.update(post_payload)
         code, _, body = handle_api_request("/api/simulate", payload=payload)
         if code != 200:
             raise HTTPException(status_code=code, detail=body.get("detail", "Error"))
@@ -1104,7 +1116,9 @@ if __name__ == "__main__":
                     )
                     if status_code == 413:
                         self.send_response(413)
+                        self.send_header("Content-Type", "application/json")
                         self.end_headers()
+                        self.wfile.write(json.dumps(check_res).encode("utf-8"))
                         return
 
                     try:
@@ -1118,12 +1132,16 @@ if __name__ == "__main__":
                     )
                     if status_code == 413:
                         self.send_response(413)
+                        self.send_header("Content-Type", "application/json")
                         self.end_headers()
+                        self.wfile.write(json.dumps(payload).encode("utf-8"))
                         return
                     self._handle_json_route(payload=payload)
                     return
                 self.send_response(404)
+                self.send_header("Content-Type", "application/json")
                 self.end_headers()
+                self.wfile.write(json.dumps({"detail": "Not found"}).encode("utf-8"))
 
         httpd = http.server.ThreadingHTTPServer((host, port), FallbackHandler)
         print(

@@ -391,6 +391,57 @@ def test_server_agent_query_archetype_alignment_and_url_query_params() -> None:
     assert body_qs["what_if_stress_test"]["lead_time_delay_days"] == 2.0
     assert body_qs["what_if_stress_test"]["promo_demand_spike_pct"] == 25.0
 
+    # Verify fractional lead_time_delay (0.4), small promo_spike_pct (1.0), and >6 day delays
+    _, _, nom_inv = handle_api_request(
+        "/api/simulate",
+        payload={
+            "use_case": "inventory_replenishment",
+            "lead_time_delay": 0.0,
+            "promo_spike_pct": 0.0,
+        },
+    )
+    _, _, frac_delay_inv = handle_api_request(
+        "/api/simulate",
+        payload={
+            "use_case": "inventory_replenishment",
+            "lead_time_delay": 0.4,
+            "promo_spike_pct": 0.0,
+        },
+    )
+    assert frac_delay_inv["baseline"]["total_cost"] > nom_inv["baseline"]["total_cost"]
+
+    _, _, small_promo_inv = handle_api_request(
+        "/api/simulate",
+        payload={
+            "use_case": "inventory_replenishment",
+            "lead_time_delay": 0.0,
+            "promo_spike_pct": 1.0,
+        },
+    )
+    assert small_promo_inv["baseline"]["total_cost"] > nom_inv["baseline"]["total_cost"]
+
+    _, _, delay6_inv = handle_api_request(
+        "/api/simulate",
+        payload={"use_case": "inventory_replenishment", "lead_time_delay": 6.0},
+    )
+    _, _, delay10_inv = handle_api_request(
+        "/api/simulate",
+        payload={"use_case": "inventory_replenishment", "lead_time_delay": 10.0},
+    )
+    assert delay10_inv["baseline"]["total_cost"] != delay6_inv["baseline"]["total_cost"]
+
+    # Verify <1.0 cost multipliers report negative projected_cost_increase_pct
+    code_disc, _, body_disc = handle_api_request(
+        "/api/agent/query",
+        payload={
+            "use_case": "inventory_replenishment",
+            "spoilage_multiplier": 0.5,
+            "stockout_multiplier": 0.5,
+        },
+    )
+    assert code_disc == 200
+    assert body_disc["what_if_stress_test"]["projected_cost_increase_pct"] < 0.0
+
 
 def test_whatif_sandbox_client_js_live_simulate_and_race_guard() -> None:
     """Execute app.js in Node.js with a simulated DOM to verify fetch('/api/simulate') and race guards."""
@@ -522,9 +573,13 @@ def test_whatif_sandbox_client_js_live_simulate_and_race_guard() -> None:
 
     let fetchCalls = [];
     let nextSimOverride = null;
+    let shouldRejectFetch = false;
+    let customFetchPromise = null;
     global.fetch = (url, opts) => {{
       const body = JSON.parse(opts.body);
       fetchCalls.push({{ url, body }});
+      if (customFetchPromise) return customFetchPromise;
+      if (shouldRejectFetch) return Promise.reject(new Error('Network offline'));
       const payloadToReturn = nextSimOverride || (body.use_case === 'fleet_routing' ? fleetSim : invSim);
       return Promise.resolve({{
         ok: true,
@@ -580,6 +635,46 @@ def test_whatif_sandbox_client_js_live_simulate_and_race_guard() -> None:
       if (getEl('val-champ-cost').textContent !== expectedFleetCost) {{
         throw new Error('Expected fleet cost ' + expectedFleetCost + ' but got ' + getEl('val-champ-cost').textContent);
       }}
+
+      // 4. Verify offline fallback for fleet_routing uses 50 stops and select change event works
+      shouldRejectFetch = true;
+      getEl('whatif-sku').value = '1';
+      const changeListeners = getEl('whatif-sku').listeners['change'] || [];
+      if (changeListeners.length === 0) throw new Error('Missing change listener on whatif-sku');
+      changeListeners[0]();
+      while (pendingTimers.length > 0) pendingTimers.shift()();
+      await new Promise(r => setImmediate(r));
+      if (getEl('val-champ-orderup').textContent !== '50 stops (dynamic)') {{
+        throw new Error('Expected 50 stops (dynamic) in offline fleet fallback, got ' + getEl('val-champ-orderup').textContent);
+      }}
+      shouldRejectFetch = false;
+
+      // 5. Verify out-of-order stale response race condition guard (reqId !== whatIfReqSeq)
+      let resolveSlow;
+      customFetchPromise = new Promise(res => {{ resolveSlow = res; }});
+      inputListeners[0]();
+      while (pendingTimers.length > 0) pendingTimers.shift()();
+      customFetchPromise = null;
+
+      // Issue a newer request that resolves immediately with fleetSim
+      inputListeners[0]();
+      while (pendingTimers.length > 0) pendingTimers.shift()();
+      await new Promise(r => setImmediate(r));
+
+      // Now resolve the stale first request with bogus cost 999999; it must be ignored
+      resolveSlow({{
+        ok: true,
+        json: () => Promise.resolve({{
+          baseline: {{ ...fleetSim.baseline, daily_cost: 999999 }},
+          champion: {{ ...fleetSim.champion, daily_cost: 999999 }},
+          comparison: fleetSim.comparison
+        }})
+      }});
+      await new Promise(r => setImmediate(r));
+      if (getEl('val-champ-cost').textContent !== expectedFleetCost) {{
+        throw new Error('Stale out-of-order response overwrote newer state: ' + getEl('val-champ-cost').textContent);
+      }}
+
       console.log('ALL_JS_CHECKS_PASSED');
     }}
     runChecks().catch(err => {{ console.error(err); process.exit(1); }});
