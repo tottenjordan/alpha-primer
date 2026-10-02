@@ -25,7 +25,7 @@ ENV PORT=8080 \
     HOST=0.0.0.0 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH="/app/src" \
+    PYTHONPATH="/app:/app/src" \
     PATH="/app/.venv/bin:$PATH"
 
 # Copy virtualenv and runtime assets
@@ -34,6 +34,7 @@ COPY server.py ./
 COPY dashboard/ ./dashboard/
 COPY records/ ./records/
 COPY src/ ./src/
+COPY examples/ ./examples/
 
 # Security: Run as non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app

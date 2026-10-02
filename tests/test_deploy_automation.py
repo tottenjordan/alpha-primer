@@ -89,15 +89,50 @@ def test_github_deploy_workflow_structure() -> None:
     assert "Pre-Deployment Verification" in content
 
 
-def test_dockerfile_security_and_non_root() -> None:
-    """Verify Dockerfile uses non-root user and installs uv frozen dependencies."""
+def test_dockerfile_security_and_non_root(tmp_path: Path) -> None:
+    """Verify Dockerfile uses non-root user, installs uv frozen dependencies, and copies all runtime paths."""
+    import os
+    import shutil
+    import sys
+
     dockerfile_path = ROOT_DIR / "Dockerfile"
     assert dockerfile_path.exists()
 
     content = dockerfile_path.read_text(encoding="utf-8")
     assert "FROM python:3.12-slim" in content
     assert "uv sync --frozen --no-dev" in content
+    assert 'PYTHONPATH="/app:/app/src"' in content
+    assert "COPY examples/ ./examples/" in content
     assert "useradd -m -u 1000 appuser" in content
     assert "USER appuser" in content
     assert "EXPOSE 8080" in content
     assert 'CMD ["python", "server.py"]' in content
+
+    # Stage an isolated /app directory matching Dockerfile COPY directives and verify server.py executes
+    app_dir = tmp_path / "app"
+    app_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(ROOT_DIR / "server.py", app_dir / "server.py")
+    for folder in ("dashboard", "records", "src", "examples"):
+        shutil.copytree(
+            ROOT_DIR / folder,
+            app_dir / folder,
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "tests"),
+        )
+
+    env = dict(os.environ)
+    env["PYTHONPATH"] = f"{app_dir}:{app_dir / 'src'}"
+    probe = (
+        "import server; "
+        "c1, _, b1 = server.handle_api_request('/api/simulate', {'use_case': 'inventory_replenishment'}); "
+        "c2, _, b2 = server.handle_api_request('/api/simulate', {'use_case': 'fleet_routing'}); "
+        "assert c1 == 200 and c2 == 200, (c1, c2)"
+    )
+    res = subprocess.run(
+        [sys.executable, "-c", probe],
+        cwd=str(app_dir),
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert res.returncode == 0, res.stderr

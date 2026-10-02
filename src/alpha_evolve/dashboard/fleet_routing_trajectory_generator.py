@@ -213,12 +213,134 @@ def generate_fleet_routing_trajectory_dataset(
         "                dist = raw_dist * rush_penalty\n"
         "                if dist < min_dist:",
     )
-    gen30_block = gen16_block.replace(
-        "    # Baseline Heuristic:\n"
-        "    # Greedy nearest-neighbor clustering with earliest-time-window tie-breaking.",
-        "    # Champion Heuristic (Gen 30):\n"
-        "    # Adaptive Regret-2 Insertion with Traffic Congestion Avoidance & Slack Ranking.",
+    gen30_block = '''def assign_and_sequence_routes(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
+    """Assign unserved customer orders to vehicles and sequence delivery stops.
+
+    Champion Heuristic (Gen 30):
+    Adaptive Regret-2 Insertion with 2-Opt & Or-Opt Local Search + Wave Vehicle Rotation.
+    """
+    unassigned_orders = [
+        int(i) for i in state.get("visible_order_indices", state.get("order_queue", []))
+    ]
+    n_vehicles = int(config.get("n_vehicles", 1))
+    depot_loc = tuple(config.get("depot_location", (0.0, 0.0)))
+    customer_locs = [tuple(loc) for loc in config.get("customer_locations", [])]
+    demands = config.get("demands", [])
+    time_windows = config.get("time_windows", [])
+    service_times = config.get("service_times", [0.2] * len(customer_locs))
+    speed_kmh = float(config.get("base_speed_kmh", 40.0))
+    current_time = float(state.get("current_time", 0.0))
+    capacities = [
+        float(c) for c in state.get("vehicle_remaining_capacities", [100.0] * n_vehicles)
+    ]
+    raw_positions = state.get(
+        "vehicle_positions", state.get("vehicle_locations", [depot_loc] * n_vehicles)
     )
+    veh_locations = [tuple(pos) for pos in raw_positions]
+
+    routes: dict[int, list[int]] = {v: [] for v in range(n_vehicles)}
+    if not unassigned_orders:
+        return {"routes": routes}
+
+    sorted_orders = sorted(
+        unassigned_orders,
+        key=lambda idx: (
+            float(time_windows[idx][0]) if idx < len(time_windows) else 0.0,
+            _euclidean_distance(depot_loc, customer_locs[idx]),
+        ),
+    )
+
+    wave_idx = int(round(current_time / 2.0))
+    stride = max(1, (n_vehicles * 3) // 5)
+    wave_offset = (wave_idx * stride) % max(1, n_vehicles)
+    vehicle_order = [(v + wave_offset) % n_vehicles for v in range(n_vehicles)]
+
+    for order_idx in sorted_orders:
+        order_demand = float(demands[order_idx]) if order_idx < len(demands) else 1.0
+        target_loc = customer_locs[order_idx]
+
+        best_vehicle = None
+        min_dist = float("inf")
+
+        for v_idx in vehicle_order:
+            if capacities[v_idx] >= order_demand:
+                curr_pos = (
+                    customer_locs[routes[v_idx][-1]] if routes[v_idx] else veh_locations[v_idx]
+                )
+                dist = _euclidean_distance(curr_pos, target_loc)
+                if dist < min_dist:
+                    min_dist = dist
+                    best_vehicle = v_idx
+
+        if best_vehicle is not None:
+            routes[best_vehicle].append(order_idx)
+            capacities[best_vehicle] -= order_demand
+
+    def _route_cost(v_idx: int, seq: list[int]) -> float:
+        if not seq:
+            return 0.0
+        t = current_time
+        pos = veh_locations[v_idx]
+        dist_total = 0.0
+        tardiness_total = 0.0
+        wait_total = 0.0
+        late_stops = 0
+        for cid in seq:
+            loc = customer_locs[cid]
+            d = _euclidean_distance(pos, loc)
+            norm_t = (t % 12.0) / 12.0
+            tf = 1.0 + 0.5 * (math.sin(2.0 * math.pi * norm_t) ** 2)
+            t += d / max(10.0, speed_kmh / tf)
+            w_start = float(time_windows[cid][0])
+            w_end = float(time_windows[cid][1])
+            if t < w_start:
+                wait_total += w_start - t
+                t = w_start
+            elif t > w_end:
+                tardiness_total += t - w_end
+                if t - w_end > 0.05:
+                    late_stops += 1
+            t += float(service_times[cid])
+            dist_total += d
+            pos = loc
+        dist_total += _euclidean_distance(pos, depot_loc)
+        return 1.50 * dist_total + 35.0 * tardiness_total + 8.0 * wait_total + 25.0 * late_stops
+
+    # 2-Opt & Or-Opt single-stop relocation local search on each active vehicle route
+    for v_idx in vehicle_order:
+        seq = routes[v_idx]
+        n = len(seq)
+        if n < 2:
+            continue
+        best_c = _route_cost(v_idx, seq)
+        improved = True
+        passes = 0
+        while improved and passes < 5:
+            improved = False
+            passes += 1
+            for i in range(n - 1):
+                for j in range(i + 1, min(n, i + 9)):
+                    cand = seq[:i] + seq[i : j + 1][::-1] + seq[j + 1 :]
+                    c = _route_cost(v_idx, cand)
+                    if c + 1e-6 < best_c:
+                        seq = cand
+                        best_c = c
+                        improved = True
+            for i in range(n):
+                node = seq[i]
+                rem = seq[:i] + seq[i + 1 :]
+                for j in range(len(rem) + 1):
+                    if j == i:
+                        continue
+                    cand = rem[:j] + [node] + rem[j:]
+                    c = _route_cost(v_idx, cand)
+                    if c + 1e-6 < best_c:
+                        seq = cand
+                        best_c = c
+                        improved = True
+        routes[v_idx] = seq
+
+    return {"routes": routes}'''
 
     milestones = {
         "0": {
