@@ -1,6 +1,6 @@
 {
   "platform_title": "AlphaEvolve Supply Chain & Digital Twin Intelligence Suite",
-  "generated_at_utc": "2026-10-02T08:58:42.024692+00:00",
+  "generated_at_utc": "2026-10-02T11:24:33.452465+00:00",
   "engine_info": {
     "project_id": "934903580331",
     "engine_id": "alpha-evolve-experiment-engine",
@@ -14,7 +14,7 @@
       "use_case_id": "fleet_routing",
       "title": "Dynamic Fleet Routing & Dispatch with Time Windows (VRPTW)",
       "subtitle": "Google Cloud Discovery Engine AlphaEvolve (v1alpha) Digital Twin Heuristic Optimization",
-      "recorded_at_utc": "2026-10-02T08:58:42.024624+00:00",
+      "recorded_at_utc": "2026-10-02T11:24:33.452396+00:00",
       "horizon_days": 30,
       "num_skus": 50,
       "total_generations": 30,
@@ -264,7 +264,7 @@
             "savings": 105.2,
             "savings_label": "-$105",
             "pct_of_total_savings": 9.0,
-            "color": "#A855F7"
+            "color": "#14B8A6"
           }
         ]
       },

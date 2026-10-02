@@ -375,7 +375,7 @@ def generate_fleet_routing_trajectory_dataset(
                 "savings": round(m0["ordering_cost"] - m30["ordering_cost"], 1),
                 "savings_label": f"-${m0['ordering_cost'] - m30['ordering_cost']:,.0f}",
                 "pct_of_total_savings": 9.0,
-                "color": "#A855F7",
+                "color": "#14B8A6",
             },
         ],
     }

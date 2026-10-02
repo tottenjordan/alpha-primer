@@ -644,7 +644,7 @@ def generate_inventory_trajectory_dataset(
                 "savings": round(gen0_metrics["ordering_cost"] - gen30_metrics["ordering_cost"], 1),
                 "savings_label": "-$395",
                 "pct_of_total_savings": 1.7,
-                "color": "#A855F7",
+                "color": "#14B8A6",
             },
         ],
     }
