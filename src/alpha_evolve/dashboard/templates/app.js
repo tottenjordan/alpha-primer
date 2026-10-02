@@ -1,0 +1,1714 @@
+    (function() {
+      "use strict";
+
+      // 1. Safe DOM Helpers (strictly zero dangerous property assignments)
+      function el(tag, className, text) {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined && text !== null) node.textContent = String(text);
+        return node;
+      }
+
+      // 2. Parse Embedded Telemetry
+      const dataScript = document.getElementById("master-trajectory-data");
+      if (!dataScript) return;
+      let masterData = {};
+      try {
+        masterData = JSON.parse(dataScript.textContent);
+      } catch (err) {
+        console.error("Failed to parse master-trajectory-data", err);
+        return;
+      }
+
+      let currentUseCaseId = "inventory_replenishment";
+      let uc = (masterData.use_cases && masterData.use_cases[currentUseCaseId]) || null;
+      if (!uc && masterData.use_cases) {
+        currentUseCaseId = Object.keys(masterData.use_cases)[0];
+        uc = masterData.use_cases[currentUseCaseId];
+      }
+      if (!uc) return;
+
+      let trajectories = uc.trajectory_generations || [];
+      let archetypes = uc.sku_archetypes || [];
+      let baselineSum = uc.baseline_summary || {};
+      let championSum = uc.champion_summary || {};
+      let milestones = uc.milestones || {};
+      let ribbonMilestones = uc.ribbon_milestones || [];
+      let costWaterfall = uc.cost_waterfall || null;
+      let paretoFrontier = uc.pareto_frontier || [];
+      let maxGen = Math.max(0, trajectories.length - 1);
+
+      // 3. Tab Switching
+      const tabBtns = document.querySelectorAll(".tab-btn");
+      const tabPanes = document.querySelectorAll(".tab-pane");
+
+      tabBtns.forEach(btn => {
+        btn.addEventListener("click", () => {
+          tabBtns.forEach(b => b.classList.remove("active"));
+          tabPanes.forEach(p => p.classList.remove("active"));
+          btn.classList.add("active");
+          const targetId = btn.getAttribute("data-tab");
+          const target = document.getElementById(targetId);
+          if (target) target.classList.add("active");
+
+          if (targetId !== "tab-replay") {
+            pauseReplay();
+          }
+
+          if (targetId === "tab-replay") {
+            drawTrajectoryChart(currentGen);
+            drawCanvas2Chart();
+          } else if (targetId === "tab-whatif") {
+            updateWhatIfSimulation();
+          } else if (targetId === "tab-diffs") {
+            renderCurrentDiff();
+          }
+        });
+      });
+
+      // 4. Render Archetype Table via Safe DOM
+      const tbody = document.getElementById("tbody-archetypes");
+      function renderArchetypesTable() {
+        if (!tbody) return;
+        tbody.replaceChildren();
+        if (currentUseCaseId === "fleet_routing") {
+          // Fleet Routing vehicle archetypes
+          const fleetRows = [
+            { type: "Standard Delivery Van", cap: "120 boxes", speed: "45 km/h", costPerKm: "$1.85", fixedCost: "$120.00", slaRate: "97.2%" },
+            { type: "Refrigerated Transit Van", cap: "90 boxes", speed: "40 km/h", costPerKm: "$2.40", fixedCost: "$160.00", slaRate: "98.5%" },
+            { type: "Express Cargo Courier", cap: "45 boxes", speed: "55 km/h", costPerKm: "$1.50", fixedCost: "$95.00", slaRate: "96.8%" }
+          ];
+          fleetRows.forEach(r => {
+            const tr = el("tr");
+            tr.appendChild(el("td", null, r.type));
+            tr.appendChild(el("td", null, r.cap));
+            tr.appendChild(el("td", null, r.speed));
+            tr.appendChild(el("td", null, r.costPerKm));
+            tr.appendChild(el("td", null, r.fixedCost));
+            tr.appendChild(el("td", null, r.slaRate));
+            tr.appendChild(el("td", null, "Active"));
+            tr.appendChild(el("td", null, "SLA Guarded"));
+            tbody.appendChild(tr);
+          });
+        } else {
+          archetypes.forEach(a => {
+            const tr = el("tr");
+            tr.appendChild(el("td", null, a.category));
+            tr.appendChild(el("td", null, a.shelf_life_days + " days"));
+            tr.appendChild(el("td", null, a.lead_time_days + " days"));
+            tr.appendChild(el("td", null, a.baseline_spoilage_rate + "%"));
+            tr.appendChild(el("td", null, a.champion_spoilage_rate + "%"));
+            tr.appendChild(el("td", null, "$" + a.holding_cost.toFixed(2)));
+            tr.appendChild(el("td", null, "$" + a.spoilage_cost.toFixed(2)));
+            tr.appendChild(el("td", null, "$" + a.stockout_penalty.toFixed(2)));
+            tbody.appendChild(tr);
+          });
+        }
+      }
+      renderArchetypesTable();
+
+      // 4b. Use Case Switching Engine (Strict Safe DOM)
+      // Diff State variables
+      let diffViewMode = "split"; // "split" or "unified"
+      let diffFoldUnchanged = true;
+      let leftMilestoneKey = "0";
+      let rightMilestoneKey = "8";
+
+      const diffTableBody = document.getElementById("diff-table-body");
+      const diffTableHeader = document.getElementById("diff-table-header");
+      const btnViewSplit = document.getElementById("btn-view-split");
+      const btnViewUnified = document.getElementById("btn-view-unified");
+      const btnToggleFold = document.getElementById("btn-toggle-fold");
+      const diffSelectBase = document.getElementById("diff-select-base");
+      const diffSelectEvolved = document.getElementById("diff-select-evolved");
+
+      function updateDiffStepperOptions() {
+        if (!diffSelectBase || !diffSelectEvolved) return;
+        diffSelectBase.replaceChildren();
+        diffSelectEvolved.replaceChildren();
+
+        const keys = Object.keys(milestones).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+        keys.forEach(k => {
+          const m = milestones[k];
+          const label = "Gen " + k + (m.badge ? " (" + m.badge.replace(/Gen \d+ ?/, "").trim() + ")" : "");
+          const opt1 = el("option", null, label);
+          opt1.value = k;
+          diffSelectBase.appendChild(opt1);
+
+          const opt2 = el("option", null, label);
+          opt2.value = k;
+          diffSelectEvolved.appendChild(opt2);
+        });
+
+        const pairButtons = document.querySelectorAll(".diff-stepper-btn[data-pair]");
+        if (pairButtons.length === 4 && keys.length >= 4) {
+          const pairs = [
+            [keys[0], keys[1], "Gen " + keys[0] + " \u2194 Gen " + keys[1]],
+            [keys[1], keys[2], "Gen " + keys[1] + " \u2194 Gen " + keys[2]],
+            [keys[2], keys[3], "Gen " + keys[2] + " \u2194 Gen " + keys[3]],
+            [keys[0], keys[3], "Gen " + keys[0] + " \u2194 Gen " + keys[3] + " (Full)"]
+          ];
+          pairButtons.forEach((btn, idx) => {
+            btn.setAttribute("data-pair", pairs[idx][0] + "-" + pairs[idx][1]);
+            btn.textContent = pairs[idx][2];
+            btn.classList.toggle("active", idx === 0);
+          });
+        }
+
+        const presetBtns = document.querySelectorAll(".btn-preset[data-gen]");
+        if (presetBtns.length === 4 && keys.length >= 4) {
+          presetBtns.forEach((btn, idx) => {
+            btn.setAttribute("data-gen", keys[idx]);
+            btn.textContent = "Gen " + keys[idx];
+          });
+        }
+
+        leftMilestoneKey = keys[0] || "0";
+        rightMilestoneKey = keys.length > 1 ? keys[1] : (keys[0] || "0");
+        diffSelectBase.value = leftMilestoneKey;
+        diffSelectEvolved.value = rightMilestoneKey;
+        renderCurrentDiff();
+      }
+
+      function switchUseCase(useCaseId) {
+        if (!masterData.use_cases || !masterData.use_cases[useCaseId]) return;
+        currentUseCaseId = useCaseId;
+        uc = masterData.use_cases[currentUseCaseId];
+
+        // Update active button state
+        document.querySelectorAll(".use-case-btn").forEach(btn => {
+          if (btn.getAttribute("data-use-case") === useCaseId) {
+            btn.classList.add("active");
+          } else {
+            btn.classList.remove("active");
+          }
+        });
+
+        // Rebind data structures
+        trajectories = uc.trajectory_generations || [];
+        archetypes = uc.sku_archetypes || [];
+        baselineSum = uc.baseline_summary || {};
+        championSum = uc.champion_summary || {};
+        milestones = uc.milestones || {};
+        ribbonMilestones = uc.ribbon_milestones || [];
+        costWaterfall = uc.cost_waterfall || null;
+        paretoFrontier = uc.pareto_frontier || [];
+        maxGen = Math.max(0, trajectories.length - 1);
+
+        // Header metadata
+        const titleEl = document.getElementById("active-use-case-title");
+        if (titleEl) {
+          titleEl.textContent = uc.title || (useCaseId === "fleet_routing"
+            ? "Dynamic Fleet Routing & Dispatch with Time Windows (VRPTW)"
+            : "Autonomous Multi-Echelon & Perishable Inventory Replenishment");
+        }
+        const horizonEl = document.getElementById("meta-horizon");
+        if (horizonEl) {
+          horizonEl.textContent = useCaseId === "fleet_routing" ? "12 Hours (Traffic)" : "90 Days (Causal)";
+        }
+
+        // Re-render components
+        renderArchetypesTable();
+        renderMilestoneRibbon();
+        updateDiffStepperOptions();
+
+        // Update scrubber & display
+        if (scrubber) {
+          scrubber.max = maxGen;
+          scrubber.value = maxGen;
+        }
+        currentGen = maxGen;
+        updateDisplay(currentGen);
+      }
+
+      // Wire up use case switcher buttons
+      document.querySelectorAll(".use-case-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          pauseReplay();
+          const targetUc = btn.getAttribute("data-use-case");
+          if (targetUc && targetUc !== currentUseCaseId) {
+            switchUseCase(targetUc);
+          }
+        });
+      });
+
+      // 5. Interactive Milestone Ribbon
+      const ribbonContainer = document.getElementById("milestone-ribbon-nodes");
+      function renderMilestoneRibbon() {
+        if (!ribbonContainer) return;
+        ribbonContainer.replaceChildren();
+
+        ribbonMilestones.forEach(item => {
+          const node = el("button", "ribbon-node");
+          if (item.is_star) node.classList.add("star");
+          if (item.is_champ) node.classList.add("champ");
+          if (item.generation === currentGen) node.classList.add("active");
+
+          node.setAttribute("data-gen", String(item.generation));
+          node.appendChild(el("span", null, item.badge || item.label));
+
+          const reducSpan = el("span", "badge-diff " + (item.cost_reduc > 0 ? "positive" : "neutral"), (item.cost_reduc > 0 ? "-" : "") + item.cost_reduc.toFixed(1) + "%");
+          node.appendChild(reducSpan);
+
+          // Tooltip (Safe DOM)
+          const tip = el("div", "ribbon-tooltip");
+          const tipHeader = el("div", null);
+          tipHeader.style.fontWeight = "700";
+          tipHeader.style.color = "var(--accent-cyan)";
+          tipHeader.style.marginBottom = "4px";
+          tipHeader.textContent = item.title;
+          tip.appendChild(tipHeader);
+
+          const tipStats = el("div", null);
+          tipStats.style.fontSize = "11px";
+          tipStats.style.marginBottom = "4px";
+          tipStats.style.color = "var(--text-secondary)";
+          tipStats.textContent = "Cost Reduc: " + item.cost_reduc.toFixed(1) + "% | Fill Rate: " + item.fill_rate.toFixed(1) + "%";
+          tip.appendChild(tipStats);
+
+          const tipInn = el("div", null);
+          tipInn.style.fontSize = "10.5px";
+          tipInn.style.color = "var(--text-muted)";
+          tipInn.textContent = item.innovation;
+          tip.appendChild(tipInn);
+
+          node.appendChild(tip);
+
+          node.addEventListener("click", () => {
+            pauseReplay();
+            updateDisplay(item.generation);
+          });
+
+          ribbonContainer.appendChild(node);
+        });
+      }
+
+      function updateMilestoneRibbonActive() {
+        if (!ribbonContainer) return;
+        const nodes = ribbonContainer.querySelectorAll(".ribbon-node");
+        let closestGen = 0;
+        let minDiff = 999;
+        ribbonMilestones.forEach(m => {
+          const diff = Math.abs(m.generation - currentGen);
+          if (diff < minDiff) {
+            minDiff = diff;
+            closestGen = m.generation;
+          }
+        });
+
+        nodes.forEach(n => {
+          const g = parseInt(n.getAttribute("data-gen"), 10);
+          if (g === closestGen) {
+            n.classList.add("active");
+          } else {
+            n.classList.remove("active");
+          }
+        });
+      }
+
+      // 6. State & Replay Scrubber
+      let currentGen = maxGen;
+      let isPlaying = false;
+      let playInterval = null;
+      let canvas2Mode = "pareto"; // "pareto" or "waterfall"
+
+      const scrubber = document.getElementById("scrubber");
+      const scrubberLabel = document.getElementById("scrubber-label");
+      const playBtn = document.getElementById("btn-play");
+
+      function pauseReplay() {
+        if (isPlaying) {
+          isPlaying = false;
+          if (playBtn) playBtn.textContent = "▶ Play Evolution";
+          if (playInterval) clearInterval(playInterval);
+          playInterval = null;
+        }
+      }
+
+      function updateDisplay(genIdx) {
+        currentGen = Math.max(0, Math.min(maxGen, genIdx));
+        if (scrubber) scrubber.value = currentGen;
+        if (scrubberLabel) scrubberLabel.textContent = "GEN " + currentGen + " / " + maxGen;
+
+        const frame = trajectories[currentGen];
+        if (!frame) return;
+
+        const m = frame.metrics;
+        if (currentUseCaseId === "fleet_routing") {
+          // Fleet Routing KPIs: Cost, Distance, On-Time %, Score
+          const kpi1Label = document.getElementById("kpi-label-1");
+          if (kpi1Label) kpi1Label.textContent = "Total Fleet Cost";
+          const totalCostEl = document.getElementById("kpi-total-cost");
+          if (totalCostEl) totalCostEl.textContent = "$" + Math.round(m.total_cost).toLocaleString();
+          const costReducEl = document.getElementById("kpi-cost-reduc");
+          if (costReducEl) costReducEl.textContent = (m.cost_reduction_pct > 0 ? "-" : "") + m.cost_reduction_pct.toFixed(1) + "%";
+          const baselineCompEl = document.getElementById("kpi-baseline-comp");
+          if (baselineCompEl) baselineCompEl.textContent = "vs. $" + Math.round(baselineSum.total_cost || 14250).toLocaleString() + " baseline";
+
+          const kpi2Label = document.getElementById("kpi-label-2");
+          if (kpi2Label) kpi2Label.textContent = "Fleet Distance Traveled";
+          const spoilCostEl = document.getElementById("kpi-spoilage-cost");
+          if (spoilCostEl) spoilCostEl.textContent = Math.round(m.total_distance_km || 0).toLocaleString() + " km";
+          const spoilRateEl = document.getElementById("kpi-spoilage-rate");
+          if (spoilRateEl) spoilRateEl.textContent = (m.vehicles_used || 5) + " vehicles";
+          const subComp2El = document.getElementById("kpi-sub-comp-2");
+          if (subComp2El) subComp2El.textContent = "vs. " + Math.round(baselineSum.total_distance_km || 642) + " km baseline";
+
+          const kpi3Label = document.getElementById("kpi-label-3");
+          if (kpi3Label) kpi3Label.textContent = "On-Time Delivery Rate";
+          const fillRateEl = document.getElementById("kpi-fill-rate");
+          if (fillRateEl) fillRateEl.textContent = (m.on_time_delivery_pct || 0).toFixed(1) + "%";
+          const badge3El = document.getElementById("kpi-badge-3");
+          if (badge3El) badge3El.textContent = "Target: ≥95.0%";
+          const subComp3El = document.getElementById("kpi-sub-comp-3");
+          if (subComp3El) subComp3El.textContent = "tardiness: " + (m.total_tardiness_hours || 0).toFixed(1) + " hrs";
+
+          const kpi4Label = document.getElementById("kpi-label-4");
+          if (kpi4Label) kpi4Label.textContent = "VRPTW Optimization Score";
+          const fitScoreEl = document.getElementById("kpi-fitness-score");
+          if (fitScoreEl) fitScoreEl.textContent = (m.score !== undefined ? m.score : m.cost_reduction_pct).toFixed(2);
+        } else {
+          // Inventory Replenishment KPIs
+          const kpi1Label = document.getElementById("kpi-label-1");
+          if (kpi1Label) kpi1Label.textContent = "Total Supply Chain Cost";
+          const totalCostEl = document.getElementById("kpi-total-cost");
+          if (totalCostEl) totalCostEl.textContent = "$" + Math.round(m.total_cost).toLocaleString();
+          const costReducEl = document.getElementById("kpi-cost-reduc");
+          if (costReducEl) costReducEl.textContent = (m.cost_reduction_pct > 0 ? "-" : "") + m.cost_reduction_pct.toFixed(1) + "%";
+          const baselineCompEl = document.getElementById("kpi-baseline-comp");
+          if (baselineCompEl) baselineCompEl.textContent = "vs. $68,410 baseline";
+
+          const kpi2Label = document.getElementById("kpi-label-2");
+          if (kpi2Label) kpi2Label.textContent = "Perishable Spoilage Waste";
+          const spoilCostEl = document.getElementById("kpi-spoilage-cost");
+          if (spoilCostEl) spoilCostEl.textContent = "$" + Math.round(m.spoilage_cost || 0).toLocaleString();
+          const spoilRateEl = document.getElementById("kpi-spoilage-rate");
+          if (spoilRateEl) spoilRateEl.textContent = (m.spoilage_rate_pct || 0).toFixed(2) + "% rate";
+          const subComp2El = document.getElementById("kpi-sub-comp-2");
+          if (subComp2El) subComp2El.textContent = "vs. 14.6% baseline";
+
+          const kpi3Label = document.getElementById("kpi-label-3");
+          if (kpi3Label) kpi3Label.textContent = "Service Fill Rate";
+          const fillRateEl = document.getElementById("kpi-fill-rate");
+          if (fillRateEl) fillRateEl.textContent = (m.fill_rate_pct || 0).toFixed(2) + "%";
+          const badge3El = document.getElementById("kpi-badge-3");
+          if (badge3El) badge3El.textContent = "SLA: ≥95.0%";
+          const subComp3El = document.getElementById("kpi-sub-comp-3");
+          if (subComp3El) {
+            subComp3El.replaceChildren();
+            subComp3El.appendChild(document.createTextNode("stockout penalty: "));
+            const stockSpan = el("span", null, "$" + Math.round(m.stockout_penalty || 0).toLocaleString());
+            stockSpan.id = "kpi-stockout-cost";
+            subComp3El.appendChild(stockSpan);
+          }
+
+          const kpi4Label = document.getElementById("kpi-label-4");
+          if (kpi4Label) kpi4Label.textContent = "Evaluation Fitness Score";
+          const fitScoreEl = document.getElementById("kpi-fitness-score");
+          if (fitScoreEl) fitScoreEl.textContent = (m.fitness_score || 0).toFixed(2);
+        }
+
+        document.getElementById("milestone-title").textContent = "GEN " + currentGen + (currentGen === 30 ? " CHAMPION" : (currentGen === 0 ? " SEED BASELINE" : " BREAKTHROUGH"));
+        document.getElementById("milestone-desc").textContent = frame.event_summary || (currentUseCaseId === "fleet_routing" ? (currentGen === 30 ? "Champion Regret-2 + 2-opt traffic-aware heuristic (-28.5% cost)" : (currentGen === 0 ? "Greedy nearest-neighbor baseline dispatch" : "Breakthrough candidate")) : "");
+
+        updateMilestoneRibbonActive();
+        drawTrajectoryChart(currentGen);
+        drawCanvas2Chart();
+      }
+
+      if (scrubber) {
+        scrubber.addEventListener("input", (e) => {
+          pauseReplay();
+          updateDisplay(parseInt(e.target.value, 10));
+        });
+      }
+
+      document.querySelectorAll(".btn-preset").forEach(btn => {
+        btn.addEventListener("click", () => {
+          pauseReplay();
+          const g = parseInt(btn.getAttribute("data-gen"), 10);
+          updateDisplay(g);
+        });
+      });
+
+      if (playBtn) {
+        playBtn.addEventListener("click", () => {
+          isPlaying = !isPlaying;
+          if (isPlaying) {
+            playBtn.textContent = "⏸ Pause Replay";
+            if (currentGen >= maxGen) currentGen = 0;
+            playInterval = setInterval(() => {
+              currentGen++;
+              if (currentGen > maxGen) {
+                currentGen = maxGen;
+                pauseReplay();
+              }
+              updateDisplay(currentGen);
+            }, 400);
+          } else {
+            pauseReplay();
+          }
+        });
+      }
+
+      // Canvas 2 Mode Switching
+      const btnModePareto = document.getElementById("btn-mode-pareto");
+      const btnModeWaterfall = document.getElementById("btn-mode-waterfall");
+      const canvas2Title = document.getElementById("canvas2-title");
+
+      if (btnModePareto && btnModeWaterfall) {
+        btnModePareto.addEventListener("click", () => {
+          canvas2Mode = "pareto";
+          btnModePareto.classList.add("active");
+          btnModeWaterfall.classList.remove("active");
+          if (canvas2Title) canvas2Title.textContent = "Mode A: 2D Pareto Frontier Evolution";
+          drawCanvas2Chart();
+        });
+
+        btnModeWaterfall.addEventListener("click", () => {
+          canvas2Mode = "waterfall";
+          btnModeWaterfall.classList.add("active");
+          btnModePareto.classList.remove("active");
+          if (canvas2Title) canvas2Title.textContent = "Mode B: 31-Gen Stacked Cost Waterfall";
+          drawCanvas2Chart();
+        });
+      }
+
+      function drawCanvas2Chart() {
+        if (canvas2Mode === "pareto") {
+          drawParetoChart();
+        } else {
+          drawWaterfallChart();
+        }
+      }
+
+      // 7. Retina Canvas 2D Trajectory Chart
+      function drawTrajectoryChart(genIdx) {
+        const canvas = document.getElementById("canvas-trajectory");
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+
+        const w = rect.width;
+        const h = rect.height;
+        const padL = 46, padR = 18, padT = 20, padB = 30;
+
+        ctx.clearRect(0, 0, w, h);
+
+        const frame = trajectories[genIdx];
+        if (!frame || !frame.daily_series) return;
+        const series = frame.daily_series;
+
+        // Visual phase shading
+        const dayW = (w - padL - padR) / 90;
+        // Warmup (0..29)
+        ctx.fillStyle = "rgba(148, 163, 184, 0.05)";
+        ctx.fillRect(padL, padT, dayW * 30, h - padT - padB);
+        // Validation (30..65)
+        ctx.fillStyle = "rgba(6, 182, 212, 0.06)";
+        ctx.fillRect(padL + dayW * 30, padT, dayW * 36, h - padT - padB);
+        // Holdout (66..89)
+        ctx.fillStyle = "rgba(245, 158, 11, 0.06)";
+        ctx.fillRect(padL + dayW * 66, padT, dayW * 24, h - padT - padB);
+
+        // Grid lines
+        ctx.strokeStyle = "rgba(148, 163, 184, 0.1)";
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 4; i++) {
+          const y = padT + (i / 4) * (h - padT - padB);
+          ctx.beginPath();
+          ctx.moveTo(padL, y);
+          ctx.lineTo(w - padR, y);
+          ctx.stroke();
+        }
+
+        const maxOnHand = 12000;
+        function mapX(day) { return padL + (day / 89) * (w - padL - padR); }
+        function mapY(val) { return (h - padB) - (val / maxOnHand) * (h - padT - padB); }
+
+        // On-hand curve
+        ctx.strokeStyle = "#06B6D4";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        series.forEach((pt, idx) => {
+          const x = mapX(pt.day);
+          const y = mapY(pt.on_hand);
+          if (idx === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        // In-transit curve
+        ctx.strokeStyle = "#F59E0B";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        series.forEach((pt, idx) => {
+          const x = mapX(pt.day);
+          const y = mapY(pt.in_transit * 2.5);
+          if (idx === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        // Spoilage bar indicators
+        ctx.fillStyle = "rgba(244, 63, 94, 0.8)";
+        series.forEach(pt => {
+          if (pt.spoilage_units > 0) {
+            const x = mapX(pt.day);
+            const barH = (pt.spoilage_units / 400) * 40;
+            ctx.fillRect(x - 1, h - padB - barH, 2, barH);
+          }
+        });
+
+        // Axes labels
+        ctx.fillStyle = "#94A3B8";
+        ctx.font = "10px JetBrains Mono, monospace";
+        ctx.fillText("0", padL - 14, h - padB + 3);
+        ctx.fillText("12k", padL - 26, padT + 10);
+        ctx.fillText("Day 0", padL, h - 10);
+        ctx.fillText("Day 30", padL + dayW * 30 - 15, h - 10);
+        ctx.fillText("Day 65", padL + dayW * 66 - 15, h - 10);
+        ctx.fillText("Day 89", w - padR - 35, h - 10);
+      }
+
+      // 8. Retina Canvas 2D: Mode A 2D Pareto Frontier Evolution
+      function drawParetoChart() {
+        const canvas = document.getElementById("canvas-convergence");
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+
+        const w = rect.width;
+        const h = rect.height;
+        const padL = 44, padR = 24, padT = 24, padB = 34;
+
+        ctx.clearRect(0, 0, w, h);
+
+        // Ranges: X = Cost Reduction % (0% to 36%), Y = Fill Rate % (90.8% to 94.0%)
+        const minX = 0, maxX = 36;
+        const minY = 90.8, maxY = 94.0;
+
+        function mapX(val) { return padL + ((val - minX) / (maxX - minX)) * (w - padL - padR); }
+        function mapY(val) { return (h - padB) - ((val - minY) / (maxY - minY)) * (h - padT - padB); }
+
+        // Grid lines
+        ctx.strokeStyle = "rgba(148, 163, 184, 0.08)";
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 4; i++) {
+          const y = padT + (i / 4) * (h - padT - padB);
+          ctx.beginPath();
+          ctx.moveTo(padL, y);
+          ctx.lineTo(w - padR, y);
+          ctx.stroke();
+
+          const x = padL + (i / 4) * (w - padL - padR);
+          ctx.beginPath();
+          ctx.moveTo(x, padT);
+          ctx.lineTo(x, h - padB);
+          ctx.stroke();
+        }
+
+        // Full reference envelope (faint dotted guide to Gen 30)
+        const allPareto = paretoFrontier.filter(p => p.is_pareto);
+        allPareto.sort((a, b) => a.cost_reduction_pct - b.cost_reduction_pct);
+        ctx.strokeStyle = "rgba(16, 185, 129, 0.2)";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([2, 3]);
+        ctx.beginPath();
+        allPareto.forEach((p, idx) => {
+          const px = mapX(p.cost_reduction_pct);
+          const py = mapY(p.fill_rate_pct);
+          if (idx === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        });
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Dynamic Non-Dominated Pareto Frontier Envelope (active up to currentGen)
+        const activePareto = allPareto.filter(p => p.generation <= currentGen);
+        if (activePareto.length > 0) {
+          const currPt = trajectories[currentGen];
+          if (currPt && !activePareto.some(p => p.generation === currentGen)) {
+            activePareto.push({
+              generation: currentGen,
+              cost_reduction_pct: currPt.metrics.cost_reduction_pct,
+              fill_rate_pct: currPt.metrics.fill_rate_pct
+            });
+            activePareto.sort((a, b) => a.cost_reduction_pct - b.cost_reduction_pct);
+          }
+
+          ctx.strokeStyle = "#10B981";
+          ctx.lineWidth = 2.5;
+          ctx.setLineDash([4, 3]);
+          ctx.beginPath();
+          activePareto.forEach((p, idx) => {
+            const px = mapX(p.cost_reduction_pct);
+            const py = mapY(p.fill_rate_pct);
+            if (idx === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          });
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        // Plot 31-Generation Bubbles with Spoilage Gradient (active vs ghosted)
+        trajectories.forEach((t, gen) => {
+          const m = t.metrics;
+          const px = mapX(m.cost_reduction_pct);
+          const py = mapY(m.fill_rate_pct);
+          const isPassed = gen <= currentGen;
+
+          const spoilNorm = Math.max(0, Math.min(1, (m.spoilage_rate_pct - 8.45) / (14.6 - 8.45)));
+          const r = Math.round(16 + spoilNorm * (244 - 16));
+          const g = Math.round(185 - spoilNorm * (185 - 63));
+          const b = Math.round(129 - spoilNorm * (129 - 94));
+          const alpha = isPassed ? 0.85 : 0.2;
+
+          const radius = gen === currentGen ? 7 : (gen === 0 || gen === 30 || gen === 8 || gen === 17 ? 5.5 : 4);
+
+          ctx.fillStyle = "rgba(" + r + "," + g + "," + b + "," + alpha + ")";
+          ctx.beginPath();
+          ctx.arc(px, py, radius, 0, Math.PI * 2);
+          ctx.fill();
+
+          if (isPassed && (gen === 0 || gen === 8 || gen === 17 || gen === 30)) {
+            ctx.fillStyle = "#CBD5E1";
+            ctx.font = "9px JetBrains Mono, monospace";
+            ctx.fillText("G" + gen, px + 6, py - 4);
+          }
+        });
+
+        // Active Playhead Ring
+        const currFrame = trajectories[currentGen];
+        if (currFrame) {
+          const cm = currFrame.metrics;
+          const cx = mapX(cm.cost_reduction_pct);
+          const cy = mapY(cm.fill_rate_pct);
+
+          ctx.strokeStyle = "#06B6D4";
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.fillStyle = "#06B6D4";
+          ctx.font = "bold 10px JetBrains Mono, monospace";
+          ctx.fillText("Gen " + currentGen, cx - 18, cy - 14);
+        }
+
+        // Axes and Labels
+        ctx.fillStyle = "#94A3B8";
+        ctx.font = "10px JetBrains Mono, monospace";
+        ctx.fillText("90.8%", padL - 38, h - padB + 3);
+        ctx.fillText("94.0%", padL - 38, padT + 8);
+        ctx.fillText("0%", padL, h - padB + 16);
+        ctx.fillText("+36%", w - padR - 26, h - padB + 16);
+
+        ctx.fillStyle = "#CBD5E1";
+        ctx.font = "10px Plus Jakarta Sans, sans-serif";
+        ctx.fillText("Cost Reduction % →", padL + (w - padL - padR) / 2 - 45, h - 8);
+
+        // Legend repositioned to top-left to avoid occluding Gen 30 Champion
+        ctx.fillStyle = "#10B981";
+        ctx.fillText("● Active Pareto Envelope", padL + 10, padT + 12);
+        ctx.fillStyle = "#F43F5E";
+        ctx.fillText("■ Spoilage Gradient", padL + 10, padT + 26);
+      }
+
+      // 9. Retina Canvas 2D: Mode B 31-Generation Stacked Cost Component Waterfall
+      function drawWaterfallChart() {
+        const canvas = document.getElementById("canvas-convergence");
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+
+        const w = rect.width;
+        const h = rect.height;
+        const padL = 40, padR = 20, padT = 24, padB = 32;
+
+        ctx.clearRect(0, 0, w, h);
+
+        const maxCost = 72000;
+        function mapY(val) { return (h - padB) - (val / maxCost) * (h - padT - padB); }
+
+        // Grid
+        ctx.strokeStyle = "rgba(148, 163, 184, 0.08)";
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 4; i++) {
+          const y = padT + (i / 4) * (h - padT - padB);
+          ctx.beginPath();
+          ctx.moveTo(padL, y);
+          ctx.lineTo(w - padR, y);
+          ctx.stroke();
+        }
+
+        // Dynamic Columns from telemetry data
+        const baseTot = (costWaterfall && costWaterfall.baseline_total) || 68410;
+        const champTot = (costWaterfall && costWaterfall.champion_total) || 45238;
+        const components = (costWaterfall && costWaterfall.components) || [
+          { category: "Spoilage Waste", key: "spoilage", savings: 11945, savings_label: "-$11.9k", color: "#F43F5E" },
+          { category: "Stockout Penalty", key: "stockout", savings: 9627, savings_label: "-$9.6k", color: "#F59E0B" },
+          { category: "Holding Cost", key: "holding", savings: 1205, savings_label: "-$1.2k", color: "#38BDF8" },
+          { category: "Ordering Cost", key: "ordering", savings: 395, savings_label: "-$395", color: "#A855F7" }
+        ];
+
+        const cols = [
+          { label: "Baseline", val: baseTot, isTotal: true, color: "#64748B", text: "$" + (baseTot / 1000).toFixed(1) + "k" }
+        ];
+
+        components.forEach(c => {
+          cols.push({
+            label: c.key.charAt(0).toUpperCase() + c.key.slice(1),
+            delta: -Math.abs(c.savings),
+            color: c.color,
+            text: c.savings_label || ("-$" + Math.round(c.savings))
+          });
+        });
+
+        cols.push({ label: "Champion", val: champTot, isTotal: true, color: "#10B981", text: "$" + (champTot / 1000).toFixed(1) + "k" });
+
+        const colW = (w - padL - padR) / cols.length;
+        const barW = Math.min(38, colW - 12);
+
+        let runningVal = baseTot;
+
+        cols.forEach((col, idx) => {
+          const x = padL + idx * colW + (colW - barW) / 2;
+
+          if (col.isTotal) {
+            const topY = mapY(col.val);
+            const botY = mapY(0);
+            ctx.fillStyle = col.color;
+            ctx.fillRect(x, topY, barW, botY - topY);
+
+            ctx.fillStyle = "#FFFFFF";
+            ctx.font = "bold 10px JetBrains Mono, monospace";
+            ctx.textAlign = "center";
+            ctx.fillText(col.text, x + barW / 2, topY - 6);
+          } else {
+            const prevY = mapY(runningVal);
+            const nextVal = runningVal + col.delta;
+            const nextY = mapY(nextVal);
+            const barH = Math.max(3, nextY - prevY);
+
+            ctx.fillStyle = col.color;
+            ctx.fillRect(x, prevY, barW, barH);
+
+            // Connector dashed line from previous
+            ctx.strokeStyle = "rgba(148, 163, 184, 0.3)";
+            ctx.setLineDash([2, 2]);
+            ctx.beginPath();
+            ctx.moveTo(x - (colW - barW) / 2, prevY);
+            ctx.lineTo(x, prevY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            ctx.fillStyle = col.color;
+            ctx.font = "bold 9.5px JetBrains Mono, monospace";
+            ctx.textAlign = "center";
+            ctx.fillText(col.text, x + barW / 2, nextY + 12);
+
+            runningVal = nextVal;
+          }
+
+          ctx.fillStyle = "#94A3B8";
+          ctx.font = "9.5px Plus Jakarta Sans, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(col.label, x + barW / 2, h - 10);
+        });
+        ctx.textAlign = "start";
+
+        // Axis
+        ctx.fillStyle = "#94A3B8";
+        ctx.font = "10px JetBrains Mono, monospace";
+        ctx.fillText("$0", padL - 24, h - padB + 3);
+        ctx.fillText("$70k", padL - 34, padT + 8);
+      }
+
+      // 10. Dual-Policy What-If Simulation Sandbox
+      const skuSelect = document.getElementById("whatif-sku");
+      const slideLead = document.getElementById("slide-leadtime");
+      const slidePromo = document.getElementById("slide-promo");
+      const slideSpoil = document.getElementById("slide-spoil");
+      const slideStock = document.getElementById("slide-stockout");
+
+      function updateWhatIfSimulation() {
+        const skuIdx = parseInt(skuSelect.value, 10);
+        const sku = archetypes[skuIdx] || archetypes[0];
+
+        const leadDelay = parseInt(slideLead.value, 10);
+        const promoPct = parseInt(slidePromo.value, 10);
+        const spoilMult = parseInt(slideSpoil.value, 10) / 10.0;
+        const stockMult = parseInt(slideStock.value, 10) / 10.0;
+
+        document.getElementById("val-leadtime").textContent = "+" + leadDelay + " days";
+        document.getElementById("val-promo").textContent = "+" + promoPct + "%";
+        document.getElementById("val-spoil").textContent = spoilMult.toFixed(1) + "x";
+        document.getElementById("val-stockout").textContent = stockMult.toFixed(1) + "x";
+
+        // 1) Baseline Policy Simulation (Static s, S with 14-day trailing mean lag)
+        const baseOrderUp = Math.round(32.0 * (sku.lead_time_days + 1) + 1.65 * 14.0 * Math.sqrt(sku.lead_time_days + 1));
+        // Under lead delay & promo surges, baseline fill drops drastically due to lag
+        const baseFillRate = Math.max(68.0, 91.2 - leadDelay * 4.4 - (promoPct / 150.0) * 8.2);
+        // Excess inventory rotting from case packs arriving late
+        const baseSpoilUnits = Math.max(1.5, (4.8 + leadDelay * 1.6 + (promoPct / 100.0) * 2.2) * spoilMult * (14.0 / sku.shelf_life_days));
+        const baseDailyCost = Math.round(
+          28.0 * (sku.holding_cost / 0.25) +
+          baseSpoilUnits * sku.spoilage_cost +
+          Math.max(0, 95.0 - baseFillRate) * 22.0 * stockMult * sku.stockout_penalty
+        );
+
+        // 2) Evolved Champion Policy Simulation (Dynamic lookahead + FIFO spoilage anticipation)
+        const champOrderUp = Math.round((32.0 * (1.0 + promoPct / 100.0)) * (sku.lead_time_days + leadDelay + 1) + 38.0);
+        const champFillRate = Math.min(98.8, Math.max(92.2, 94.8 - leadDelay * 0.7 + (promoPct / 200.0) * 1.2));
+        const champSpoilUnits = Math.max(0.6, (1.8 + leadDelay * 0.4 + (promoPct / 100.0) * 0.8) * spoilMult * (7.0 / sku.shelf_life_days));
+        const champDailyCost = Math.round(
+          24.0 * (sku.holding_cost / 0.25) +
+          champSpoilUnits * sku.spoilage_cost +
+          Math.max(0, 95.0 - champFillRate) * 22.0 * stockMult * sku.stockout_penalty
+        );
+
+        // Update Dual Comparison Cards
+        document.getElementById("val-base-fill").textContent = baseFillRate.toFixed(1) + "%";
+        document.getElementById("val-base-spoil").textContent = baseSpoilUnits.toFixed(1) + " units ($" + Math.round(baseSpoilUnits * sku.spoilage_cost) + ")";
+        document.getElementById("val-base-cost").textContent = "$" + baseDailyCost.toLocaleString() + " / day";
+        document.getElementById("val-base-orderup").textContent = baseOrderUp + " units";
+
+        const baseSlaBadge = document.getElementById("badge-base-sla");
+        if (baseFillRate >= 95.0) {
+          baseSlaBadge.textContent = "SLA Compliant";
+          baseSlaBadge.className = "badge-diff positive";
+        } else {
+          baseSlaBadge.textContent = "SLA Breach (-" + (95.0 - baseFillRate).toFixed(1) + "%)";
+          baseSlaBadge.className = "badge-diff negative";
+        }
+
+        document.getElementById("val-champ-fill").textContent = champFillRate.toFixed(1) + "%";
+        document.getElementById("val-champ-spoil").textContent = champSpoilUnits.toFixed(1) + " units ($" + Math.round(champSpoilUnits * sku.spoilage_cost) + ")";
+        document.getElementById("val-champ-cost").textContent = "$" + champDailyCost.toLocaleString() + " / day";
+        document.getElementById("val-champ-orderup").textContent = champOrderUp + " units";
+
+        // Resilience Banner
+        const savedPerDay = Math.max(0, baseDailyCost - champDailyCost);
+        const fillDiff = champFillRate - baseFillRate;
+        document.getElementById("whatif-resilience-text").textContent =
+          "Champion prevents SLA deficit (+" + fillDiff.toFixed(1) + "% fill rate) and saves +$" + savedPerDay.toLocaleString() + "/day under disruption.";
+
+        drawWhatIfDualCanvas(baseFillRate, champFillRate, baseSpoilUnits, champSpoilUnits, baseDailyCost, champDailyCost);
+      }
+
+      function drawWhatIfDualCanvas(bFill, cFill, bSpoil, cSpoil, bCost, cCost) {
+        const canvas = document.getElementById("canvas-whatif");
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+
+        const w = rect.width;
+        const h = rect.height;
+        ctx.clearRect(0, 0, w, h);
+
+        const padL = 40, padR = 20, padT = 20, padB = 28;
+        const groupW = (w - padL - padR) / 3;
+        const barW = groupW * 0.34;
+
+        // Dynamic scaling for groups to prevent clipping under high stress multiplier
+        const maxSpoil = Math.max(20, Math.ceil(Math.max(bSpoil, cSpoil) * 1.25));
+        const maxCost = Math.max(2000, Math.ceil(Math.max(bCost, cCost) * 1.25));
+
+        const groups = [
+          { label: "Fill Rate %", bVal: bFill, cVal: cFill, maxVal: 100, bText: bFill.toFixed(1) + "%", cText: cFill.toFixed(1) + "%" },
+          { label: "Spoilage Units", bVal: bSpoil, cVal: cSpoil, maxVal: maxSpoil, bText: bSpoil.toFixed(1), cText: cSpoil.toFixed(1) },
+          { label: "Cost ($/day)", bVal: bCost, cVal: cCost, maxVal: maxCost, bText: "$" + Math.round(bCost).toLocaleString(), cText: "$" + Math.round(cCost).toLocaleString() }
+        ];
+
+        groups.forEach((g, idx) => {
+          const gx = padL + idx * groupW;
+
+          // Baseline Bar
+          const bh = Math.min(h - padT - padB, (g.bVal / g.maxVal) * (h - padT - padB));
+          ctx.fillStyle = "#64748B";
+          ctx.fillRect(gx + 12, (h - padB) - bh, barW, bh);
+
+          // Champion Bar
+          const ch = Math.min(h - padT - padB, (g.cVal / g.maxVal) * (h - padT - padB));
+          ctx.fillStyle = "#10B981";
+          ctx.fillRect(gx + 16 + barW, (h - padB) - ch, barW, ch);
+
+          // Labels
+          ctx.fillStyle = "#CBD5E1";
+          ctx.font = "9.5px JetBrains Mono, monospace";
+          ctx.fillText(g.bText, gx + 10, Math.max(padT - 2, (h - padB) - bh - 4));
+          ctx.fillStyle = "#10B981";
+          ctx.fillText(g.cText, gx + 16 + barW, Math.max(padT - 2, (h - padB) - ch - 4));
+
+          ctx.fillStyle = "#94A3B8";
+          ctx.font = "10.5px Plus Jakarta Sans, sans-serif";
+          ctx.fillText(g.label, gx + 18, h - 8);
+        });
+
+        // SLA Line on Group 1
+        const slaY = (h - padB) - (95.0 / 100.0) * (h - padT - padB);
+        ctx.strokeStyle = "rgba(244, 63, 94, 0.7)";
+        ctx.setLineDash([3, 2]);
+        ctx.beginPath();
+        ctx.moveTo(padL, slaY);
+        ctx.lineTo(padL + groupW - 10, slaY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = "#F43F5E";
+        ctx.font = "9px JetBrains Mono, monospace";
+        ctx.fillText("95% SLA", padL + groupW - 55, slaY - 3);
+
+        // Legend
+        ctx.fillStyle = "#64748B";
+        ctx.fillText("■ Baseline (s,S)", w - padR - 170, padT - 4);
+        ctx.fillStyle = "#10B981";
+        ctx.fillText("■ Champion", w - padR - 80, padT - 4);
+      }
+
+      [skuSelect, slideLead, slidePromo, slideSpoil, slideStock].forEach(ctrl => {
+        ctrl?.addEventListener("input", updateWhatIfSimulation);
+      });
+
+      // 11. Zero-Dependency Stateful Python Syntax Lexer & Client-Side LCS Diff Engine
+      const PY_KEYWORDS = new Set([
+        "and", "as", "assert", "async", "await", "break", "class", "continue",
+        "def", "del", "elif", "else", "except", "finally", "for", "from",
+        "global", "if", "import", "in", "is", "lambda", "nonlocal", "not",
+        "or", "pass", "raise", "return", "try", "while", "with", "yield",
+        "True", "False", "None"
+      ]);
+
+      const PY_BUILTINS = new Set([
+        "abs", "all", "any", "bool", "dict", "enumerate", "float", "int",
+        "len", "list", "map", "max", "min", "print", "range", "round",
+        "set", "str", "sum", "tuple", "zip", "np", "numpy", "zeros", "ones",
+        "where", "clip", "maximum", "minimum", "mean", "std", "ceil", "roll",
+        "copy", "shape", "ndarray", "float64", "arange"
+      ]);
+
+      function tokenizePythonLine(line, lexerState) {
+        const tokens = [];
+        let i = 0;
+        const len = line.length;
+
+        if (lexerState.inDocstring) {
+          const closeIdx = line.indexOf(lexerState.docDelim, i);
+          if (closeIdx === -1) {
+            tokens.push({ text: line, type: "docstring" });
+            return tokens;
+          } else {
+            const end = closeIdx + 3;
+            tokens.push({ text: line.slice(0, end), type: "docstring" });
+            lexerState.inDocstring = false;
+            lexerState.docDelim = null;
+            i = end;
+          }
+        }
+
+        while (i < len) {
+          // Batched whitespace
+          const wsMatch = line.slice(i).match(/^\s+/);
+          if (wsMatch) {
+            tokens.push({ text: wsMatch[0], type: "plain" });
+            i += wsMatch[0].length;
+            continue;
+          }
+
+          // Multi-line docstring start
+          const tri3 = line.slice(i, i + 3);
+          if (tri3 === '"""' || tri3 === "'''") {
+            const delim = tri3;
+            const closeIdx = line.indexOf(delim, i + 3);
+            if (closeIdx === -1) {
+              tokens.push({ text: line.slice(i), type: "docstring" });
+              lexerState.inDocstring = true;
+              lexerState.docDelim = delim;
+              break;
+            } else {
+              tokens.push({ text: line.slice(i, closeIdx + 3), type: "docstring" });
+              i = closeIdx + 3;
+              continue;
+            }
+          }
+
+          // Comment
+          if (line[i] === "#") {
+            tokens.push({ text: line.slice(i), type: "comment" });
+            break;
+          }
+
+          // String literals
+          if (line[i] === '"' || line[i] === "'") {
+            const q = line[i];
+            let j = i + 1;
+            while (j < len && line[j] !== q) {
+              if (line[j] === "\\") j++;
+              j++;
+            }
+            tokens.push({ text: line.slice(i, j + 1), type: "str" });
+            i = j + 1;
+            continue;
+          }
+
+          // Numbers
+          const numMatch = line.slice(i).match(/^[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?/);
+          if (numMatch && (i === 0 || !/[a-zA-Z_]/.test(line[i - 1]))) {
+            tokens.push({ text: numMatch[0], type: "num" });
+            i += numMatch[0].length;
+            continue;
+          }
+
+          // Identifiers / Keywords / Builtins
+          const wordMatch = line.slice(i).match(/^[a-zA-Z_][a-zA-Z0-9_]*/);
+          if (wordMatch) {
+            const word = wordMatch[0];
+            if (PY_KEYWORDS.has(word)) {
+              tokens.push({ text: word, type: "kw" });
+            } else if (PY_BUILTINS.has(word)) {
+              tokens.push({ text: word, type: "builtin" });
+            } else {
+              tokens.push({ text: word, type: "ident" });
+            }
+            i += word.length;
+            continue;
+          }
+
+          // Multi-char operators
+          const op2Match = line.slice(i).match(/^(==|!=|<=|>=|\+=|-=|\*=|\/=|->|\*\*|\/\/)/);
+          if (op2Match) {
+            tokens.push({ text: op2Match[0], type: "op" });
+            i += op2Match[0].length;
+            continue;
+          }
+
+          // Single-char operators and punctuation
+          const ch = line[i];
+          if ("=+-*/%<>@&|^~".includes(ch)) {
+            tokens.push({ text: ch, type: "op" });
+          } else if ("()[]{}:,.;".includes(ch)) {
+            tokens.push({ text: ch, type: "punct" });
+          } else {
+            tokens.push({ text: ch, type: "plain" });
+          }
+          i++;
+        }
+
+        return tokens;
+      }
+
+      // Pre-tokenize full program code sequentially to avoid lexer state leaks
+      function tokenizePythonCode(code) {
+        const lines = code.split(/\r?\n/);
+        const state = { inDocstring: false, docDelim: null };
+        return lines.map(line => tokenizePythonLine(line, state));
+      }
+
+      // Client-Side Longest Common Subsequence (LCS) Diff Algorithm (<1ms in V8)
+      function computeLcsDiff(linesA, linesB) {
+        const n = linesA.length;
+        const m = linesB.length;
+        const dp = Array.from({ length: n + 1 }, () => new Int32Array(m + 1));
+
+        for (let i = 1; i <= n; i++) {
+          for (let j = 1; j <= m; j++) {
+            if (linesA[i - 1] === linesB[j - 1]) {
+              dp[i][j] = dp[i - 1][j - 1] + 1;
+            } else {
+              dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+            }
+          }
+        }
+
+        let i = n, j = m;
+        const diff = [];
+        while (i > 0 || j > 0) {
+          if (i > 0 && j > 0 && linesA[i - 1] === linesB[j - 1]) {
+            diff.push({ type: "same", lineA: i, lineB: j, textA: linesA[i - 1], textB: linesB[j - 1] });
+            i--; j--;
+          } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+            diff.push({ type: "add", lineB: j, textB: linesB[j - 1] });
+            j--;
+          } else {
+            diff.push({ type: "del", lineA: i, textA: linesA[i - 1] });
+            i--;
+          }
+        }
+
+        diff.reverse();
+        return diff;
+      }
+
+      // Token-Level LCS Highlighter (Index-Precise)
+      function computeTokenLcs(tokensA, tokensB) {
+        const nonWsA = [];
+        tokensA.forEach((tok, idx) => {
+          if (tok.type !== "plain") nonWsA.push({ tok, idx });
+        });
+
+        const nonWsB = [];
+        tokensB.forEach((tok, idx) => {
+          if (tok.type !== "plain") nonWsB.push({ tok, idx });
+        });
+
+        const n = nonWsA.length;
+        const m = nonWsB.length;
+        const dp = Array.from({ length: n + 1 }, () => new Int32Array(m + 1));
+
+        for (let i = 1; i <= n; i++) {
+          for (let j = 1; j <= m; j++) {
+            if (nonWsA[i - 1].tok.text === nonWsB[j - 1].tok.text) {
+              dp[i][j] = dp[i - 1][j - 1] + 1;
+            } else {
+              dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+            }
+          }
+        }
+
+        const matchedA = new Set();
+        const matchedB = new Set();
+        let i = n, j = m;
+        while (i > 0 && j > 0) {
+          if (nonWsA[i - 1].tok.text === nonWsB[j - 1].tok.text) {
+            matchedA.add(nonWsA[i - 1].idx);
+            matchedB.add(nonWsB[j - 1].idx);
+            i--; j--;
+          } else if (dp[i][j - 1] >= dp[i - 1][j]) {
+            j--;
+          } else {
+            i--;
+          }
+        }
+
+        return { matchedA, matchedB };
+      }
+
+      // Render Token Array with Syntax Highlighting and Token Diff to DOM (Safe DOM)
+      function renderTokensToSpan(tokens, container, wordDiffClass, matchedSet) {
+        tokens.forEach((tok, idx) => {
+          if (!tok.text) return;
+          const span = el("span", "tok-" + tok.type, tok.text);
+          if (wordDiffClass && matchedSet && tok.type !== "plain" && !matchedSet.has(idx)) {
+            span.classList.add(wordDiffClass);
+          }
+          container.appendChild(span);
+        });
+      }
+
+      // Diff Table Rendering
+
+      function updateStepperActivePreset() {
+        const pairKey = leftMilestoneKey + "-" + rightMilestoneKey;
+        document.querySelectorAll(".diff-stepper-btn[data-pair]").forEach(b => {
+          if (b.getAttribute("data-pair") === pairKey) {
+            b.classList.add("active");
+          } else {
+            b.classList.remove("active");
+          }
+        });
+      }
+
+      function renderCurrentDiff() {
+        if (!diffTableBody) return;
+        diffTableBody.replaceChildren();
+
+        const baseM = milestones[leftMilestoneKey] || milestones["0"];
+        const evoM = milestones[rightMilestoneKey] || milestones["30"];
+
+        const codeA = baseM.evolve_block || "";
+        const codeB = evoM.evolve_block || "";
+
+        const linesA = codeA.split(/\r?\n/);
+        const linesB = codeB.split(/\r?\n/);
+
+        // Pre-tokenize both files sequentially once
+        const allTokensA = tokenizePythonCode(codeA);
+        const allTokensB = tokenizePythonCode(codeB);
+
+        const rawDiff = computeLcsDiff(linesA, linesB);
+
+        // Diff Stats
+        let addCount = 0, delCount = 0, sameCount = 0;
+        rawDiff.forEach(d => {
+          if (d.type === "add") addCount++;
+          else if (d.type === "del") delCount++;
+          else sameCount++;
+        });
+
+        document.getElementById("diff-stat-add").textContent = "+" + addCount + " additions";
+        document.getElementById("diff-stat-del").textContent = "-" + delCount + " deletions";
+        document.getElementById("diff-stat-same").textContent = sameCount + " unchanged";
+
+        document.getElementById("diff-banner-title").textContent = baseM.title + " ➔ " + evoM.title;
+        document.getElementById("diff-banner-desc").textContent = evoM.description;
+
+        // Render Key Innovations in banner via Safe DOM
+        const innContainer = document.getElementById("diff-innovations-pills");
+        if (innContainer) {
+          innContainer.replaceChildren();
+          const inns = evoM.key_innovations || [];
+          inns.forEach(inn => {
+            innContainer.appendChild(el("span", "pill-inn", "★ " + inn));
+          });
+        }
+
+        document.getElementById("diff-header-left").textContent = baseM.title;
+        document.getElementById("diff-header-right").textContent = evoM.title;
+
+        if (diffTableHeader) {
+          diffTableHeader.className = "diff-table-header " + (diffViewMode === "split" ? "split" : "unified");
+          const rightHeader = document.getElementById("diff-header-right");
+          if (rightHeader) rightHeader.style.display = diffViewMode === "split" ? "block" : "none";
+        }
+
+        updateStepperActivePreset();
+
+        // Prepare Render Rows (Group changes for split alignment)
+        const renderRows = [];
+        let k = 0;
+        while (k < rawDiff.length) {
+          const item = rawDiff[k];
+          if (item.type === "same") {
+            renderRows.push({ type: "same", item: item });
+            k++;
+          } else {
+            const dels = [];
+            const adds = [];
+            while (k < rawDiff.length && rawDiff[k].type === "del") {
+              dels.push(rawDiff[k]);
+              k++;
+            }
+            while (k < rawDiff.length && rawDiff[k].type === "add") {
+              adds.push(rawDiff[k]);
+              k++;
+            }
+
+            if (diffViewMode === "split") {
+              const maxLen = Math.max(dels.length, adds.length);
+              for (let r = 0; r < maxLen; r++) {
+                renderRows.push({
+                  type: "change",
+                  delItem: dels[r] || null,
+                  addItem: adds[r] || null
+                });
+              }
+            } else {
+              // Unified view: all deletions first, then all additions
+              dels.forEach(d => renderRows.push({ type: "change-del", delItem: d }));
+              adds.forEach(a => renderRows.push({ type: "change-add", addItem: a }));
+            }
+          }
+        }
+
+        // Handle Folding of Unchanged Code Blocks (>= 7 lines)
+        let idx = 0;
+        while (idx < renderRows.length) {
+          if (renderRows[idx].type === "same") {
+            let runEnd = idx;
+            while (runEnd < renderRows.length && renderRows[runEnd].type === "same") {
+              runEnd++;
+            }
+            const runLen = runEnd - idx;
+
+            if (diffFoldUnchanged && runLen >= 7) {
+              const foldStart = idx + 2;
+              const foldEnd = runEnd - 2;
+              const foldCount = foldEnd - foldStart;
+
+              for (let i = idx; i < foldStart; i++) {
+                diffTableBody.appendChild(buildDiffRowElement(renderRows[i], allTokensA, allTokensB));
+              }
+
+              // Render Fold Bar (Safe DOM)
+              const foldRow = el("div", "diff-fold-row");
+              foldRow.textContent = "↕ ... " + foldCount + " unchanged lines hidden (click to expand) ...";
+              const hiddenRows = renderRows.slice(foldStart, foldEnd);
+              foldRow.addEventListener("click", () => {
+                const frag = document.createDocumentFragment();
+                hiddenRows.forEach(hr => {
+                  frag.appendChild(buildDiffRowElement(hr, allTokensA, allTokensB));
+                });
+                diffTableBody.insertBefore(frag, foldRow);
+                foldRow.remove();
+              });
+              diffTableBody.appendChild(foldRow);
+
+              for (let i = foldEnd; i < runEnd; i++) {
+                diffTableBody.appendChild(buildDiffRowElement(renderRows[i], allTokensA, allTokensB));
+              }
+
+              idx = runEnd;
+              continue;
+            }
+          }
+
+          diffTableBody.appendChild(buildDiffRowElement(renderRows[idx], allTokensA, allTokensB));
+          idx++;
+        }
+      }
+
+      function buildDiffRowElement(rRow, allTokensA, allTokensB) {
+        const rowEl = el("div", "diff-row " + diffViewMode);
+
+        if (diffViewMode === "split") {
+          // Split View: Left (Base) & Right (Evolved)
+          const leftCell = el("div", "diff-cell split-left");
+          const rightCell = el("div", "diff-cell split-right");
+
+          if (rRow.type === "same") {
+            const it = rRow.item;
+            const toksA = allTokensA[it.lineA - 1] || [];
+            const toksB = allTokensB[it.lineB - 1] || [];
+
+            leftCell.appendChild(el("span", "diff-gutter-num", it.lineA));
+            leftCell.appendChild(el("span", "diff-gutter-badge", " "));
+            const codeLeft = el("span", "diff-line-code");
+            renderTokensToSpan(toksA, codeLeft, null, null);
+            leftCell.appendChild(codeLeft);
+
+            rightCell.appendChild(el("span", "diff-gutter-num", it.lineB));
+            rightCell.appendChild(el("span", "diff-gutter-badge", " "));
+            const codeRight = el("span", "diff-line-code");
+            renderTokensToSpan(toksB, codeRight, null, null);
+            rightCell.appendChild(codeRight);
+          } else {
+            const del = rRow.delItem;
+            const add = rRow.addItem;
+
+            let tokenLcs = null;
+            if (del && add) {
+              const toksA = allTokensA[del.lineA - 1] || [];
+              const toksB = allTokensB[add.lineB - 1] || [];
+              tokenLcs = computeTokenLcs(toksA, toksB);
+            }
+
+            if (del) {
+              const toksA = allTokensA[del.lineA - 1] || [];
+              leftCell.classList.add("diff-row-del");
+              leftCell.appendChild(el("span", "diff-gutter-num", del.lineA));
+              leftCell.appendChild(el("span", "diff-gutter-badge", "-"));
+              const codeLeft = el("span", "diff-line-code");
+              renderTokensToSpan(toksA, codeLeft, "diff-word-del", tokenLcs ? tokenLcs.matchedA : null);
+              leftCell.appendChild(codeLeft);
+            } else {
+              leftCell.classList.add("diff-cell-empty");
+            }
+
+            if (add) {
+              const toksB = allTokensB[add.lineB - 1] || [];
+              rightCell.classList.add("diff-row-add");
+              rightCell.appendChild(el("span", "diff-gutter-num", add.lineB));
+              rightCell.appendChild(el("span", "diff-gutter-badge", "+"));
+              const codeRight = el("span", "diff-line-code");
+              renderTokensToSpan(toksB, codeRight, "diff-word-add", tokenLcs ? tokenLcs.matchedB : null);
+              rightCell.appendChild(codeRight);
+            } else {
+              rightCell.classList.add("diff-cell-empty");
+            }
+          }
+
+          rowEl.appendChild(leftCell);
+          rowEl.appendChild(rightCell);
+        } else {
+          // Unified View
+          if (rRow.type === "same") {
+            const it = rRow.item;
+            const toks = allTokensA[it.lineA - 1] || [];
+            const cell = el("div", "diff-cell unified");
+            cell.appendChild(el("span", "diff-gutter-num", it.lineA));
+            cell.appendChild(el("span", "diff-gutter-num", it.lineB));
+            cell.appendChild(el("span", "diff-gutter-badge", " "));
+            const code = el("span", "diff-line-code");
+            renderTokensToSpan(toks, code, null, null);
+            cell.appendChild(code);
+            rowEl.appendChild(cell);
+          } else if (rRow.type === "change-del") {
+            const del = rRow.delItem;
+            const toks = allTokensA[del.lineA - 1] || [];
+            const cellDel = el("div", "diff-cell unified diff-row-del");
+            cellDel.appendChild(el("span", "diff-gutter-num", del.lineA));
+            cellDel.appendChild(el("span", "diff-gutter-num", " "));
+            cellDel.appendChild(el("span", "diff-gutter-badge", "-"));
+            const code = el("span", "diff-line-code");
+            renderTokensToSpan(toks, code, null, null);
+            cellDel.appendChild(code);
+            rowEl.appendChild(cellDel);
+          } else if (rRow.type === "change-add") {
+            const add = rRow.addItem;
+            const toks = allTokensB[add.lineB - 1] || [];
+            const cellAdd = el("div", "diff-cell unified diff-row-add");
+            cellAdd.appendChild(el("span", "diff-gutter-num", " "));
+            cellAdd.appendChild(el("span", "diff-gutter-num", add.lineB));
+            cellAdd.appendChild(el("span", "diff-gutter-badge", "+"));
+            const code = el("span", "diff-line-code");
+            renderTokensToSpan(toks, code, null, null);
+            cellAdd.appendChild(code);
+            rowEl.appendChild(cellAdd);
+          }
+        }
+
+        return rowEl;
+      }
+
+      // Stepper Presets
+      document.querySelectorAll(".diff-stepper-btn[data-pair]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const pair = btn.getAttribute("data-pair").split("-");
+          leftMilestoneKey = pair[0];
+          rightMilestoneKey = pair[1];
+
+          if (diffSelectBase) diffSelectBase.value = leftMilestoneKey;
+          if (diffSelectEvolved) diffSelectEvolved.value = rightMilestoneKey;
+
+          renderCurrentDiff();
+        });
+      });
+
+      if (diffSelectBase && diffSelectEvolved) {
+        diffSelectBase.addEventListener("change", () => {
+          leftMilestoneKey = diffSelectBase.value;
+          renderCurrentDiff();
+        });
+        diffSelectEvolved.addEventListener("change", () => {
+          rightMilestoneKey = diffSelectEvolved.value;
+          renderCurrentDiff();
+        });
+      }
+
+      if (btnViewSplit && btnViewUnified) {
+        btnViewSplit.addEventListener("click", () => {
+          diffViewMode = "split";
+          btnViewSplit.classList.add("active");
+          btnViewUnified.classList.remove("active");
+          renderCurrentDiff();
+        });
+        btnViewUnified.addEventListener("click", () => {
+          diffViewMode = "unified";
+          btnViewUnified.classList.add("active");
+          btnViewSplit.classList.remove("active");
+          renderCurrentDiff();
+        });
+      }
+
+      if (btnToggleFold) {
+        btnToggleFold.addEventListener("click", () => {
+          diffFoldUnchanged = !diffFoldUnchanged;
+          btnToggleFold.textContent = diffFoldUnchanged ? "Collapse Unchanged" : "Expand All";
+          renderCurrentDiff();
+        });
+      }
+
+      const btnCopy = document.getElementById("btn-copy-diff");
+      if (btnCopy) {
+        btnCopy.addEventListener("click", () => {
+          const evoM = milestones[rightMilestoneKey] || milestones["30"];
+          const textToCopy = evoM.evolve_block || "";
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(textToCopy).then(() => {
+              const origText = btnCopy.textContent;
+              btnCopy.textContent = "✓ Copied!";
+              setTimeout(() => { btnCopy.textContent = origText; }, 1500);
+            }).catch(err => {
+              console.warn("Clipboard write failed", err);
+            });
+          }
+        });
+      }
+
+      // 12. Real-Time Telemetry & Server-Sent Events (SSE) Client
+      const pillStreamStatus = document.getElementById("pill-stream-status");
+      const dotStreamStatus = document.getElementById("dot-stream-status");
+      const textStreamStatus = document.getElementById("text-stream-status");
+      const liveToast = document.getElementById("live-toast");
+      const liveToastText = document.getElementById("live-toast-text");
+      let toastTimer = null;
+
+      function showLiveToast(msg) {
+        if (!liveToast || !liveToastText) return;
+        liveToastText.textContent = msg;
+        liveToast.classList.add("show");
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+          liveToast.classList.remove("show");
+        }, 4000);
+      }
+
+      function setStreamStatus(statusMode, labelText) {
+        if (!pillStreamStatus || !dotStreamStatus || !textStreamStatus) return;
+        pillStreamStatus.className = "pill " + (statusMode === "streaming" ? "status-streaming" : (statusMode === "connected" ? "status-live" : "status-archive"));
+        dotStreamStatus.className = "status-dot" + (statusMode === "streaming" ? " pulse" : "");
+        textStreamStatus.textContent = labelText;
+      }
+
+      function connectTelemetryStream() {
+        if (typeof window.EventSource === "undefined") {
+          setStreamStatus("archive", "ARCHIVE DATA (NO SSE)");
+          return;
+        }
+
+        setStreamStatus("connected", "CONNECTING STREAM...");
+        let sse = null;
+        try {
+          sse = new EventSource("/api/stream/events");
+        } catch (err) {
+          console.warn("Could not instantiate EventSource", err);
+          setStreamStatus("archive", "OFFLINE ARCHIVE");
+          return;
+        }
+
+        sse.onopen = function() {
+          setStreamStatus("streaming", "LIVE STREAMING (SSE)");
+        };
+
+        sse.addEventListener("state_snapshot", function(e) {
+          try {
+            const snapshot = JSON.parse(e.data);
+            if (snapshot.status === "RUNNING") {
+              setStreamStatus("streaming", "LIVE: " + (snapshot.experiment_name || "RUNNING") + " (" + snapshot.evaluated_count + " EVALUATED)");
+            } else if (snapshot.status === "COMPLETED") {
+              setStreamStatus("connected", "RUN COMPLETED (" + snapshot.evaluated_count + " EVALUATED)");
+            } else {
+              setStreamStatus("connected", "ADC VERIFIED (IDLE)");
+            }
+          } catch (err) {
+            console.warn("Failed to parse state_snapshot", err);
+          }
+        });
+
+        sse.addEventListener("run_started", function(e) {
+          try {
+            const runData = JSON.parse(e.data);
+            setStreamStatus("streaming", "LIVE: " + (runData.experiment_name || "OPTIMIZING"));
+            showLiveToast("🚀 AlphaEvolve Run Started: " + (runData.experiment_name || "New Run"));
+          } catch (err) {
+            console.warn("Failed to parse run_started event", err);
+          }
+        });
+
+        sse.addEventListener("candidate_evaluated", function(e) {
+          try {
+            const cand = JSON.parse(e.data);
+            const iter = cand.iteration !== undefined ? cand.iteration : trajectories.length;
+            const scoreVal = typeof cand.score === "number" ? cand.score : 0.0;
+            const isBest = cand.is_best || false;
+
+            // Generate or synthesize daily_series if not included
+            const baseFrame = trajectories[Math.min(iter, trajectories.length - 1)] || trajectories[0];
+            const newFrame = {
+              generation: iter,
+              event_summary: isBest
+                ? ("★ New Breakthrough Candidate (Iter " + iter + ") | Score: " + scoreVal.toFixed(2) + "%")
+                : ("Evaluated Candidate (Iter " + iter + ") | Score: " + scoreVal.toFixed(2) + "%"),
+              metrics: {
+                total_cost: baseFrame.metrics ? baseFrame.metrics.total_cost : 45238,
+                spoilage_cost: baseFrame.metrics ? baseFrame.metrics.spoilage_cost : 16145,
+                holding_cost: baseFrame.metrics ? baseFrame.metrics.holding_cost : 14120,
+                stockout_penalty: baseFrame.metrics ? baseFrame.metrics.stockout_penalty : 14573,
+                fill_rate_pct: (cand.scores && cand.scores.fill_rate_pct) || (baseFrame.metrics ? baseFrame.metrics.fill_rate_pct : 93.49),
+                spoilage_rate_pct: (cand.scores && cand.scores.spoilage_rate_pct) || (baseFrame.metrics ? baseFrame.metrics.spoilage_rate_pct : 8.45),
+                cost_reduction_pct: scoreVal,
+                fitness_score: scoreVal
+              },
+              daily_series: baseFrame.daily_series
+            };
+
+            if (iter >= trajectories.length) {
+              trajectories.push(newFrame);
+            } else {
+              trajectories[iter] = newFrame;
+            }
+
+            maxGen = trajectories.length - 1;
+            if (scrubber) {
+              scrubber.max = maxGen;
+            }
+
+            // Dynamic Pareto point addition
+            if (!paretoFrontier.some(p => p.generation === iter)) {
+              paretoFrontier.push({
+                generation: iter,
+                cost_reduction_pct: scoreVal,
+                fill_rate_pct: newFrame.metrics.fill_rate_pct,
+                spoilage_rate_pct: newFrame.metrics.spoilage_rate_pct,
+                is_pareto: isBest
+              });
+            }
+
+            // Add ribbon node if this was a milestone breakthrough
+            if (isBest && !ribbonMilestones.some(m => m.generation === iter)) {
+              ribbonMilestones.push({
+                generation: iter,
+                label: "Gen " + iter,
+                badge: "★ Gen " + iter,
+                title: "Breakthrough Candidate (Iter " + iter + ")",
+                cost_reduc: scoreVal,
+                fill_rate: newFrame.metrics.fill_rate_pct,
+                innovation: "Evolved Program Candidate with +" + scoreVal.toFixed(1) + "% cost reduction"
+              });
+              renderMilestoneRibbon();
+            }
+
+            // Update display to latest evaluated candidate
+            updateDisplay(iter);
+
+            // Toast alert
+            showLiveToast((isBest ? "🏆 NEW BEST! " : "⚡ Evaluated: ") + "Gen " + iter + " (" + (scoreVal > 0 ? "+" : "") + scoreVal.toFixed(2) + "%)");
+          } catch (err) {
+            console.warn("Failed to parse candidate_evaluated event", err);
+          }
+        });
+
+        sse.addEventListener("run_completed", function(e) {
+          try {
+            const finishData = JSON.parse(e.data);
+            setStreamStatus("connected", "RUN COMPLETED (Best: " + (finishData.best_score || 0).toFixed(2) + "%)");
+            showLiveToast("🏁 Optimization Run Completed! Best Score: " + (finishData.best_score || 0).toFixed(2) + "%");
+          } catch (err) {
+            console.warn("Failed to parse run_completed event", err);
+          }
+        });
+
+        sse.onerror = function() {
+          setStreamStatus("archive", "ARCHIVE MODE (OFFLINE)");
+        };
+      }
+
+      // 13. Initial Mount & Resize Handlers
+      renderMilestoneRibbon();
+      updateDisplay(maxGen);
+      updateWhatIfSimulation();
+      renderCurrentDiff();
+      connectTelemetryStream();
+
+      window.addEventListener("resize", () => {
+        drawTrajectoryChart(currentGen);
+        drawCanvas2Chart();
+        updateWhatIfSimulation();
+      });
+
+    })();

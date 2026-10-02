@@ -369,3 +369,15 @@ def test_realtime_stream_dashboard_elements(tmp_path: Path) -> None:
     # Dynamic trajectory updating without innerHTML
     assert "innerHTML" not in content
     assert "showLiveToast" in content
+
+
+def test_dashboard_template_modularity() -> None:
+    """Verify build_dashboard.py is modularized with separate CSS, HTML, and JS templates."""
+    builder_path = ROOT_DIR / "src" / "alpha_evolve" / "dashboard" / "build_dashboard.py"
+    templates_dir = ROOT_DIR / "src" / "alpha_evolve" / "dashboard" / "templates"
+
+    assert len(builder_path.read_text(encoding="utf-8").splitlines()) < 150
+    for filename in ("styles.css", "body.html", "app.js"):
+        asset_path = templates_dir / filename
+        assert asset_path.exists(), f"Missing template asset: {filename}"
+        assert "innerHTML" not in asset_path.read_text(encoding="utf-8")
