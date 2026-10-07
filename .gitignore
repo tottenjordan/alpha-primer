@@ -28,6 +28,7 @@ scratch/
 # IDEs & Editors
 .idea/
 .vscode/
+.claude/
 *.swp
 *.swo
 
