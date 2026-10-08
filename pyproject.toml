@@ -19,6 +19,9 @@ dependencies = [
     "pyarrow>=15.0.0",
 ]
 
+[project.scripts]
+alpha-evolve = "alpha_evolve.cli:main"
+
 [build-system]
 requires = ["uv_build>=0.9,<1"]
 build-backend = "uv_build"
