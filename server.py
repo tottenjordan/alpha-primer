@@ -785,13 +785,16 @@ class _DryRunEvolutionClient(MockAlphaEvolveClient):
         super().__init__(seed_code=seed_code)
         self.use_case = use_case
         self._milestone_blocks: list[str] = []
-        if use_case == "fleet_routing":
-            traj_path = (RECORDS_DIR / ALLOWED_USE_CASES["fleet_routing"]).resolve()
+        if use_case in ALLOWED_USE_CASES:
+            traj_path = (RECORDS_DIR / ALLOWED_USE_CASES[use_case]).resolve()
             if traj_path.exists():
                 try:
                     traj_data = _read_json_cached(traj_path)
                     ms = traj_data.get("milestones", {})
-                    for key in ("7", "16", "30"):
+                    milestone_keys = (
+                        ("7", "16", "30") if use_case == "fleet_routing" else ("8", "17", "30")
+                    )
+                    for key in milestone_keys:
                         blk = ms.get(key, {}).get("evolve_block", "")
                         if blk:
                             self._milestone_blocks.append(blk)
@@ -799,7 +802,7 @@ class _DryRunEvolutionClient(MockAlphaEvolveClient):
                     pass
 
     def _mutate_seed_code(self, base_code: str, iteration: int) -> str:
-        if self.use_case == "fleet_routing" and self._milestone_blocks:
+        if self._milestone_blocks:
             idx = min(max(0, iteration - 1), len(self._milestone_blocks) - 1)
             target_block = self._milestone_blocks[idx]
             prefix = base_code.split("# EVOLVE-BLOCK-START", 1)[0]
@@ -839,11 +842,26 @@ def start_live_experiment(payload: dict[str, Any]) -> tuple[int, dict[str, Any]]
     )
 
     broker = get_global_broker()
+
+    # If a prior background thread already published run_completed (or broker was cleared)
+    # and is merely finishing console output teardown, join briefly before checking lock.
+    existing_thread = _EXPERIMENT_THREAD
+    if (
+        existing_thread is not None
+        and existing_thread.is_alive()
+        and broker.get_current_state().get("status") in ("COMPLETED", "IDLE")
+    ):
+        existing_thread.join(timeout=0.5)
+
     now_mono = time.monotonic()
 
     with _EXPERIMENT_LOCK:
         curr_started_at = broker.get_current_state().get("started_at")
         broker_was_cleared = _LAST_BROKER_STARTED_AT is not None and curr_started_at is None
+        if broker_was_cleared:
+            _LAST_EXPERIMENT_START_TS = 0.0
+            _LAST_BROKER_STARTED_AT = None
+
         is_thread_alive = _EXPERIMENT_THREAD is not None and _EXPERIMENT_THREAD.is_alive()
         elapsed = now_mono - _LAST_EXPERIMENT_START_TS
 
@@ -916,6 +934,7 @@ def start_live_experiment(payload: dict[str, Any]) -> tuple[int, dict[str, Any]]
 
     def _run_evolution_worker() -> None:
         global _EXPERIMENT_RUNNING, _LAST_BROKER_STARTED_AT
+        observed_started_at: str | None = None
         try:
             client = _DryRunEvolutionClient(seed_code=seed_code, use_case=use_case)
             with client:
@@ -927,12 +946,17 @@ def start_live_experiment(payload: dict[str, Any]) -> tuple[int, dict[str, Any]]
                     telemetry_broker=broker,
                 )
                 controller.run()
+                observed_started_at = broker.get_current_state().get("started_at")
         except Exception:
             pass
         finally:
             with _EXPERIMENT_LOCK:
                 _EXPERIMENT_RUNNING = False
-                _LAST_BROKER_STARTED_AT = broker.get_current_state().get("started_at")
+                curr_at = broker.get_current_state().get("started_at")
+                if curr_at is not None:
+                    _LAST_BROKER_STARTED_AT = curr_at
+                elif observed_started_at is not None and _LAST_BROKER_STARTED_AT is None:
+                    _LAST_BROKER_STARTED_AT = observed_started_at
 
     if not run_in_background:
         _run_evolution_worker()
@@ -955,7 +979,9 @@ def start_live_experiment(payload: dict[str, Any]) -> tuple[int, dict[str, Any]]
                 break
             time.sleep(0.002)
         with _EXPERIMENT_LOCK:
-            _LAST_BROKER_STARTED_AT = broker.get_current_state().get("started_at")
+            curr_at = broker.get_current_state().get("started_at")
+            if curr_at is not None:
+                _LAST_BROKER_STARTED_AT = curr_at
 
     return (
         200,
@@ -1039,6 +1065,8 @@ def handle_api_request(
     if route_path == "/api/experiments/start":
         headers["Content-Type"] = "application/json"
         exp_code, exp_body = start_live_experiment(merged_payload)
+        if exp_code == 429 and "retry_after_s" in exp_body:
+            headers["Retry-After"] = str(max(1, int(np.ceil(float(exp_body["retry_after_s"])))))
         return exp_code, headers, exp_body
 
     if route_path in ("/api/agent/replenish-query", "/api/agent/query"):
@@ -1165,8 +1193,9 @@ try:
         payload: dict[str, Any] = dict(request.query_params)
         post_payload = await _read_bounded_json(request)
         payload.update(post_payload)
-        code, _, body = handle_api_request("/api/experiments/start", payload=payload)
-        return JSONResponse(content=body, status_code=code)
+        code, hdrs, body = handle_api_request("/api/experiments/start", payload=payload)
+        resp_headers = {"Retry-After": hdrs["Retry-After"]} if "Retry-After" in hdrs else None
+        return JSONResponse(content=body, status_code=code, headers=resp_headers)
 
     @app.get("/api/stream/events", tags=["Telemetry"])
     async def stream_events(request: Request) -> Any:
@@ -1244,6 +1273,137 @@ try:
 except ImportError:
     app = None  # type: ignore
 
+import http.server  # noqa: E402
+
+
+class FallbackHandler(http.server.SimpleHTTPRequestHandler):
+    """Standard-library HTTP handler serving dashboard assets, REST APIs, and SSE streams."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, directory=str(DASHBOARD_DIR), **kwargs)
+
+    def log_message(self, format: str, *args: Any) -> None:
+        if os.environ.get("QUIET_HTTP_LOGS") == "1":
+            return
+        super().log_message(format, *args)
+
+    def end_headers(self) -> None:
+        is_sse = self.path.split("?", 1)[0] == "/api/stream/events"
+        for hk, hv in SECURITY_HEADERS.items():
+            if hk not in ("Content-Type", "Content-Length") and not (
+                is_sse and hk == "Cache-Control"
+            ):
+                self.send_header(hk, hv)
+        super().end_headers()
+
+    def _handle_json_route(self, payload: dict[str, Any] | None = None) -> None:
+        code, hdrs, body = handle_api_request(self.path, payload=payload)
+        encoded = json.dumps(body).encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(encoded)))
+        if "Retry-After" in hdrs:
+            self.send_header("Retry-After", hdrs["Retry-After"])
+        self.end_headers()
+        self.wfile.write(encoded)
+
+    def do_GET(self) -> None:
+        route_only = self.path.split("?", 1)[0]
+        if route_only in (
+            "/health",
+            "/api/cloud-status",
+            "/api/data",
+            "/api/live/state",
+            "/api/agent/replenish-query",
+            "/api/agent/query",
+        ) or route_only.startswith("/api/trajectories/"):
+            self._handle_json_route()
+            return
+
+        if route_only == "/api/stream/events":
+            # SSE stream for fallback threading HTTP server
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self.send_header("X-Accel-Buffering", "no")
+            self.end_headers()
+
+            broker = get_global_broker()
+            sub_queue = broker.subscribe()
+            try:
+                state = broker.get_current_state()
+                init_payload = f"event: state_snapshot\ndata: {json.dumps(state)}\n\n"
+                self.wfile.write(init_payload.encode("utf-8"))
+                self.wfile.flush()
+
+                while True:
+                    try:
+                        event = sub_queue.get(timeout=1.0)
+                        chunk = (
+                            f"event: {event['event_type']}\ndata: {json.dumps(event['data'])}\n\n"
+                        )
+                        self.wfile.write(chunk.encode("utf-8"))
+                        self.wfile.flush()
+                    except queue.Empty:
+                        self.wfile.write(b": keep-alive\n\n")
+                        self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                pass
+            finally:
+                broker.unsubscribe(sub_queue)
+            return
+
+        super().do_GET()
+
+    def do_POST(self) -> None:
+        route_only = self.path.split("?", 1)[0]
+        if route_only in (
+            "/api/agent/replenish-query",
+            "/api/agent/query",
+            "/api/simulate",
+            "/api/live/candidates",
+            "/api/experiments/start",
+        ):
+            content_len_hdr = self.headers.get("Content-Length")
+            status_code, check_res = parse_bounded_json_body(
+                b"", content_length_header=content_len_hdr
+            )
+            if status_code == 413:
+                encoded = json.dumps(check_res).encode("utf-8")
+                self.send_response(413)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(encoded)))
+                self.end_headers()
+                self.wfile.write(encoded)
+                return
+
+            try:
+                content_len = max(0, int(content_len_hdr or 0))
+            except (ValueError, TypeError):
+                content_len = 0
+
+            raw_bytes = self.rfile.read(content_len) if content_len > 0 else b""
+            status_code, payload = parse_bounded_json_body(
+                raw_bytes, content_length_header=content_len_hdr
+            )
+            if status_code == 413:
+                encoded = json.dumps(payload).encode("utf-8")
+                self.send_response(413)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(encoded)))
+                self.end_headers()
+                self.wfile.write(encoded)
+                return
+            self._handle_json_route(payload=payload)
+            return
+        encoded = json.dumps({"detail": "Not found"}).encode("utf-8")
+        self.send_response(404)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(encoded)))
+        self.end_headers()
+        self.wfile.write(encoded)
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
@@ -1259,114 +1419,6 @@ if __name__ == "__main__":
             app = None
 
     if app is None:
-        import http.server
-
-        class FallbackHandler(http.server.SimpleHTTPRequestHandler):
-            def __init__(self, *args: Any, **kwargs: Any) -> None:
-                super().__init__(*args, directory=str(DASHBOARD_DIR), **kwargs)
-
-            def end_headers(self) -> None:
-                for hk, hv in SECURITY_HEADERS.items():
-                    if hk not in ("Content-Type", "Content-Length"):
-                        self.send_header(hk, hv)
-                super().end_headers()
-
-            def _handle_json_route(self, payload: dict[str, Any] | None = None) -> None:
-                code, hdrs, body = handle_api_request(self.path, payload=payload)
-                self.send_response(code)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps(body).encode("utf-8"))
-
-            def do_GET(self) -> None:
-                route_only = self.path.split("?", 1)[0]
-                if route_only in (
-                    "/health",
-                    "/api/cloud-status",
-                    "/api/data",
-                    "/api/live/state",
-                    "/api/agent/replenish-query",
-                    "/api/agent/query",
-                ) or route_only.startswith("/api/trajectories/"):
-                    self._handle_json_route()
-                    return
-
-                if route_only == "/api/stream/events":
-                    # SSE stream for fallback threading HTTP server
-                    self.send_response(200)
-                    self.send_header("Content-Type", "text/event-stream")
-                    self.send_header("Cache-Control", "no-cache")
-                    self.send_header("Connection", "keep-alive")
-                    self.send_header("X-Accel-Buffering", "no")
-                    self.end_headers()
-
-                    broker = get_global_broker()
-                    sub_queue = broker.subscribe()
-                    try:
-                        state = broker.get_current_state()
-                        init_payload = f"event: state_snapshot\ndata: {json.dumps(state)}\n\n"
-                        self.wfile.write(init_payload.encode("utf-8"))
-                        self.wfile.flush()
-
-                        while True:
-                            try:
-                                event = sub_queue.get(timeout=1.0)
-                                chunk = f"event: {event['event_type']}\ndata: {json.dumps(event['data'])}\n\n"
-                                self.wfile.write(chunk.encode("utf-8"))
-                                self.wfile.flush()
-                            except queue.Empty:
-                                self.wfile.write(b": keep-alive\n\n")
-                                self.wfile.flush()
-                    except (BrokenPipeError, ConnectionResetError):
-                        pass
-                    finally:
-                        broker.unsubscribe(sub_queue)
-                    return
-
-                super().do_GET()
-
-            def do_POST(self) -> None:
-                route_only = self.path.split("?", 1)[0]
-                if route_only in (
-                    "/api/agent/replenish-query",
-                    "/api/agent/query",
-                    "/api/simulate",
-                    "/api/live/candidates",
-                    "/api/experiments/start",
-                ):
-                    content_len_hdr = self.headers.get("Content-Length")
-                    status_code, check_res = parse_bounded_json_body(
-                        b"", content_length_header=content_len_hdr
-                    )
-                    if status_code == 413:
-                        self.send_response(413)
-                        self.send_header("Content-Type", "application/json")
-                        self.end_headers()
-                        self.wfile.write(json.dumps(check_res).encode("utf-8"))
-                        return
-
-                    try:
-                        content_len = max(0, int(content_len_hdr or 0))
-                    except (ValueError, TypeError):
-                        content_len = 0
-
-                    raw_bytes = self.rfile.read(content_len) if content_len > 0 else b""
-                    status_code, payload = parse_bounded_json_body(
-                        raw_bytes, content_length_header=content_len_hdr
-                    )
-                    if status_code == 413:
-                        self.send_response(413)
-                        self.send_header("Content-Type", "application/json")
-                        self.end_headers()
-                        self.wfile.write(json.dumps(payload).encode("utf-8"))
-                        return
-                    self._handle_json_route(payload=payload)
-                    return
-                self.send_response(404)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps({"detail": "Not found"}).encode("utf-8"))
-
         httpd = http.server.ThreadingHTTPServer((host, port), FallbackHandler)
         print(
             f"Serving AlphaEvolve Executive Suite at http://127.0.0.1:{port} (bound to {host}:{port})"

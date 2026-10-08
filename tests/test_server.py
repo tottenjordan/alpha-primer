@@ -729,12 +729,15 @@ def test_server_start_live_experiment_inventory_and_sse_streaming() -> None:
         assert len(cand_events) == 4
         assert [c["data"]["iteration"] for c in cand_events] == [0, 1, 2, 3]
         assert cand_events[0]["data"]["is_baseline"] is True
-        assert any(c["data"]["is_best"] and not c["data"]["is_baseline"] for c in cand_events)
+        scores = [c["data"]["score"] for c in cand_events]
+        # Progressive inventory replenishment milestone mutations monotonically improve score to >33%
+        assert scores[0] < scores[1] < scores[2] < scores[3]
+        assert scores[-1] > 33.0
 
         _, _, state = handle_api_request("/api/live/state")
         assert state["status"] == "COMPLETED"
         assert state["evaluated_count"] == 4
-        assert state["best_score"] > cand_events[0]["data"]["score"]
+        assert state["best_score"] == scores[-1]
     finally:
         broker.unsubscribe(sub_q)
 
@@ -765,12 +768,14 @@ def test_server_start_live_experiment_fleet_routing_and_rate_limiting() -> None:
         assert body["use_case"] == "fleet_routing"
         assert body["experiment_name"] == "Fleet Live Test"
 
-        # 2. Immediate concurrent request must be rejected with HTTP 429 rate_limited
-        code_429, _, body_429 = handle_api_request(
+        # 2. Immediate concurrent request must be rejected with HTTP 429 rate_limited + Retry-After header
+        code_429, headers_429, body_429 = handle_api_request(
             "/api/experiments/start",
             payload={"use_case": "fleet_routing", "max_programs": 2},
         )
         assert code_429 == 429
+        assert "Retry-After" in headers_429
+        assert int(headers_429["Retry-After"]) >= 1
         assert body_429["status"] == "rate_limited"
         assert "Rate limit exceeded" in body_429["detail"]
         assert body_429["retry_after_s"] > 0.0
@@ -829,6 +834,122 @@ def test_server_start_live_experiment_validation_and_clamping() -> None:
     assert body_clamp["max_programs"] == 2
     assert body_clamp["parallel_workers"] == 4
     assert "Inventory Replenishment" in body_clamp["experiment_name"]
+
+
+def test_server_http_socket_sse_stream_and_live_experiment() -> None:
+    """Verify live HTTP socket SSE stream (/api/stream/events) concurrently with POST /api/experiments/start."""
+    import http.client
+    import http.server
+    import json
+    import os
+    import threading
+
+    from server import FallbackHandler
+
+    from alpha_evolve.dashboard.telemetry_broker import get_global_broker
+
+    broker = get_global_broker()
+    broker.clear()
+
+    prev_quiet = os.environ.get("QUIET_HTTP_LOGS")
+    os.environ["QUIET_HTTP_LOGS"] = "1"
+    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), FallbackHandler)
+    port = httpd.server_address[1]
+    srv_thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    srv_thread.start()
+
+    sse_conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+    post_conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+    try:
+        # 1. Open SSE stream connection
+        sse_conn.request("GET", "/api/stream/events")
+        sse_resp = sse_conn.getresponse()
+        assert sse_resp.status == 200
+        assert "text/event-stream" in (sse_resp.getheader("Content-Type") or "")
+        # Ensure Cache-Control is not duplicated with no-store
+        assert sse_resp.getheader("Cache-Control") == "no-cache"
+
+        # Read initial state_snapshot event from socket
+        line1 = sse_resp.fp.readline().decode("utf-8").strip()
+        line2 = sse_resp.fp.readline().decode("utf-8").strip()
+        _ = sse_resp.fp.readline()
+        assert line1 == "event: state_snapshot"
+        assert line2.startswith("data: ")
+        init_snapshot = json.loads(line2[len("data: ") :])
+        assert init_snapshot["status"] == "IDLE"
+
+        # 2. Trigger POST /api/experiments/start over HTTP socket
+        req_body = json.dumps(
+            {
+                "use_case": "inventory_replenishment",
+                "max_programs": 3,
+                "parallel_workers": 3,
+            }
+        ).encode("utf-8")
+        post_conn.request(
+            "POST",
+            "/api/experiments/start",
+            body=req_body,
+            headers={
+                "Content-Type": "application/json",
+                "Content-Length": str(len(req_body)),
+            },
+        )
+        post_resp = post_conn.getresponse()
+        post_data = json.loads(post_resp.read().decode("utf-8"))
+        assert post_resp.status == 200
+        assert post_data["status"] == "started"
+
+        # 3. Immediate concurrent POST over HTTP socket must return 429 with Retry-After header
+        post_conn.request(
+            "POST",
+            "/api/experiments/start",
+            body=req_body,
+            headers={
+                "Content-Type": "application/json",
+                "Content-Length": str(len(req_body)),
+            },
+        )
+        rate_resp = post_conn.getresponse()
+        rate_data = json.loads(rate_resp.read().decode("utf-8"))
+        assert rate_resp.status == 429
+        assert rate_resp.getheader("Retry-After") is not None
+        assert rate_data["status"] == "rate_limited"
+
+        # 4. Read SSE frames from live socket until run_completed
+        received_events: list[tuple[str, dict]] = []
+        current_event_type = ""
+        for _ in range(60):
+            raw_line = sse_resp.fp.readline()
+            if not raw_line:
+                break
+            line = raw_line.decode("utf-8").strip()
+            if not line or line.startswith(":"):
+                continue
+            if line.startswith("event: "):
+                current_event_type = line[len("event: ") :]
+            elif line.startswith("data: ") and current_event_type:
+                payload = json.loads(line[len("data: ") :])
+                received_events.append((current_event_type, payload))
+                if current_event_type == "run_completed":
+                    break
+                current_event_type = ""
+
+        ev_names = [et for et, _ in received_events]
+        assert ev_names[0] == "run_started"
+        assert ev_names[-1] == "run_completed"
+        cand_frames = [p for et, p in received_events if et == "candidate_evaluated"]
+        assert len(cand_frames) == 3
+        assert cand_frames[0]["score"] < cand_frames[1]["score"] < cand_frames[2]["score"]
+    finally:
+        sse_conn.close()
+        post_conn.close()
+        httpd.shutdown()
+        httpd.server_close()
+        if prev_quiet is None:
+            os.environ.pop("QUIET_HTTP_LOGS", None)
+        else:
+            os.environ["QUIET_HTTP_LOGS"] = prev_quiet
 
 
 def test_live_evolution_trigger_button_client_js_execution() -> None:
@@ -918,6 +1039,12 @@ def test_live_evolution_trigger_button_client_js_execution() -> None:
       return elements.get(id);
     }}
 
+    const useCaseBtns = ['inventory_replenishment', 'fleet_routing'].map(uc => {{
+      const b = makeEl('button', 'btn-' + uc);
+      b.setAttribute('data-use-case', uc);
+      return b;
+    }});
+
     class MockEventSource {{
       constructor() {{ sseListeners = {{}}; }}
       addEventListener(ev, fn) {{ sseListeners[ev] = fn; }}
@@ -935,7 +1062,10 @@ def test_live_evolution_trigger_button_client_js_execution() -> None:
       createTextNode(txt) {{ return {{ textContent: String(txt) }}; }},
       createDocumentFragment() {{ return makeEl('fragment', ''); }},
       getElementById(id) {{ return getEl(id); }},
-      querySelectorAll() {{ return []; }}
+      querySelectorAll(sel) {{
+        if (sel === '.use-case-btn') return useCaseBtns;
+        return [];
+      }}
     }};
 
     global.setTimeout = () => 1;
@@ -984,7 +1114,44 @@ def test_live_evolution_trigger_button_client_js_execution() -> None:
         throw new Error('Unexpected stream status after start: ' + getEl('text-stream-status').textContent);
       }}
 
-      // 2. Simulate SSE candidate_evaluated and run_completed events
+      // 2. Simulate SSE run_started + candidate_evaluated WITHOUT total_cost (real InventoryReplenishmentEvaluator format)
+      // Also test spoilage_rate_pct: 0.0 to ensure zero-value metrics are not overwritten by falsy || fallback
+      sseListeners['run_started']({{
+        data: JSON.stringify({{
+          experiment_name: 'Inventory Replenishment Digital Twin (Live Dry-Run)',
+          target_function_name: 'compute_replenishment_orders',
+          max_programs: 4
+        }})
+      }});
+      sseListeners['candidate_evaluated']({{
+        data: JSON.stringify({{
+          iteration: 3,
+          score: 25.0,
+          is_best: true,
+          scores: {{
+            cost_reduction_pct: 25.0,
+            raw_cost_reduction_pct: 25.0,
+            fill_rate_pct: 95.5,
+            spoilage_rate_pct: 0.0
+          }}
+        }})
+      }});
+      // 68410 * (1 - 0.25) = 51307.5 -> rounds to $51,308
+      if (getEl('kpi-total-cost').textContent !== '$51,308') {{
+        throw new Error('Expected derived total_cost $51,308 when total_cost omitted, got ' + getEl('kpi-total-cost').textContent);
+      }}
+      if (getEl('kpi-spoilage-rate').textContent !== '0.00% rate') {{
+        throw new Error('Expected zero spoilage_rate_pct (0.00% rate) to be preserved, got ' + getEl('kpi-spoilage-rate').textContent);
+      }}
+
+      // 3. Rapid domain switch to fleet_routing while inventory_replenishment stream is still emitting
+      useCaseBtns[1].listeners['click'][0]();
+      const fleetChampCostText = getEl('kpi-total-cost').textContent;
+      if (fleetChampCostText !== '$2,931') {{
+        throw new Error('Expected fleet_routing champion cost $2,931 after switching tab, got ' + fleetChampCostText);
+      }}
+
+      // Emit an inventory_replenishment candidate_evaluated event while user is viewing fleet_routing
       sseListeners['candidate_evaluated']({{
         data: JSON.stringify({{
           iteration: 31,
@@ -993,8 +1160,15 @@ def test_live_evolution_trigger_button_client_js_execution() -> None:
           scores: {{ total_cost: 44800, fill_rate_pct: 94.2, spoilage_rate_pct: 8.1 }}
         }})
       }});
+      // Active fleet_routing view must NOT be corrupted by inventory_replenishment event!
+      if (getEl('kpi-total-cost').textContent !== '$2,931') {{
+        throw new Error('Cross-domain SSE event corrupted active fleet_routing view: ' + getEl('kpi-total-cost').textContent);
+      }}
+
+      // Switch back to inventory_replenishment -> Gen 31 ($44,800) must be present!
+      useCaseBtns[0].listeners['click'][0]();
       if (getEl('kpi-total-cost').textContent !== '$44,800') {{
-        throw new Error('Expected updated total_cost $44,800 from SSE candidate_evaluated, got ' + getEl('kpi-total-cost').textContent);
+        throw new Error('Expected inventory_replenishment to retain background Gen 31 ($44,800), got ' + getEl('kpi-total-cost').textContent);
       }}
 
       sseListeners['run_completed']({{
@@ -1004,7 +1178,7 @@ def test_live_evolution_trigger_button_client_js_execution() -> None:
         throw new Error('Button did not reset after SSE run_completed');
       }}
 
-      // 3. Simulate HTTP 429 rate-limit response
+      // 4. Simulate HTTP 429 rate-limit response
       nextStartResponse = {{
         ok: false,
         status: 429,
