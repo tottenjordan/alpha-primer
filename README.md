@@ -24,8 +24,10 @@ AlphaEvolve is Google's agentic evolutionary coding capability powered by Gemini
 ├── src/alpha_evolve/           # Shared, type-safe AlphaEvolve client & runtime
 │   ├── client.py               # Discovery Engine V1alpha REST API client
 │   ├── controller.py           # Evolutionary loop manager
+│   ├── experiment.py           # High-level AlphaEvolveExperiment orchestrator
 │   ├── evaluators/             # 3-tier BaseEvaluator & EvaluatorProtocol
-│   ├── models.py               # Pydantic data schemas (Experiment, Program, Scores)
+│   ├── models.py               # Pydantic data schemas (ExperimentConfig, ProgramCandidate, Scores)
+│   ├── utils.py                # EVOLVE-BLOCK extraction, candidate compilation & artifact export
 │   ├── workers.py              # Isolated evaluation worker pool (process/subprocess/thread)
 │   └── dashboard/              # Trajectory generators, SSE broker & Safe DOM compiler
 ├── dashboard/                  # Compiled static dashboard bundle (index.html, data.json)
@@ -58,7 +60,7 @@ cd alpha-primer
 
 # Install dependencies with uv
 make dev
-# or: uv sync --all-groups
+# or: uv sync --frozen --all-groups
 ```
 
 ### 3. Configure Google Cloud Access
@@ -77,12 +79,12 @@ Navigate to any example directory or run directly from root:
 
 ```bash
 # 1. Perishable Inventory Replenishment Digital Twin (offline dry-run or live API)
-uv run python examples/inventory_replenishment/run_evolution.py --dry-run --max-programs 5
-uv run python examples/inventory_replenishment/run_evolution.py --max-programs 20
+uv run --frozen python examples/inventory_replenishment/run_evolution.py --dry-run --max-programs 5
+uv run --frozen python examples/inventory_replenishment/run_evolution.py --max-programs 20
 
 # 2. Dynamic Fleet Routing & Dispatch Digital Twin (VRPTW) (offline dry-run or live API)
-uv run python examples/fleet_routing/run_evolution.py --dry-run --max-programs 5
-uv run python examples/fleet_routing/run_evolution.py --max-programs 20
+uv run --frozen python examples/fleet_routing/run_evolution.py --dry-run --max-programs 5
+uv run --frozen python examples/fleet_routing/run_evolution.py --max-programs 20
 ```
 
 #### What Happens When You Run This Command?
@@ -103,7 +105,7 @@ See [docs/notes/cloud_resources_and_execution.md](docs/notes/cloud_resources_and
 Launch the local web server to interact with the dashboard:
 
 ```bash
-uv run python server.py
+uv run --frozen python server.py
 ```
 
 Open [http://127.0.0.1:8080](http://127.0.0.1:8080) in your browser. (Zero external server dependencies required; runs on standard library `http.server` with optional FastAPI/Uvicorn support).
@@ -130,15 +132,15 @@ The repository includes a decoupled web dashboard (`dashboard/index.html` + `ser
 1. **Multi-Use-Case Domain Switcher & 31-Generation Evolution Scrubber**:
    - Seamlessly switch in the top header between **📦 Retail & Perishable Inventory** (50 SKUs, 90-day causal horizon) and **🚚 Dynamic Fleet Routing (VRPTW)** (50 customer stops across 4 urban quadrant clusters, 5 vehicles, 12-hour shift with dynamic order waves and rush-hour congestion).
    - **Inventory Replenishment Trajectory**: Scrub through Generations `0` to `30` from **Gen 0** Static $(s, S)$ baseline ($68.4k cost, 14.6% spoilage) &rarr; **Gen 8** Censored Demand Imputation &rarr; **Gen 17** Dynamic FIFO Spoilage Deduction &rarr; **Gen 30** Global Champion ($45.2k cost, **-33.9% reduction**, 93.49% fill rate, 8.45% spoilage).
-   - **Fleet Routing 2D Route Topology Map & Shift Trajectory**: Toggle Canvas 1 between the **2D Route Topology Map** and the **90-Step Shift Trajectory**. The 2D Route Topology Map renders a dual-viewport Retina Canvas 2D comparing **Gen 0: Greedy Baseline** (crisscrossing tours, high tardiness) side-by-side against **Gen 7** (Slack Urgency Ranking), **Gen 16** (Traffic Congestion + 2-Opt Uncrossing), and **Gen 30: Regret-2 + 2-Opt Champion** ($2,931 cost, **-28.5% reduction**, 97.2% on-time SLA, 1,118.0 km distance, **0 intra-route crossings**), complete with a live center `DELTA HUD`, wave/vehicle filters (`All Waves`, `Wave 0 (Static)`, `Waves 1–4 (Dynamic)`, `SLA Breaches`, `V0`–`V4`), and customer stop hover tooltips.
+   - **Fleet Routing 2D Route Topology Map & Shift Trajectory**: Toggle Canvas 1 between the **2D Route Topology Map** and the **90-Step Shift Trajectory**. The 2D Route Topology Map renders a dual-viewport Retina Canvas 2D comparing **Gen 0: Greedy Baseline** (crisscrossing tours, 19 intra-route crossings, 20 late stops) side-by-side against **Gen 7** (Slack Urgency Ranking), **Gen 16** (Traffic Congestion + 2-Opt Uncrossing), and **Gen 30: Regret-2 + 2-Opt Champion** ($2,931 validation cost, **-28.5% reduction**, 97.2% on-time SLA, 1,118.0 km distance, **0 intra-route crossings**), complete with a live center `DELTA HUD` (`Crossings`, `Late Stops`, `On-Time`, `Distance`, and `PEAK WAVE LOAD` vehicle bars), wave/vehicle filters (`All Waves`, `Wave 0 (Static)`, `Waves 1–4 (Dynamic)`, `SLA Breaches`, `V0`–`V4`), and customer stop hover tooltips.
 2. **Interactive What-If Sandbox (`POST /api/simulate`)**:
    - Connected directly to the live backend simulation endpoint (`POST /api/simulate`) with debounced request race-condition guards and automatic `<2ms` in-browser fallback when offline.
-   - Executes real `InventoryDigitalTwin` and `FleetRoutingDigitalTwin` rollouts comparing Baseline vs. Champion policies under supplier lead-time / traffic congestion delays (`+0` to `+5`), promotional demand / order surges (`+0%` to `+150%`), and spoilage/tardiness & stockout/unserved penalty multipliers (`0.5x` to `3.0x`) across domain archetypes.
+   - Executes real `InventoryDigitalTwin` and `FleetRoutingDigitalTwin` rollouts comparing Baseline vs. Champion policies under supplier lead-time delays (`+0` to `+5 days`) or urban traffic congestion delays (`+0` to `+60 mins`), promotional demand / dynamic order surges (`+0%` to `+150%`), and spoilage/tardiness & stockout/unserved penalty multipliers (`0.5x` to `3.0x`) across domain archetypes.
 3. **Multi-Domain Gemini Enterprise Grounding Webhook (`/api/agent/query`)**:
    - Exposes `GET/POST /api/agent/query` (plus backward-compatible `/api/agent/replenish-query`) for Gemini Enterprise StreamAssist agents (`inventory-replenishment-twin` and `fleet-routing-twin`).
    - Returns structured executive Markdown grounding cards, champion metrics, algorithmic innovations, and live `what_if_stress_test` digital twin simulations when disruption parameters are supplied.
-4. **Benchmark Mathematics & High-Visibility Evolved Code Diffs**:
-   - View paired Wilcoxon signed-rank significance tests ($p < 0.001$), 2D Pareto Frontier & Cost Waterfall charts, and zero-dependency AST/LCS **Split** and **Unified** Python code diffs across milestone generations.
+4. **Domain Objective Mathematics & High-Visibility Evolved Code Diffs**:
+   - Inspect domain-adaptive objective function equations, causal 3-phase operational horizons, 2D Pareto Frontier & 31-Generation Stacked Cost Waterfall charts, and zero-dependency AST/LCS **Split** and **Unified** Python code diffs across milestone generations.
 
 ---
 
@@ -167,9 +169,9 @@ For complete high-resolution architecture diagrams, PaperBanana statistical traj
 We enforce strict quality and modern Python standards (see [CODE_STANDARDS.md](CODE_STANDARDS.md)):
 
 ```bash
-make lint       # uv run ruff check .
-make format     # uv run ruff format .
-make typecheck  # uv run ty check src/
-make test       # uv run pytest -v
-make check      # runs all lint, format, typecheck, and test checks
+make lint       # uv run --frozen ruff check .
+make format     # uv run --frozen ruff format .
+make typecheck  # uv run --frozen ty check src/
+make test       # uv run --frozen pytest -v
+make check      # runs all lint, format-check, typecheck, and test checks
 ```
