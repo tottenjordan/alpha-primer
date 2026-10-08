@@ -18,14 +18,14 @@ A foundational architectural principle of this repository is the strict separati
 flowchart TD
     subgraph Cloud["Google Cloud Platform (Serverless)"]
         GE["Gemini Enterprise (Discovery Engine v1alpha)"]
-        CR["Cloud Run (Dashboard & Webhook)"]
+        CR["Cloud Run (Dashboard, /api/simulate & Webhooks)"]
     end
 
     subgraph Local["Local Private Environment (Your Machine)"]
         CTL["AlphaEvolve Controller"]
         WP["Isolated Worker Pool (Multi-Process)"]
-        DT["Vectorized Inventory Digital Twin"]
-        DATA["Proprietary Telemetry & POS Data"]
+        DT["Domain Digital Twins (Inventory & Fleet Routing)"]
+        DATA["Proprietary Telemetry, POS & Dispatch Data"]
     end
 
     CTL -- "1. Submit Initial Seed & Goals" --> GE
@@ -35,11 +35,11 @@ flowchart TD
     DT <--> DATA
     WP -- "4. Return Scores & Diagnostic Insights" --> CTL
     CTL -- "5. Report Evaluation Results" --> GE
-    CR -- "Query Evolved Policy via Webhook" --> DT
+    CR -- "Query Evolved Policy & Run What-If" --> DT
 ```
 
 - **Cloud (Serverless)**: Gemini Enterprise manages the evolutionary session and generates code mutations based on structured evaluation feedback.
-- **Local (Isolated Sandbox)**: Digital twin simulations run 100% locally. Proprietary business logic, cost formulas, and customer demand datasets never leave your private environment.
+- **Local (Isolated Sandbox)**: Digital twin simulations run 100% locally. Proprietary business logic, cost formulas, and customer demand or routing datasets never leave your private environment.
 
 ---
 
@@ -90,11 +90,15 @@ gcloud config set project <YOUR_PROJECT_ID>
 Run the full evolutionary loop locally without sending any API requests to Google Cloud. The system uses a deterministic mock client that generates synthetic candidate mutations to test your simulation engine and evaluator harness.
 
 ```bash
+# Use Case 1: Perishable Inventory Replenishment Digital Twin
 uv run python examples/inventory_replenishment/run_evolution.py --dry-run --max-programs 5
+
+# Use Case 2: Dynamic Fleet Routing & Dispatch Digital Twin (VRPTW)
+uv run python examples/fleet_routing/run_evolution.py --dry-run --max-programs 5
 ```
 
 - **When to use**: Continuous Integration (CI), local code development, debugging evaluators, and rapid syntax verification.
-- **Output**: Terminal logs displaying generation-by-generation scores and diagnostic insights.
+- **Output**: Terminal logs displaying generation-by-generation scores and diagnostic insights, plus local artifacts in `artifacts/inventory_replenishment/` or `artifacts/fleet_routing/`.
 
 ---
 
@@ -102,16 +106,20 @@ uv run python examples/inventory_replenishment/run_evolution.py --dry-run --max-
 Execute live evolutionary search against Google Cloud Discovery Engine's AlphaEvolve v1alpha API:
 
 ```bash
+# Live Cloud Evolution: Perishable Inventory Replenishment
 uv run python examples/inventory_replenishment/run_evolution.py --max-programs 25 --workers 4
+
+# Live Cloud Evolution: Dynamic Fleet Routing (VRPTW)
+uv run python examples/fleet_routing/run_evolution.py --max-programs 25 --workers 4
 ```
 
 - **Execution Flow**:
   1. Initializes a serverless session under your Discovery Engine instance.
-  2. Creates an `alphaEvolveExperiments` resource and registers the initial baseline seed from `examples/inventory_replenishment/src/program.py`.
+  2. Creates an `alphaEvolveExperiments` resource and registers the initial baseline seed from `examples/inventory_replenishment/src/program.py` (`compute_replenishment_orders`) or `examples/fleet_routing/src/program.py` (`assign_and_sequence_routes`).
   3. Gemini 3.5 Flash inspects past scores and diagnostic insights to propose targeted code mutations in `# EVOLVE-BLOCK`.
-  4. Local workers run the 3-tier evaluator, calculating cost reductions, fill rates, and spoilage metrics.
+  4. Local workers run the 3-tier evaluator (`InventoryReplenishmentEvaluator` or `VehicleRoutingEvaluator`), calculating cost reductions, service fill / on-time SLA rates, and spoilage / tardiness metrics.
   5. The cycle repeats until `--max-programs` is reached or convergence is achieved.
-  6. Exports the global champion program to `artifacts/inventory_replenishment/best_evolved_program.py`.
+  6. Exports the global champion program and holdout evaluation summary to `artifacts/inventory_replenishment/` or `artifacts/fleet_routing/` (`best_evolved_program.py` and `best_evaluation_summary.json`).
 
 ---
 
@@ -124,26 +132,34 @@ uv run python server.py
 Open **[http://127.0.0.1:8080](http://127.0.0.1:8080)** in your browser.
 
 #### Dashboard Capabilities
-1. **Digital Twin Replay (Tab 1)**:
-   - Scrub through 31 generations of evolution across a 90-day simulation.
-   - **Dual Canvas Visualization**:
-     - *Mode A (Pareto Frontier)*: 2D plot of Customer Service Fill Rate vs. Cost Reduction with perishable spoilage bubble gradients and the non-dominated frontier envelope.
-     - *Mode B (Cost Waterfall)*: Stacked 31-generation breakdown showing reductions across Spoilage (-$11.9k), Stockout Penalties (-$9.6k), and Holding Costs (-$1.2k).
-   - **Interactive Milestone Ribbon**: Click to jump directly to key breakthrough generations (Gen 0 Baseline, Gen 8 Censored Imputation, Gen 17 FIFO Spoilage Deduction, Gen 30 Global Champion).
-2. **What-If Sandbox (Tab 2)**:
-   - Run dual-policy stress tests comparing the Baseline $(s, S)$ and the Champion heuristic side-by-side.
-   - Adjust supplier lead-time delays (+1 to +5 days) and promotional demand shocks (+10% to +80%) in real time.
-3. **Benchmark & Perishability Mathematics (Tab 3)**:
-   - Inspect Wilcoxon signed-rank significance tests ($p < 0.001$), Monte Carlo seed distributions, and closed-form equations for FIFO cohort aging and critical fractiles.
+1. **Digital Twin Replay & Spatial Visualization (Tab 1)**:
+   - Scrub through 31 generations of evolution (`Gen 0` to `Gen 30`) with `1x`/`2x` playback speed controls and keyboard navigation (`←` / `→`).
+   - **Primary Domain Canvas (Canvas 1)**:
+     - *In Retail & Perishable Inventory mode*: Renders the **90-Day Digital Twin Inventory Trajectory & Spoilage Stack** across Warmup (`Days 0..29`), Eval (`Days 30..65`), and Holdout (`Days 66..89`) phases.
+     - *In Dynamic Fleet Routing (VRPTW) mode*: Provides an interactive mode toggle (`#canvas1-mode-toggles`) between:
+       - **2D Route Topology Map (`topology` mode)**: Dual-viewport Retina Canvas 2D spatial visualizer over a $100 \times 100\text{ km}$ urban grid with a central depot at $(50, 50)$ and 50 customer delivery stops across 4 quadrant clusters (30 static Wave 0 orders + 20 dynamic orders arriving mid-shift in Waves 1–4). Compares **GEN 0: GREEDY BASELINE** (crisscrossing trajectories, high tardiness) on the left against the selected generation on the right (**GEN 7: SLACK URGENCY**, **GEN 16: TRAFFIC + 2-OPT**, **GEN 30: REGRET-2 + 2-OPT** with **0 intra-route crossings**, `-28.5%` cost reduction, and `97.2%` on-time SLA). Includes a center **DELTA HUD** card summarizing distance, crossing, and tardiness deltas, interactive filter pills (`All Waves`, `Wave 0 (Static)`, `Waves 1–4 (Dynamic)`, `SLA Breaches`, and vehicles `V0`–`V4`), and customer stop hover tooltips showing exact arrival times, time windows, and vehicle assignments.
+       - **90-Step Shift Trajectory (`trajectory` mode)**: Time-series operational shift profile tracking active route load, in-transit stops, fulfilled deliveries, and tardiness hours.
+   - **Secondary Convergence Canvas (Canvas 2)**:
+     - *Mode A (Pareto Frontier)*: 2D plot of Service Fill Rate / On-Time Delivery SLA vs. Cost Reduction with spoilage / tardiness bubble gradients and the non-dominated frontier envelope.
+     - *Mode B (Cost Waterfall)*: Stacked 31-generation breakdown showing reductions across Spoilage (`-$11.9k`), Stockout Penalties (`-$9.6k`), Holding (`-$1.2k`), and Ordering (`-$395`) for Inventory, or Distance (`-$631`), Tardiness Penalties (`-$432`), Unserved Penalties (`-$105`), and Fixed Fleet Dispatch for Fleet Routing.
+   - **Interactive Milestone Ribbon**: Click any milestone node to jump directly to key breakthrough generations (`Gen 0`, `Gen 8`, `Gen 17`, `Gen 30` for Inventory; `Gen 0`, `Gen 7`, `Gen 16`, `Gen 30` for Fleet Routing).
+2. **Interactive What-If Sandbox with Live `POST /api/simulate` Execution (Tab 2)**:
+   - Run real-time dual-policy stress simulations comparing the Baseline policy against the compiled AlphaEvolve Champion heuristic side-by-side.
+   - Adjusting any slider or archetype dispatches a debounced `POST /api/simulate` request to `server.py` (with sequence-ID race-condition protection and automatic `<2ms` client-side analytical fallback when offline), executing the real `InventoryDigitalTwin` or `FleetRoutingDigitalTwin` in Python.
+   - **Domain-Adaptive Stress Parameters**:
+     - *Archetype Selector*: Switch between SKU categories (`Ultra-Perishables`, `Chilled Dairy & Fresh Meats`, `Ambient Grocery`) or Fleet route categories (`Tight-Window Urban Stops (1-hr SLA)`, `Commercial Metro Deliveries (2-hr SLA)`, `Suburban Perimeter Bulk Routes (4-hr SLA)`).
+     - *Disruption Sliders*: Adjust Supplier Lead Time Delay / Traffic Congestion Delay (`+0` to `+5`), Promotional Demand / Order Surge (`+0%` to `+150%`), Spoilage / Tardiness Cost Multiplier (`0.5x` to `3.0x`), and Stockout / Unserved Penalty Multiplier (`0.5x` to `3.0x`).
+3. **Benchmark & Domain Mathematics (Tab 3)**:
+   - Inspect Wilcoxon signed-rank significance tests ($p < 0.001$), Monte Carlo seed distributions, and closed-form objective equations for both perishable FIFO cohort aging and time-windowed vehicle routing (`VRPTW`).
 4. **Evolved Code Diffs (Tab 4)**:
    - High-visibility AST code diff viewer powered by client-side LCS diffing and zero-dependency Python syntax highlighting.
    - Toggle between **Split** (side-by-side) and **Unified** diffs with line badges and foldable unchanged sections.
-   - Use the **Milestone AST Stepper** to inspect exact code mutations between generations.
+   - Use the **Milestone AST Stepper** to inspect exact code mutations between milestone generations (`Gen 0 ↔ Gen 8`, `Gen 8 ↔ Gen 17`, `Gen 17 ↔ Gen 30`, or `Gen 0 ↔ Gen 7`, `Gen 7 ↔ Gen 16`, `Gen 16 ↔ Gen 30`).
 5. **Multi-Use-Case Domain Switcher**:
    - Seamlessly switch domains in the top navigation bar between:
      - 📦 **Retail & Perishable Inventory**: 90-day simulation tracking inventory on hand, in transit, FIFO spoilage waste, and $(s, S)$ vs. AlphaEvolve lookahead policies.
      - 🚚 **Dynamic Fleet Routing (VRPTW)**: 12-hour simulation tracking fleet travel costs, vehicle routing distance, time-window delivery deadlines, and greedy nearest-neighbor vs. AlphaEvolve regret-2 / 2-opt traffic-aware heuristics.
-   - Instant Safe DOM re-binding of all KPI cards, milestone ribbons, archetypes tables, and code diff AST selectors with zero page reload latency.
+   - Instant Safe DOM re-binding of all KPI cards, milestone ribbons, 2D Route Topology Map / trajectory canvases, archetypes tables, What-If sandbox controls, and code diff AST selectors with zero page reload latency.
 
 ---
 
@@ -158,24 +174,26 @@ Open **[http://127.0.0.1:8080](http://127.0.0.1:8080)**. The status pill in the 
 
 **Terminal 2 — Run Optimization with Telemetry Streaming**:
 ```bash
-# Dry-run mock evolution streaming to dashboard
+# Dry-run mock evolution streaming to dashboard (Inventory or Fleet Routing)
 uv run python examples/inventory_replenishment/run_evolution.py --dry-run --max-programs 20 --stream-to-dashboard
+uv run python examples/fleet_routing/run_evolution.py --dry-run --max-programs 20 --stream-to-dashboard
 
 # Live Cloud evolution streaming to dashboard
 uv run python examples/inventory_replenishment/run_evolution.py --max-programs 30 --workers 4 --stream-to-dashboard
+uv run python examples/fleet_routing/run_evolution.py --max-programs 30 --workers 4 --stream-to-dashboard
 ```
 
 #### Real-Time Visualizer Features
 - **Dynamic Scrubber Range**: Scrubber track and maximum counter automatically expand as each candidate finishes evaluation.
-- **Dynamic 2D Pareto Frontier**: New candidate bubbles are dynamically plotted on Retina Canvas 2D and non-dominated frontier curves recalculate live.
+- **Dynamic 2D Pareto Frontier & Topology Map**: New candidate bubbles are dynamically plotted on Retina Canvas 2D, non-dominated frontier curves recalculate live, and the Fleet Routing 2D Route Topology Map updates the right-hand viewport header and delta metrics dynamically.
 - **Dynamic Milestone Ribbon**: Whenever a candidate achieves a new best fitness score, a milestone node is appended to the ribbon with instant click-to-scrub navigation.
 - **Live Toast Notifications**: Non-intrusive notifications pop in the bottom-right corner displaying candidate IDs, validation scores, and breakthrough alerts.
 - **Graceful Offline Fallback**: If the server is stopped or running in static mode, the dashboard gracefully transitions to `ARCHIVE DATA (OFFLINE)` mode while preserving all historical interactive playback.
 
 ---
 
-### Mode D: Serverless Cloud Run Deployment & Gemini Enterprise Agent Automation
-Deploy the full web dashboard and Gemini agent webhook to Google Cloud Run with automated Artifact Registry provisioning, security hardening, and optional Discovery Engine external agent registration:
+### Mode D: Serverless Cloud Run Deployment, Live `/api/simulate`, & Gemini Enterprise Webhooks
+Deploy the full web dashboard, live digital twin simulation engine, and Gemini Enterprise agent webhooks to Google Cloud Run with automated Artifact Registry provisioning, security hardening, and optional Discovery Engine external agent registration:
 
 ```bash
 # Automated deployment with active gcloud credentials
@@ -204,16 +222,67 @@ make deploy-dry-run
    - Concurrency: 80 requests/instance
    - Memory: 512Mi / 1 vCPU
    - Auto-scaling: 0 to 5 instances (scale-to-zero when idle)
-   - Strict enterprise security headers: Content-Security-Policy (CSP), HSTS, nosniff, frame-ancestors.
+   - Strict enterprise security headers: Content-Security-Policy (CSP), HSTS, nosniff, frame-ancestors, and a 1 MB request payload limit (`HTTP 413` protection).
 5. **Post-Deployment Health Check**: Automatically probes `${SERVICE_URL}/health` and `${SERVICE_URL}/api/cloud-status`.
-6. **Gemini Enterprise Assistant Registration**: Automatically registers the Cloud Run webhook endpoint (`${SERVICE_URL}/api/agent/replenish-query`) as an External Agent (`inventory-replenishment-twin`) under `assistants/default_assistant/agents` in Discovery Engine v1alpha.
+6. **Gemini Enterprise Assistant Registration**: Automatically registers the Cloud Run webhook endpoint (`${SERVICE_URL}/api/agent/replenish-query` and multi-domain `${SERVICE_URL}/api/agent/query`) as an External Agent under `assistants/default_assistant/agents` in Discovery Engine v1alpha.
 7. **CI/CD Automation**: Fully declarative build via [`cloudbuild.yaml`](../cloudbuild.yaml) and GitHub Actions workflow via [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml).
 
-- **Endpoints Exposed**:
-  - `GET /` — Interactive executive dashboard (Retina Canvas 2D, What-If simulation, AST code diffs).
-  - `GET /health` — Service health and ADC credential status.
-  - `GET /api/cloud-status` — Discovery Engine connection and experiment metadata.
-  - `POST /api/agent/replenish-query` — Gemini Enterprise agent webhook with Markdown grounding cards and dynamic parameter stress tests.
+#### HTTP API & Webhook Reference (`server.py`)
+
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/` | `GET` | Interactive executive dashboard (`dashboard/index.html` with Safe DOM, Retina Canvas 2D, 2D Route Topology Map, What-If Sandbox, and AST code diffs). |
+| `/health` | `GET` | Service health probe and ADC credential status (`secrets_leaked: false`). |
+| `/api/cloud-status` | `GET` | Discovery Engine connection metadata and multi-use-case experiment summaries. |
+| `/api/data` | `GET` | Master multi-domain trajectory bundle (`dashboard/data.json`). |
+| `/api/trajectories/{use_case_id}` | `GET` | 31-generation trajectory dataset for `inventory_replenishment` or `fleet_routing`. |
+| `/api/simulate` | `POST` | **Live Digital Twin Simulation**: Executes `InventoryDigitalTwin` or `FleetRoutingDigitalTwin` comparing Baseline vs. Champion under custom stress parameters. |
+| `/api/agent/query` | `GET`, `POST` | **Multi-Domain Gemini Enterprise Webhook**: Returns StreamAssist Markdown grounding cards, KPI metrics, and optional live `what_if_stress_test` simulations for `inventory_replenishment` (`inventory-replenishment-twin`) or `fleet_routing` (`fleet-routing-twin`). |
+| `/api/agent/replenish-query` | `GET`, `POST` | Backward-compatible Gemini Enterprise webhook defaulting to `inventory_replenishment`. |
+| `/api/live/state` | `GET` | Current real-time telemetry broker state snapshot (`IDLE` or active run metrics). |
+| `/api/live/candidates` | `POST` | Ingests a newly evaluated candidate event and broadcasts it to all SSE subscribers. |
+| `/api/stream/events` | `GET` | Server-Sent Events (`text/event-stream`) feed for real-time dashboard updates. |
+
+#### Example 1: Live Digital Twin Stress Simulation (`POST /api/simulate`)
+```bash
+# Simulate Perishable Inventory Replenishment under a 3-day lead-time delay and +30% promo spike
+curl -s -X POST http://127.0.0.1:8080/api/simulate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "use_case": "inventory_replenishment",
+    "archetype_index": 0,
+    "lead_time_delay": 3.0,
+    "promo_spike_pct": 30.0,
+    "spoilage_multiplier": 1.5,
+    "stockout_multiplier": 1.2
+  }' | jq .
+
+# Simulate Dynamic Fleet Routing (VRPTW) under traffic congestion delay and +35% order surge
+curl -s -X POST http://127.0.0.1:8080/api/simulate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "use_case": "fleet_routing",
+    "archetype_index": 0,
+    "lead_time_delay": 3.0,
+    "promo_spike_pct": 35.0,
+    "spoilage_multiplier": 1.4,
+    "stockout_multiplier": 1.4
+  }' | jq .
+```
+
+#### Example 2: Multi-Domain Gemini Enterprise Agent Query (`POST /api/agent/query`)
+```bash
+# Query the Fleet Routing Digital Twin Agent with a live What-If stress test
+curl -s -X POST http://127.0.0.1:8080/api/agent/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "use_case": "fleet_routing",
+    "query": "what-if",
+    "archetype_index": 1,
+    "lead_time_delay": 2.0,
+    "promo_spike_pct": 25.0
+  }' | jq .
+```
 
 ---
 
@@ -221,7 +290,7 @@ make deploy-dry-run
 All contributions must adhere to the quality standards defined in `CODE_STANDARDS.md`:
 
 ```bash
-# Run full test suite (29 tests)
+# Run full test suite across SDK, server, dashboard, and domain digital twins
 uv run --frozen pytest -v
 
 # Run ruff linter
@@ -369,11 +438,20 @@ alpha-primer/
 │   │   └── base.py                    # EvaluationTier, TierResult, EvaluatorProtocol, BaseEvaluator
 │   ├── models.py                      # Type-safe Pydantic schemas (scores, insights, configs)
 │   ├── workers.py                     # True process/subprocess sandboxed worker pool
-│   └── dashboard/                     # Trajectory aggregation & dashboard compiler
-├── dashboard/                         # Web dashboard assets
-│   ├── index.html                     # Safe DOM, Retina Canvas 2D, LCS diff engine
-│   └── data.json                      # Precompiled 31-generation trajectory records
-├── server.py                          # Zero-dependency HTTP server & agent webhook
+│   └── dashboard/                     # Trajectory aggregation, SSE broker & dashboard compiler
+│       ├── trajectory_generator.py    # 31-generation Inventory Replenishment trajectory builder
+│       ├── fleet_routing_trajectory_generator.py # 31-gen Fleet Routing & 2D spatial topology builder
+│       ├── build_dashboard.py         # Safe DOM HTML/CSS/JS compiler
+│       ├── telemetry_broker.py        # Thread-safe Server-Sent Events pub/sub broker
+│       └── templates/                 # Modular Safe DOM UI templates (styles.css, body.html, app.js)
+├── dashboard/                         # Compiled web dashboard bundle
+│   ├── index.html                     # Safe DOM, Retina Canvas 2D, 2D Route Topology Map, LCS diff engine
+│   └── data.json                      # Precompiled 31-generation master trajectory records
+├── records/                           # Domain trajectory & spatial topology datasets
+│   ├── master_trajectories.json       # Unified multi-use-case trajectory bundle
+│   ├── inventory_replenishment_trajectory.json # Perishable inventory 31-gen records
+│   └── fleet_routing_trajectory.json  # Fleet routing 31-gen records & 50-stop spatial topology
+├── server.py                          # Production HTTP server, live /api/simulate & Gemini webhooks
 ├── cloudbuild.yaml                    # Declarative Google Cloud Build & Cloud Run pipeline
 ├── Dockerfile                         # Non-root hardened container (uv frozen dependencies)
 ├── .github/workflows/
@@ -395,7 +473,8 @@ alpha-primer/
 
 - [**Candidate Execution Sandboxing**](notes/candidate_sandboxing.md): Process isolation architecture, OS-level `RLIMIT_AS` memory capping, and SIGKILL termination escalation.
 - [**Abstract Evaluator Protocol**](notes/abstract_evaluator_protocol.md): Multi-tier evaluation design, short-circuiting architecture, lifecycle hooks, and authoring guide.
-- [**Dataset Specification**](../examples/inventory_replenishment/DATASET.md): Full breakdown of SKU distributions, Poisson demand, promo lifts, and cost parameters.
+- [**Inventory Replenishment Dataset Specification**](../examples/inventory_replenishment/DATASET.md): Full breakdown of SKU distributions, Poisson demand, promo lifts, and cost parameters.
+- [**Dynamic Fleet Routing (VRPTW) Guide**](../examples/fleet_routing/README.md): Problem formulation, 3-tier `VehicleRoutingEvaluator` scoring function, and execution walkthrough.
 - [**Architecture Diagrams**](architecture/README.md): Reference diagrams for the hybrid evolutionary architecture, Cloud Run integration, and digital twin loop.
 - [**AlphaEvolve REST Wire Specification**](notes/alphaevolve_api_wire_spec.md): Complete HTTP wire schemas for Discovery Engine v1alpha.
 - [**Cloud Run Hosting & Agent Grounding**](notes/google_cloud_run_hosting.md): Deployment architecture, IAM roles, and Gemini Enterprise agent webhook registration.
