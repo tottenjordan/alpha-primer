@@ -58,7 +58,7 @@ git clone https://github.com/tottenjordan/alpha-primer.git
 cd alpha-primer
 
 # Synchronize all dependency groups using uv
-uv sync --all-groups
+uv sync --frozen --all-groups
 ```
 
 ### Step 3: Configure Environment
@@ -72,8 +72,9 @@ Key environment variables:
 | :--- | :--- | :--- |
 | `PROJECT_ID` | Google Cloud Project ID | `hybrid-vertex` |
 | `LOCATION` | Cloud Engine location | `global` |
-| `COLLECTION_ID` | Discovery Engine collection | `default_collection` |
+| `COLLECTION` | Discovery Engine collection | `default_collection` |
 | `ENGINE_ID` | Discovery Engine app ID | `alpha-evolve-experiment-engine` |
+| `ASSISTANT_ID` | Discovery Engine assistant ID | `default_assistant` |
 | `MOCK_ALPHAEVOLVE` | Enable offline mock client | `false` (or set `true` for offline) |
 
 ### Step 4: Google Cloud Authentication (For Cloud Modes)
@@ -91,10 +92,10 @@ Run the full evolutionary loop locally without sending any API requests to Googl
 
 ```bash
 # Use Case 1: Perishable Inventory Replenishment Digital Twin
-uv run python examples/inventory_replenishment/run_evolution.py --dry-run --max-programs 5
+uv run --frozen python examples/inventory_replenishment/run_evolution.py --dry-run --max-programs 5
 
 # Use Case 2: Dynamic Fleet Routing & Dispatch Digital Twin (VRPTW)
-uv run python examples/fleet_routing/run_evolution.py --dry-run --max-programs 5
+uv run --frozen python examples/fleet_routing/run_evolution.py --dry-run --max-programs 5
 ```
 
 - **When to use**: Continuous Integration (CI), local code development, debugging evaluators, and rapid syntax verification.
@@ -107,10 +108,10 @@ Execute live evolutionary search against Google Cloud Discovery Engine's AlphaEv
 
 ```bash
 # Live Cloud Evolution: Perishable Inventory Replenishment
-uv run python examples/inventory_replenishment/run_evolution.py --max-programs 25 --workers 4
+uv run --frozen python examples/inventory_replenishment/run_evolution.py --max-programs 25 --workers 4
 
 # Live Cloud Evolution: Dynamic Fleet Routing (VRPTW)
-uv run python examples/fleet_routing/run_evolution.py --max-programs 25 --workers 4
+uv run --frozen python examples/fleet_routing/run_evolution.py --max-programs 25 --workers 4
 ```
 
 - **Execution Flow**:
@@ -127,34 +128,34 @@ uv run python examples/fleet_routing/run_evolution.py --max-programs 25 --worker
 Serve the interactive executive dashboard locally using the built-in web server:
 
 ```bash
-uv run python server.py
+uv run --frozen python server.py
 ```
 Open **[http://127.0.0.1:8080](http://127.0.0.1:8080)** in your browser.
 
 #### Dashboard Capabilities
 1. **Digital Twin Replay & Spatial Visualization (Tab 1)**:
-   - Scrub through 31 generations of evolution (`Gen 0` to `Gen 30`) with `1x`/`2x` playback speed controls and keyboard navigation (`←` / `→`).
+   - Scrub through 31 generations of evolution (`Gen 0` to `Gen 30`) with `1x`/`2x` playback speed controls and keyboard navigation (`Space` to toggle play/pause, `←` / `→` to scrub).
    - **Primary Domain Canvas (Canvas 1)**:
      - *In Retail & Perishable Inventory mode*: Renders the **90-Day Digital Twin Inventory Trajectory & Spoilage Stack** across Warmup (`Days 0..29`), Eval (`Days 30..65`), and Holdout (`Days 66..89`) phases.
      - *In Dynamic Fleet Routing (VRPTW) mode*: Provides an interactive mode toggle (`#canvas1-mode-toggles`) between:
-       - **2D Route Topology Map (`topology` mode)**: Dual-viewport Retina Canvas 2D spatial visualizer over a $100 \times 100\text{ km}$ urban grid with a central depot at $(50, 50)$ and 50 customer delivery stops across 4 quadrant clusters (30 static Wave 0 orders + 20 dynamic orders arriving mid-shift in Waves 1–4). Compares **GEN 0: GREEDY BASELINE** (crisscrossing trajectories, high tardiness) on the left against the selected generation on the right (**GEN 7: SLACK URGENCY**, **GEN 16: TRAFFIC + 2-OPT**, **GEN 30: REGRET-2 + 2-OPT** with **0 intra-route crossings**, `-28.5%` cost reduction, and `97.2%` on-time SLA). Includes a center **DELTA HUD** card summarizing distance, crossing, and tardiness deltas, interactive filter pills (`All Waves`, `Wave 0 (Static)`, `Waves 1–4 (Dynamic)`, `SLA Breaches`, and vehicles `V0`–`V4`), and customer stop hover tooltips showing exact arrival times, time windows, and vehicle assignments.
-       - **90-Step Shift Trajectory (`trajectory` mode)**: Time-series operational shift profile tracking active route load, in-transit stops, fulfilled deliveries, and tardiness hours.
+       - **2D Route Topology Map (`topology` mode)**: Dual-viewport Retina Canvas 2D spatial visualizer over a $100 \times 100\text{ km}$ urban grid with a central depot at $(50, 50)$ and 50 customer delivery stops across 4 quadrant clusters (30 static Wave 0 orders + 20 dynamic orders arriving mid-shift in Waves 1–4). Compares **GEN 0: GREEDY BASELINE** (crisscrossing trajectories, 19 intra-route crossings, 20 late stops) on the left against the selected generation on the right (**GEN 7: SLACK URGENCY**, **GEN 16: TRAFFIC + 2-OPT**, **GEN 30: REGRET-2 + 2-OPT** with **0 intra-route crossings**, `-28.5%` validation cost reduction, and `97.2%` on-time SLA). Includes a center **DELTA HUD** card summarizing `Crossings` (`19 → 0`), `Late Stops` (`20 → 7`), `On-Time`, `Distance`, and `PEAK WAVE LOAD` vehicle utilization bars (`V0`–`V4`), interactive filter pills (`All Waves`, `Wave 0 (Static)`, `Waves 1–4 (Dynamic)`, `SLA Breaches`, and vehicles `V0`–`V4`), and customer stop hover tooltips showing vehicle assignments, stop sequences, time windows, and late/on-time status.
+       - **90-Step Shift Trajectory (`trajectory` mode)**: Time-series operational shift profile (`Steps 0..29 Morning Rush | 30..65 Midday | 66..89 Evening Wave`) tracking active route load, in-transit stops, and late events.
    - **Secondary Convergence Canvas (Canvas 2)**:
-     - *Mode A (Pareto Frontier)*: 2D plot of Service Fill Rate / On-Time Delivery SLA vs. Cost Reduction with spoilage / tardiness bubble gradients and the non-dominated frontier envelope.
-     - *Mode B (Cost Waterfall)*: Stacked 31-generation breakdown showing reductions across Spoilage (`-$11.9k`), Stockout Penalties (`-$9.6k`), Holding (`-$1.2k`), and Ordering (`-$395`) for Inventory, or Distance (`-$631`), Tardiness Penalties (`-$432`), Unserved Penalties (`-$105`), and Fixed Fleet Dispatch for Fleet Routing.
+     - *Mode A (Pareto Frontier)*: 2D plot of Service Fill Rate / On-Time Delivery SLA vs. Cost Reduction with spoilage / late-penalty bubble gradients and the non-dominated frontier envelope.
+     - *Mode B (Cost Waterfall)*: Stacked 31-generation breakdown showing reductions across Spoilage (`-$11.9k`), Stockout Penalties (`-$9.6k`), Holding (`-$1.2k`), and Ordering (`-$395`) for Inventory (`$68.4k` &rarr; `$45.2k`), or Fuel & Distance (`-$561`), SLA Tardiness Penalties (`-$362`), Overtime & Unserved Avoidance (`-$140`), and Fleet Dispatch Consolidation (`-$105`) for Fleet Routing (`$4,099` &rarr; `$2,931`).
    - **Interactive Milestone Ribbon**: Click any milestone node to jump directly to key breakthrough generations (`Gen 0`, `Gen 8`, `Gen 17`, `Gen 30` for Inventory; `Gen 0`, `Gen 7`, `Gen 16`, `Gen 30` for Fleet Routing).
 2. **Interactive What-If Sandbox with Live `POST /api/simulate` Execution (Tab 2)**:
    - Run real-time dual-policy stress simulations comparing the Baseline policy against the compiled AlphaEvolve Champion heuristic side-by-side.
    - Adjusting any slider or archetype dispatches a debounced `POST /api/simulate` request to `server.py` (with sequence-ID race-condition protection and automatic `<2ms` client-side analytical fallback when offline), executing the real `InventoryDigitalTwin` or `FleetRoutingDigitalTwin` in Python.
    - **Domain-Adaptive Stress Parameters**:
-     - *Archetype Selector*: Switch between SKU categories (`Ultra-Perishables`, `Chilled Dairy & Fresh Meats`, `Ambient Grocery`) or Fleet route categories (`Tight-Window Urban Stops (1-hr SLA)`, `Commercial Metro Deliveries (2-hr SLA)`, `Suburban Perimeter Bulk Routes (4-hr SLA)`).
-     - *Disruption Sliders*: Adjust Supplier Lead Time Delay / Traffic Congestion Delay (`+0` to `+5`), Promotional Demand / Order Surge (`+0%` to `+150%`), Spoilage / Tardiness Cost Multiplier (`0.5x` to `3.0x`), and Stockout / Unserved Penalty Multiplier (`0.5x` to `3.0x`).
+     - *Archetype Selector*: Switch between SKU categories (`Ultra-Perishables (Berries / Pre-cut Salads - 3 Days)`, `Chilled Dairy & Fresh Meats (7 Days)`, `Ambient Grocery & Packaged Goods (21 Days)`) or Fleet route categories (`Tight-Window Urban Stops (1-hr SLA)`, `Commercial Metro Deliveries (2-hr SLA)`, `Suburban Perimeter Bulk Routes (4-hr SLA)`).
+     - *Disruption Sliders*: Adjust Supplier Lead Time Delay (`+0` to `+5 days`) / Urban Traffic Congestion Delay (`+0` to `+60 mins`), Promotional Demand Spike / Dynamic Order Surge (`+0%` to `+150%`), Spoilage Cost / SLA Tardiness Penalty Multiplier (`0.5x` to `3.0x`), and Stockout Penalty / Unserved & Overtime Multiplier (`0.5x` to `3.0x`).
 3. **Benchmark & Domain Mathematics (Tab 3)**:
-   - Inspect Wilcoxon signed-rank significance tests ($p < 0.001$), Monte Carlo seed distributions, and closed-form objective equations for both perishable FIFO cohort aging and time-windowed vehicle routing (`VRPTW`).
+   - Dynamically renders the domain-specific **Objective Function** (`Score = Cost_Reduction_% - 50.0 × max(0, 0.95 - Fill_Rate)^2` for Inventory vs. `Score = Cost_Reduction_% - 60.0 × max(0, 0.95 - OnTime_SLA)^2` for Fleet Routing), total cost decomposition equations (`C_holding + C_spoilage + C_stockout + C_ordering` vs. `C_distance + C_tardiness + C_overtime + C_dispatch`), causal isolation rules (`t <= now`), and 3-phase operational horizons (`Days 0..29 Warmup / Days 30..65 Validation / Days 66..89 Holdout` for Inventory; `Morning Rush 06:00..09:30 / Midday Window 09:30..15:30 / Evening Wave 15:30..18:00` for Fleet Routing).
 4. **Evolved Code Diffs (Tab 4)**:
    - High-visibility AST code diff viewer powered by client-side LCS diffing and zero-dependency Python syntax highlighting.
    - Toggle between **Split** (side-by-side) and **Unified** diffs with line badges and foldable unchanged sections.
-   - Use the **Milestone AST Stepper** to inspect exact code mutations between milestone generations (`Gen 0 ↔ Gen 8`, `Gen 8 ↔ Gen 17`, `Gen 17 ↔ Gen 30`, or `Gen 0 ↔ Gen 7`, `Gen 7 ↔ Gen 16`, `Gen 16 ↔ Gen 30`).
+   - Use the **Milestone AST Stepper** to inspect exact code mutations between milestone generations (`Gen 0 ↔ Gen 8`, `Gen 8 ↔ Gen 17`, `Gen 17 ↔ Gen 30`, `Gen 0 ↔ Gen 30 (Full)` for Inventory; `Gen 0 ↔ Gen 7`, `Gen 7 ↔ Gen 16`, `Gen 16 ↔ Gen 30`, `Gen 0 ↔ Gen 30 (Full)` for Fleet Routing).
 5. **Multi-Use-Case Domain Switcher**:
    - Seamlessly switch domains in the top navigation bar between:
      - 📦 **Retail & Perishable Inventory**: 90-day simulation tracking inventory on hand, in transit, FIFO spoilage waste, and $(s, S)$ vs. AlphaEvolve lookahead policies.
@@ -168,19 +169,19 @@ Stream live candidate acquisitions and evaluation metrics directly into the exec
 
 **Terminal 1 — Launch Dashboard Server**:
 ```bash
-uv run python server.py
+uv run --frozen python server.py
 ```
-Open **[http://127.0.0.1:8080](http://127.0.0.1:8080)**. The status pill in the top-right header connects to `/api/stream/events` and displays `● LIVE STREAMING (SSE)`.
+Open **[http://127.0.0.1:8080](http://127.0.0.1:8080)**. The status pill in the top-right header connects to `/api/stream/events` (`LIVE STREAMING (SSE)`, settling on `ADC VERIFIED (IDLE)` until a run begins).
 
 **Terminal 2 — Run Optimization with Telemetry Streaming**:
 ```bash
 # Dry-run mock evolution streaming to dashboard (Inventory or Fleet Routing)
-uv run python examples/inventory_replenishment/run_evolution.py --dry-run --max-programs 20 --stream-to-dashboard
-uv run python examples/fleet_routing/run_evolution.py --dry-run --max-programs 20 --stream-to-dashboard
+uv run --frozen python examples/inventory_replenishment/run_evolution.py --dry-run --max-programs 20 --stream-to-dashboard
+uv run --frozen python examples/fleet_routing/run_evolution.py --dry-run --max-programs 20 --stream-to-dashboard
 
 # Live Cloud evolution streaming to dashboard
-uv run python examples/inventory_replenishment/run_evolution.py --max-programs 30 --workers 4 --stream-to-dashboard
-uv run python examples/fleet_routing/run_evolution.py --max-programs 30 --workers 4 --stream-to-dashboard
+uv run --frozen python examples/inventory_replenishment/run_evolution.py --max-programs 30 --workers 4 --stream-to-dashboard
+uv run --frozen python examples/fleet_routing/run_evolution.py --max-programs 30 --workers 4 --stream-to-dashboard
 ```
 
 #### Real-Time Visualizer Features
@@ -188,7 +189,7 @@ uv run python examples/fleet_routing/run_evolution.py --max-programs 30 --worker
 - **Dynamic 2D Pareto Frontier & Topology Map**: New candidate bubbles are dynamically plotted on Retina Canvas 2D, non-dominated frontier curves recalculate live, and the Fleet Routing 2D Route Topology Map updates the right-hand viewport header and delta metrics dynamically.
 - **Dynamic Milestone Ribbon**: Whenever a candidate achieves a new best fitness score, a milestone node is appended to the ribbon with instant click-to-scrub navigation.
 - **Live Toast Notifications**: Non-intrusive notifications pop in the bottom-right corner displaying candidate IDs, validation scores, and breakthrough alerts.
-- **Graceful Offline Fallback**: If the server is stopped or running in static mode, the dashboard gracefully transitions to `ARCHIVE DATA (OFFLINE)` mode while preserving all historical interactive playback.
+- **Graceful Offline Fallback**: If the server is stopped or running in static mode, the dashboard gracefully transitions to `ARCHIVE MODE (OFFLINE)` while preserving all historical interactive playback.
 
 ---
 
@@ -286,8 +287,8 @@ curl -s -X POST http://127.0.0.1:8080/api/agent/query \
 
 ---
 
-### Mode E: Developer Quality & Test Workflows
-All contributions must adhere to the quality standards defined in `CODE_STANDARDS.md`:
+### Mode E: Developer Quality, Dashboard Compilation & Test Workflows
+All contributions must adhere to the quality standards defined in [`CODE_STANDARDS.md`](../CODE_STANDARDS.md):
 
 ```bash
 # Run full test suite across SDK, server, dashboard, and domain digital twins
@@ -302,8 +303,13 @@ uv run --frozen ruff format --check .
 # Run static type checking with ty
 uv run --frozen ty check src/
 
-# Run all checks at once
+# Run all quality gates at once
 make check
+
+# Regenerate 31-generation trajectory datasets and recompile dashboard/index.html
+PYTHONPATH=.:src uv run --frozen python -m alpha_evolve.dashboard.trajectory_generator
+PYTHONPATH=.:src uv run --frozen python -m alpha_evolve.dashboard.fleet_routing_trajectory_generator
+PYTHONPATH=.:src uv run --frozen python -m alpha_evolve.dashboard.build_dashboard
 ```
 
 ---
@@ -393,14 +399,19 @@ Configured via `RunSettings.sandbox_mode` in `alpha_evolve.models`:
 ### Configuring Sandboxing in Code
 
 ```python
-from alpha_evolve.models import EvolutionConfig, RunSettings
+from alpha_evolve.models import ExperimentConfig, RunSettings
 
-config = EvolutionConfig(
+config = ExperimentConfig(
+    project_id="hybrid-vertex",
+    engine_id="alpha-evolve-experiment-engine",
+    experiment_name="Sandboxed Optimization",
+    user_instructions="Optimize the target policy inside # EVOLVE-BLOCK.",
+    seed_code="# EVOLVE-BLOCK-START\ndef solve(x):\n    return x\n# EVOLVE-BLOCK-END\n",
     run_settings=RunSettings(
         max_evaluation_time_s=30.0,  # Max seconds before SIGTERM/SIGKILL escalation
         max_memory_mb=2048,  # Hard virtual memory limit (RLIMIT_AS) in MB
         sandbox_mode="process",  # "process" | "subprocess" | "thread"
-    )
+    ),
 )
 ```
 
@@ -419,6 +430,7 @@ alpha-primer/
 │   ├── tests/                         # Unit tests for simulator and evaluator
 │   ├── DATASET.md                     # Complete dataset specification (50 SKUs, 90 days)
 │   ├── README.md                      # Use case summary and problem formulation
+│   ├── instructions.md                # Domain prompt context for Gemini Enterprise
 │   └── run_evolution.py               # CLI entrypoint for local or cloud evolution
 ├── examples/fleet_routing/            # Dynamic Fleet Routing & Dispatch Digital Twin
 │   ├── src/
@@ -433,12 +445,15 @@ alpha-primer/
 ├── src/alpha_evolve/                  # Core client library & orchestration runtime
 │   ├── client.py                      # Discovery Engine v1alpha REST client with ADC
 │   ├── controller.py                  # Evolutionary search loop manager
+│   ├── experiment.py                  # High-level AlphaEvolveExperiment orchestrator
 │   ├── evaluators/                    # Abstract Evaluator Protocol & BaseEvaluator ABC
 │   │   ├── __init__.py                # Exported protocol schemas and base classes
 │   │   └── base.py                    # EvaluationTier, TierResult, EvaluatorProtocol, BaseEvaluator
 │   ├── models.py                      # Type-safe Pydantic schemas (scores, insights, configs)
+│   ├── utils.py                       # EVOLVE-BLOCK extraction, compilation & artifact export
 │   ├── workers.py                     # True process/subprocess sandboxed worker pool
 │   └── dashboard/                     # Trajectory aggregation, SSE broker & dashboard compiler
+│       ├── trajectory_utils.py        # Shared S-curve interpolation & master bundle utilities
 │       ├── trajectory_generator.py    # 31-generation Inventory Replenishment trajectory builder
 │       ├── fleet_routing_trajectory_generator.py # 31-gen Fleet Routing & 2D spatial topology builder
 │       ├── build_dashboard.py         # Safe DOM HTML/CSS/JS compiler
