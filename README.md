@@ -19,13 +19,19 @@ AlphaEvolve is Google's agentic evolutionary coding capability powered by Gemini
 
 ```
 ├── examples/                   # Standalone, end-to-end enterprise use cases
-│   └── inventory_replenishment/# Multi-Echelon & Perishable Digital Twin
+│   ├── inventory_replenishment/# Multi-Echelon & Perishable Inventory Digital Twin
+│   └── fleet_routing/          # Dynamic Fleet Routing & Dispatch Digital Twin (VRPTW)
 ├── src/alpha_evolve/           # Shared, type-safe AlphaEvolve client & runtime
 │   ├── client.py               # Discovery Engine V1alpha REST API client
 │   ├── controller.py           # Evolutionary loop manager
+│   ├── evaluators/             # 3-tier BaseEvaluator & EvaluatorProtocol
 │   ├── models.py               # Pydantic data schemas (Experiment, Program, Scores)
-│   └── workers.py              # Isolated evaluation worker pool
-├── docs/                       # Architectural specs and session notes
+│   ├── workers.py              # Isolated evaluation worker pool (process/subprocess/thread)
+│   └── dashboard/              # Trajectory generators, SSE broker & Safe DOM compiler
+├── dashboard/                  # Compiled static dashboard bundle (index.html, data.json)
+├── records/                    # Precompiled 31-generation multi-domain trajectory datasets
+├── server.py                   # Production HTTP server, /api/simulate & Gemini webhooks
+├── docs/                       # Architectural specs, user guide, and session notes
 ├── pyproject.toml              # Modern uv project definition (ruff, ty, pytest)
 └── Makefile                    # Standard developer workflow commands
 ```
@@ -70,15 +76,17 @@ To run offline in **Dry-Run Mode** without consuming Google Cloud quotas, set `M
 Navigate to any example directory or run directly from root:
 
 ```bash
-# Run the Inventory Replenishment Digital Twin in dry-run mode (offline)
+# 1. Perishable Inventory Replenishment Digital Twin (offline dry-run or live API)
 uv run python examples/inventory_replenishment/run_evolution.py --dry-run --max-programs 5
-
-# Run with live Gemini Enterprise API
 uv run python examples/inventory_replenishment/run_evolution.py --max-programs 20
+
+# 2. Dynamic Fleet Routing & Dispatch Digital Twin (VRPTW) (offline dry-run or live API)
+uv run python examples/fleet_routing/run_evolution.py --dry-run --max-programs 5
+uv run python examples/fleet_routing/run_evolution.py --max-programs 20
 ```
 
 #### What Happens When You Run This Command?
-- **UI & Observability**: Execution runs directly in your terminal with live evaluation metrics streamed to the console (no web browser or UI window is automatically opened). You can optionally view the assistant and session history in the [Google Cloud Console](https://console.cloud.google.com/gen-app-builder/engines).
+- **UI & Observability**: Execution runs directly in your terminal with live evaluation metrics streamed to the console (or pass `--stream-to-dashboard` to broadcast real-time Server-Sent Events to the web dashboard). You can optionally view the assistant and session history in the [Google Cloud Console](https://console.cloud.google.com/gen-app-builder/engines).
 - **Cloud Resources Created**: Uses **serverless API resources** within your existing Discovery Engine. No VMs, GKE clusters, or persistent disks are created. Specifically, it dynamically provisions:
   1. An episodic **Session** under your engine.
   2. An **AlphaEvolve Experiment** entity defining the optimization goal and prompts.
@@ -86,7 +94,7 @@ uv run python examples/inventory_replenishment/run_evolution.py --max-programs 2
 - **Execution Split**:
   - *LLM reasoning & code mutation* occurs serverlessly in Gemini Enterprise.
   - *Evaluation & digital twin simulation* runs **locally on your machine** inside an isolated worker pool—your proprietary evaluation data and simulation logic never leave your environment.
-- **Output Artifacts**: When complete, the winning code and holdout benchmark results are saved locally to `artifacts/inventory_replenishment/` (`best_evolved_program.py` and `best_evaluation_summary.json`).
+- **Output Artifacts**: When complete, the winning code and holdout benchmark results are saved locally to `artifacts/inventory_replenishment/` or `artifacts/fleet_routing/` (`best_evolved_program.py` and `best_evaluation_summary.json`).
 See [docs/notes/cloud_resources_and_execution.md](docs/notes/cloud_resources_and_execution.md) for full architectural details.
 
 ### 5. Launching & Hosting the Interactive Executive Dashboard
@@ -115,19 +123,22 @@ See [docs/notes/google_cloud_run_hosting.md](docs/notes/google_cloud_run_hosting
 
 ![AlphaEvolve Supply Chain & Digital Twin Intelligence Suite](dashboard/assets/inventory_replenishment_dashboard.gif)
 
-### Interactive Dashboard Capabilities
+### Interactive Dashboard & Live API Capabilities
 
-The repository includes a decoupled web dashboard (`dashboard/index.html` + `server.py`) for visually exploring the multi-echelon inventory replenishment digital twin and verifying AlphaEvolve's optimization trajectory:
+The repository includes a decoupled web dashboard (`dashboard/index.html` + `server.py`) for visually exploring multi-domain supply chain and logistics digital twins and verifying AlphaEvolve's optimization trajectories:
 
-1. **Digital Twin & 31-Generation Evolution Scrubber**:
-   - Scrub through Generations `0` to `30` to inspect day-by-day inventory cohorts, arriving pipeline orders, demand fulfillment, and spoilage across a 90-day simulation.
-   - Highlights key evolutionary breakthroughs: **Gen 0** Static $(s, S)$ seed baseline ($68.4k cost, 14.6% spoilage) &rarr; **Gen 8** Censored Demand Imputation &rarr; **Gen 17** Dynamic FIFO Spoilage Deduction &rarr; **Gen 30** Global Champion ($45.2k cost, **-33.9% reduction**, 93.49% fill rate, 8.45% spoilage).
-2. **Interactive What-If Sandbox**:
-   - Test model robustness under real-time demand shocks, supplier lead-time delays (+1 to +5 days), and promotional demand spikes (+10% to +80%) across SKU archetypes (Ultra-Perishables, Chilled Dairy, Ambient Grocery).
-3. **Benchmark & Perishability Mathematics**:
-   - View statistical significance tests ($p < 0.001$, paired Wilcoxon signed-rank), Monte Carlo seed distributions, and closed-form mathematical equations for FIFO cohort aging, critical fractiles, and censored demand estimation.
-4. **Side-by-Side Evolved Python Code Diffs**:
-   - Review the exact `# EVOLVE-BLOCK` mutations discovered by Gemini 3.5 Flash against the static baseline seed, ready for 1-click clipboard export into production pipelines.
+1. **Multi-Use-Case Domain Switcher & 31-Generation Evolution Scrubber**:
+   - Seamlessly switch in the top header between **📦 Retail & Perishable Inventory** (50 SKUs, 90-day causal horizon) and **🚚 Dynamic Fleet Routing (VRPTW)** (50 customer stops across 4 urban quadrant clusters, 5 vehicles, 12-hour shift with dynamic order waves and rush-hour congestion).
+   - **Inventory Replenishment Trajectory**: Scrub through Generations `0` to `30` from **Gen 0** Static $(s, S)$ baseline ($68.4k cost, 14.6% spoilage) &rarr; **Gen 8** Censored Demand Imputation &rarr; **Gen 17** Dynamic FIFO Spoilage Deduction &rarr; **Gen 30** Global Champion ($45.2k cost, **-33.9% reduction**, 93.49% fill rate, 8.45% spoilage).
+   - **Fleet Routing 2D Route Topology Map & Shift Trajectory**: Toggle Canvas 1 between the **2D Route Topology Map** and the **90-Step Shift Trajectory**. The 2D Route Topology Map renders a dual-viewport Retina Canvas 2D comparing **Gen 0: Greedy Baseline** (crisscrossing tours, high tardiness) side-by-side against **Gen 7** (Slack Urgency Ranking), **Gen 16** (Traffic Congestion + 2-Opt Uncrossing), and **Gen 30: Regret-2 + 2-Opt Champion** ($2,931 cost, **-28.5% reduction**, 97.2% on-time SLA, 1,118.0 km distance, **0 intra-route crossings**), complete with a live center `DELTA HUD`, wave/vehicle filters (`All Waves`, `Wave 0 (Static)`, `Waves 1–4 (Dynamic)`, `SLA Breaches`, `V0`–`V4`), and customer stop hover tooltips.
+2. **Interactive What-If Sandbox (`POST /api/simulate`)**:
+   - Connected directly to the live backend simulation endpoint (`POST /api/simulate`) with debounced request race-condition guards and automatic `<2ms` in-browser fallback when offline.
+   - Executes real `InventoryDigitalTwin` and `FleetRoutingDigitalTwin` rollouts comparing Baseline vs. Champion policies under supplier lead-time / traffic congestion delays (`+0` to `+5`), promotional demand / order surges (`+0%` to `+150%`), and spoilage/tardiness & stockout/unserved penalty multipliers (`0.5x` to `3.0x`) across domain archetypes.
+3. **Multi-Domain Gemini Enterprise Grounding Webhook (`/api/agent/query`)**:
+   - Exposes `GET/POST /api/agent/query` (plus backward-compatible `/api/agent/replenish-query`) for Gemini Enterprise StreamAssist agents (`inventory-replenishment-twin` and `fleet-routing-twin`).
+   - Returns structured executive Markdown grounding cards, champion metrics, algorithmic innovations, and live `what_if_stress_test` digital twin simulations when disruption parameters are supplied.
+4. **Benchmark Mathematics & High-Visibility Evolved Code Diffs**:
+   - View paired Wilcoxon signed-rank significance tests ($p < 0.001$), 2D Pareto Frontier & Cost Waterfall charts, and zero-dependency AST/LCS **Split** and **Unified** Python code diffs across milestone generations.
 
 ---
 
@@ -142,20 +153,18 @@ For complete high-resolution architecture diagrams, PaperBanana statistical traj
 
 ---
 
-
-
-
 ## Featured Use Cases
 
 | Example | Vertical | Method | Evaluation Paradigm | Primary Metric |
 | :--- | :--- | :--- | :--- | :--- |
-| [Inventory Replenishment](examples/inventory_replenishment/README.md) | Grocery, Retail, Supply Chain | Dynamic $(s, S)$ FIFO Aging | **Simulation** (Digital Twin) | Total Supply Chain Cost Reduction & Spoilage Rate |
+| [Inventory Replenishment](examples/inventory_replenishment/README.md) | Grocery, Retail, Supply Chain | Dynamic $(s, S)$ FIFO Cohort Aging & Critical Fractile | **Simulation** (`InventoryDigitalTwin`) | Total Supply Chain Cost Reduction (`-33.9%`) & Spoilage Rate (`8.45%`) |
+| [Dynamic Fleet Routing (VRPTW)](examples/fleet_routing/README.md) | Logistics, Last-Mile Delivery, Transportation | Regret-2 Insertion + Traffic-Aware 2-Opt / Or-Opt | **Simulation** (`FleetRoutingDigitalTwin`) | Total Fleet Shift Cost Reduction (`-28.5%`) & On-Time SLA (`97.2%`) |
 
 ---
 
 ## Development & Testing
 
-We enforce strict quality and modern Python standards (see [CODE_STANDARDS.md](file:///usr/local/google/home/jordantotten/alpha/alpha-primer/CODE_STANDARDS.md)):
+We enforce strict quality and modern Python standards (see [CODE_STANDARDS.md](CODE_STANDARDS.md)):
 
 ```bash
 make lint       # uv run ruff check .
