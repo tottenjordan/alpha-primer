@@ -91,7 +91,7 @@ def normalize_use_case_name(raw_name: str) -> str:
     """Normalize and validate a use-case identifier slug.
 
     Converts hyphens and spaces to underscores and verifies the resulting name
-    is a safe, valid Python identifier.
+    is a safe, valid Python identifier that does not shadow stdlib modules.
     """
     cleaned = raw_name.strip()
     if not cleaned:
@@ -105,6 +105,10 @@ def normalize_use_case_name(raw_name: str) -> str:
         raise ValueError(
             f"Invalid use-case name '{raw_name}': must be a valid Python identifier "
             "(letters, digits, underscores, starting with a letter)."
+        )
+    if slug in sys.stdlib_module_names or slug in {"alpha_evolve", "examples", "tests"}:
+        raise ValueError(
+            f"Invalid use-case name '{raw_name}': '{slug}' is a reserved Python or package name."
         )
     return slug
 
@@ -124,9 +128,13 @@ def _inspect_use_case_dir(use_case_dir: Path) -> UseCaseInfo | None:
     if not use_case_dir.is_dir():
         return None
 
-    slug = use_case_dir.name
-    program_path = use_case_dir / "src" / "program.py"
-    evaluate_path = use_case_dir / "src" / "evaluate.py"
+    resolved_dir = use_case_dir.resolve()
+    slug = resolved_dir.name
+    if not slug.isidentifier() or keyword.iskeyword(slug) or slug.startswith("_"):
+        return None
+
+    program_path = resolved_dir / "src" / "program.py"
+    evaluate_path = resolved_dir / "src" / "evaluate.py"
     if not program_path.is_file() or not evaluate_path.is_file():
         return None
 
@@ -136,7 +144,7 @@ def _inspect_use_case_dir(use_case_dir: Path) -> UseCaseInfo | None:
             name=slug,
             title=meta["title"],
             description=meta["description"],
-            path=use_case_dir.resolve(),
+            path=resolved_dir,
             target_function=meta["target_function"],
             primary_metric=meta["primary_metric"],
             evaluator_class=meta["evaluator_class"],
@@ -156,20 +164,24 @@ def _inspect_use_case_dir(use_case_dir: Path) -> UseCaseInfo | None:
     evaluator_class = class_match.group(1) if class_match else f"{_to_pascal_case(slug)}Evaluator"
 
     title = f"{_to_title_case(slug)} Digital Twin"
-    instructions_path = use_case_dir / "instructions.md"
+    instructions_path = resolved_dir / "instructions.md"
     description = f"Custom AlphaEvolve digital twin optimization domain ({slug})."
     if instructions_path.is_file():
         for line in instructions_path.read_text(encoding="utf-8").splitlines():
             stripped = line.strip()
             if stripped.startswith("# "):
-                title = stripped.lstrip("# ").strip()
+                heading = stripped.removeprefix("# ").strip()
+                if heading.lower().startswith("domain context:"):
+                    heading = heading.split(":", 1)[1].strip()
+                if heading:
+                    title = heading
                 break
 
     return UseCaseInfo(
         name=slug,
         title=title,
         description=description,
-        path=use_case_dir.resolve(),
+        path=resolved_dir,
         target_function=target_fn,
         primary_metric=primary_metric,
         evaluator_class=evaluator_class,
@@ -210,6 +222,14 @@ def resolve_use_case(use_case: str, examples_dir: str | Path | None = None) -> U
         info = _inspect_use_case_dir(candidate_path)
         if info is not None:
             return info
+        resolved_candidate = candidate_path.resolve()
+        if (resolved_candidate / "src" / "program.py").is_file() and (
+            resolved_candidate / "src" / "evaluate.py"
+        ).is_file():
+            raise ValueError(
+                f"Use-case directory name '{resolved_candidate.name}' must be a valid Python "
+                "identifier (letters, digits, underscores, starting with a letter)."
+            )
 
     base_dir = Path(examples_dir) if examples_dir is not None else DEFAULT_EXAMPLES_DIR
     slug = normalize_use_case_name(raw)
@@ -224,28 +244,33 @@ def resolve_use_case(use_case: str, examples_dir: str | Path | None = None) -> U
 
 
 def _load_use_case_submodule(use_case_dir: Path, module_stem: str) -> ModuleType:
-    """Import `<use_case>.src.<module_stem>` after ensuring its parent directory is on sys.path."""
+    """Import `<package>.src.<module_stem>` after ensuring its search root is at sys.path[0]."""
     resolved_dir = use_case_dir.resolve()
-    parent_str = str(resolved_dir.parent)
-    if parent_str not in sys.path:
-        sys.path.insert(0, parent_str)
+    if resolved_dir.parent == DEFAULT_EXAMPLES_DIR.resolve():
+        search_root = str(REPO_ROOT)
+        package_prefix = f"examples.{resolved_dir.name}"
+    else:
+        search_root = str(resolved_dir.parent)
+        package_prefix = resolved_dir.name
+
+    if search_root in sys.path:
+        sys.path.remove(search_root)
+    sys.path.insert(0, search_root)
 
     current_py_path = os.environ.get("PYTHONPATH", "")
-    py_parts = [p for p in current_py_path.split(os.pathsep) if p]
-    if parent_str not in py_parts:
-        os.environ["PYTHONPATH"] = (
-            f"{parent_str}{os.pathsep}{current_py_path}" if current_py_path else parent_str
-        )
+    py_parts = [p for p in current_py_path.split(os.pathsep) if p and p != search_root]
+    os.environ["PYTHONPATH"] = os.pathsep.join([search_root, *py_parts])
 
-    module_name = f"{resolved_dir.name}.src.{module_stem}"
+    module_name = f"{package_prefix}.src.{module_stem}"
     if module_name in sys.modules:
         cached = sys.modules[module_name]
         cached_file = getattr(cached, "__file__", None)
         expected_file = str(resolved_dir / "src" / f"{module_stem}.py")
         if cached_file and Path(cached_file).resolve() != Path(expected_file).resolve():
             for key in list(sys.modules):
-                if key == resolved_dir.name or key.startswith(f"{resolved_dir.name}."):
+                if key == package_prefix or key.startswith(f"{package_prefix}."):
                     sys.modules.pop(key, None)
+            importlib.invalidate_caches()
 
     return importlib.import_module(module_name)
 
@@ -309,7 +334,7 @@ def run_use_case(
         evaluator=evaluator,
         max_programs=max_programs,
         parallel_workers=workers,
-        dry_run=dry_run,
+        dry_run=True if dry_run else None,
         telemetry_broker=broker,
     )
 
@@ -370,14 +395,17 @@ def scaffold_use_case(
     if output_dir is None:
         use_case_dir = DEFAULT_EXAMPLES_DIR / slug
     else:
-        out_path = Path(output_dir)
+        out_path = Path(output_dir).resolve()
         use_case_dir = out_path if out_path.name == slug else out_path / slug
 
-    if use_case_dir.exists() and any(use_case_dir.iterdir()) and not force:
-        raise FileExistsError(
-            f"Target directory '{use_case_dir}' already exists and is non-empty. "
-            "Pass --force to overwrite."
-        )
+    if use_case_dir.exists():
+        if not use_case_dir.is_dir():
+            raise FileExistsError(f"Target path '{use_case_dir}' exists and is not a directory.")
+        if any(use_case_dir.iterdir()) and not force:
+            raise FileExistsError(
+                f"Target directory '{use_case_dir}' already exists and is non-empty. "
+                "Pass --force to overwrite."
+            )
 
     pascal_name = _to_pascal_case(slug)
     title_name = _to_title_case(slug)
@@ -552,11 +580,15 @@ def {target_function}(state: dict[str, Any], config: dict[str, Any]) -> dict[str
     capacities = [float(x) for x in state.get("capacities", [])]
     backlog = [float(x) for x in state.get("backlog", [0.0] * len(demands))]
 
+    lookback_days = 7
+    z = 1.0
+    buffer_ratio = 0.75 + 0.15 * z + 0.001 * min(lookback_days, 28)
+
     allocations: list[float] = []
     for idx, demand in enumerate(demands):
         cap = capacities[idx] if idx < len(capacities) else demand
         pending = backlog[idx] if idx < len(backlog) else 0.0
-        target = (demand + pending) * 1.05
+        target = (demand + pending) * buffer_ratio
         allocations.append(max(0.0, min(cap, target)))
 
     return {{"allocations": allocations}}
@@ -731,7 +763,7 @@ from .simulator import (
     generate_benchmark_dataset,
 )
 
-_BASELINE_VALIDATION_COST = 35000.0
+_BASELINE_VALIDATION_COST = 44294.46
 
 
 class {evaluator_class}(BaseEvaluator):
@@ -878,7 +910,7 @@ from .simulator import (
     generate_benchmark_dataset,
 )
 
-console = Console()
+console = Console(width=120, height=40)
 
 
 def evaluate_on_locked_holdout(
@@ -938,6 +970,7 @@ def _render_run_evolution(
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -946,6 +979,11 @@ REPO_ROOT = EXAMPLE_DIR.parent.parent
 for candidate_path in (REPO_ROOT, REPO_ROOT / "src", EXAMPLE_DIR.parent):
     if candidate_path.is_dir() and str(candidate_path) not in sys.path:
         sys.path.insert(0, str(candidate_path))
+
+parent_str = str(EXAMPLE_DIR.parent)
+current_py_path = os.environ.get("PYTHONPATH", "")
+py_parts = [p for p in current_py_path.split(os.pathsep) if p and p != parent_str]
+os.environ["PYTHONPATH"] = os.pathsep.join([parent_str, *py_parts])
 
 from alpha_evolve.dashboard.telemetry_broker import get_global_broker
 from alpha_evolve.experiment import AlphaEvolveExperiment
@@ -999,7 +1037,7 @@ def main() -> None:
         evaluator=evaluator,
         max_programs=args.max_programs,
         parallel_workers=args.workers,
-        dry_run=args.dry_run,
+        dry_run=True if args.dry_run else None,
         telemetry_broker=broker,
     )
 
@@ -1124,7 +1162,7 @@ def _cmd_run(args: argparse.Namespace, stderr_console: Console) -> int:
             skip_holdout=args.skip_holdout,
             examples_dir=args.examples_dir,
         )
-    except (ValueError, FileNotFoundError) as exc:
+    except (ValueError, OSError) as exc:
         stderr_console.print(f"[bold red]Error:[/bold red] {exc}")
         return 2
     return 0
@@ -1144,7 +1182,7 @@ def _cmd_init(
             primary_metric=args.primary_metric,
             force=args.force,
         )
-    except (ValueError, FileExistsError) as exc:
+    except (ValueError, OSError) as exc:
         stderr_console.print(f"[bold red]Error:[/bold red] {exc}")
         return 2
 
@@ -1280,8 +1318,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(list(argv) if argv is not None else None)
 
-    stdout_console = Console(width=140)
-    stderr_console = Console(stderr=True, width=140)
+    stdout_console = Console(width=140, height=40)
+    stderr_console = Console(stderr=True, width=140, height=40)
 
     if args.command == "list":
         return _cmd_list(args, stdout_console)
