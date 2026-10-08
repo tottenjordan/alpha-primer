@@ -13,6 +13,8 @@ import json
 import os
 import queue
 import sys
+import threading
+import time
 import urllib.parse
 from pathlib import Path
 from typing import Any
@@ -25,6 +27,9 @@ for _p in (str(ROOT_DIR), str(SRC_DIR)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+from examples.fleet_routing.src.evaluate import (  # noqa: E402
+    _DEFAULT_ROUTING_EVALUATOR,
+)
 from examples.fleet_routing.src.program import (  # noqa: E402
     assign_and_sequence_routes as baseline_routing_policy,
 )
@@ -32,6 +37,9 @@ from examples.fleet_routing.src.simulator import (  # noqa: E402
     FleetConfig,
     FleetRoutingDigitalTwin,
     generate_routing_benchmark_dataset,
+)
+from examples.inventory_replenishment.src.evaluate import (  # noqa: E402
+    _DEFAULT_EVALUATOR as _DEFAULT_INVENTORY_EVALUATOR,
 )
 from examples.inventory_replenishment.src.program import (  # noqa: E402
     compute_replenishment_orders as baseline_inventory_policy,
@@ -42,10 +50,13 @@ from examples.inventory_replenishment.src.simulator import (  # noqa: E402
     generate_benchmark_dataset,
 )
 
+from alpha_evolve.client import MockAlphaEvolveClient  # noqa: E402
+from alpha_evolve.controller import EvolutionController  # noqa: E402
 from alpha_evolve.dashboard.telemetry_broker import (  # noqa: E402
     TelemetryEvent,
     get_global_broker,
 )
+from alpha_evolve.models import ExperimentConfig, RunSettings  # noqa: E402
 from alpha_evolve.utils import compile_candidate_callable  # noqa: E402
 
 DASHBOARD_DIR = ROOT_DIR / "dashboard"
@@ -76,12 +87,18 @@ SECURITY_HEADERS: dict[str, str] = {
 
 
 MAX_REQUEST_BODY_BYTES = 1_048_576  # 1 MB limit for POST payloads
+EXPERIMENT_RATE_LIMIT_SECONDS = 1.0
 
 _TEXT_CACHE: dict[Path, tuple[int, str]] = {}
 _JSON_CACHE: dict[Path, tuple[int, Any]] = {}
 _POLICY_CACHE: dict[str, tuple[int, Any]] = {}
 _INV_BENCHMARK: tuple[SimulationConfig, np.ndarray, np.ndarray] | None = None
 _FLEET_BENCHMARK: FleetConfig | None = None
+_EXPERIMENT_LOCK = threading.Lock()
+_EXPERIMENT_THREAD: threading.Thread | None = None
+_EXPERIMENT_RUNNING: bool = False
+_LAST_EXPERIMENT_START_TS: float = 0.0
+_LAST_BROKER_STARTED_AT: str | None = None
 
 INVENTORY_ARCHETYPES: list[dict[str, Any]] = [
     {
@@ -761,6 +778,199 @@ def build_cloud_status_payload() -> dict[str, Any]:
     }
 
 
+class _DryRunEvolutionClient(MockAlphaEvolveClient):
+    """Dry-run client synthesizing progressive domain mutations for live dashboard streaming."""
+
+    def __init__(self, seed_code: str, use_case: str = "inventory_replenishment") -> None:
+        super().__init__(seed_code=seed_code)
+        self.use_case = use_case
+        self._milestone_blocks: list[str] = []
+        if use_case == "fleet_routing":
+            traj_path = (RECORDS_DIR / ALLOWED_USE_CASES["fleet_routing"]).resolve()
+            if traj_path.exists():
+                try:
+                    traj_data = _read_json_cached(traj_path)
+                    ms = traj_data.get("milestones", {})
+                    for key in ("7", "16", "30"):
+                        blk = ms.get(key, {}).get("evolve_block", "")
+                        if blk:
+                            self._milestone_blocks.append(blk)
+                except Exception:
+                    pass
+
+    def _mutate_seed_code(self, base_code: str, iteration: int) -> str:
+        if self.use_case == "fleet_routing" and self._milestone_blocks:
+            idx = min(max(0, iteration - 1), len(self._milestone_blocks) - 1)
+            target_block = self._milestone_blocks[idx]
+            prefix = base_code.split("# EVOLVE-BLOCK-START", 1)[0]
+            return f"{prefix}# EVOLVE-BLOCK-START\n{target_block}\n# EVOLVE-BLOCK-END\n"
+        return super()._mutate_seed_code(base_code, iteration)
+
+
+def start_live_experiment(payload: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    """Launch a rate-limited background dry-run evolution via EvolutionController.
+
+    Broadcasts `run_started`, `candidate_evaluated`, and `run_completed` events
+    through `LiveTelemetryBroker` (`/api/stream/events`).
+    """
+    global _EXPERIMENT_THREAD, _EXPERIMENT_RUNNING
+    global _LAST_EXPERIMENT_START_TS, _LAST_BROKER_STARTED_AT
+
+    use_case = str(payload.get("use_case") or "inventory_replenishment").strip()
+    if use_case not in ALLOWED_USE_CASES:
+        return 400, {"detail": f"Invalid use_case: '{use_case}'"}
+
+    max_programs = max(2, min(15, _safe_int(payload.get("max_programs"), 4)))
+    parallel_workers = max(
+        1, min(4, _safe_int(payload.get("parallel_workers", payload.get("workers")), 4))
+    )
+    raw_exp_name = str(payload.get("experiment_name") or "").strip()
+    if raw_exp_name:
+        exp_name = raw_exp_name[:120]
+    elif use_case == "fleet_routing":
+        exp_name = "Dynamic Fleet Routing & Dispatch (Live Dry-Run)"
+    else:
+        exp_name = "Inventory Replenishment Digital Twin (Live Dry-Run)"
+
+    raw_bg = payload.get("background", True)
+    run_in_background = not (
+        raw_bg is False
+        or (isinstance(raw_bg, str) and raw_bg.strip().lower() in ("false", "0", "no"))
+    )
+
+    broker = get_global_broker()
+    now_mono = time.monotonic()
+
+    with _EXPERIMENT_LOCK:
+        curr_started_at = broker.get_current_state().get("started_at")
+        broker_was_cleared = _LAST_BROKER_STARTED_AT is not None and curr_started_at is None
+        is_thread_alive = _EXPERIMENT_THREAD is not None and _EXPERIMENT_THREAD.is_alive()
+        elapsed = now_mono - _LAST_EXPERIMENT_START_TS
+
+        if _EXPERIMENT_RUNNING or is_thread_alive:
+            retry_after = round(max(0.1, EXPERIMENT_RATE_LIMIT_SECONDS - elapsed), 2)
+            return (
+                429,
+                {
+                    "status": "rate_limited",
+                    "detail": (
+                        "Rate limit exceeded: an evolution experiment is already running. "
+                        "Please wait for completion."
+                    ),
+                    "retry_after_s": retry_after,
+                },
+            )
+
+        if (
+            _LAST_EXPERIMENT_START_TS > 0.0
+            and not broker_was_cleared
+            and elapsed < EXPERIMENT_RATE_LIMIT_SECONDS
+        ):
+            retry_after = round(max(0.1, EXPERIMENT_RATE_LIMIT_SECONDS - elapsed), 2)
+            return (
+                429,
+                {
+                    "status": "rate_limited",
+                    "detail": (
+                        f"Rate limit exceeded: please wait {retry_after:.1f}s before starting "
+                        "another evolution run."
+                    ),
+                    "retry_after_s": retry_after,
+                },
+            )
+
+        _EXPERIMENT_RUNNING = True
+        _LAST_EXPERIMENT_START_TS = now_mono
+        prev_started_at = curr_started_at
+
+    if use_case == "fleet_routing":
+        example_dir = ROOT_DIR / "examples" / "fleet_routing"
+        evaluator: Any = _DEFAULT_ROUTING_EVALUATOR
+    else:
+        example_dir = ROOT_DIR / "examples" / "inventory_replenishment"
+        evaluator = _DEFAULT_INVENTORY_EVALUATOR
+
+    instructions_path = example_dir / "instructions.md"
+    seed_program_path = example_dir / "src" / "program.py"
+    instructions = (
+        _read_text_cached(instructions_path) if instructions_path.exists() else "Optimize policy."
+    )
+    seed_code = _read_text_cached(seed_program_path)
+
+    config = ExperimentConfig(
+        project_id=os.getenv("PROJECT_ID", "934903580331"),
+        location=os.getenv("LOCATION", "global"),
+        collection=os.getenv("COLLECTION", "default_collection"),
+        engine_id=os.getenv("ENGINE_ID", "alpha-evolve-experiment-engine"),
+        assistant_id=os.getenv("ASSISTANT_ID", "default_assistant"),
+        experiment_name=exp_name,
+        user_instructions=instructions,
+        seed_code=seed_code,
+        run_settings=RunSettings(
+            max_programs=max_programs,
+            parallel_workers=parallel_workers,
+            mock_mode=True,
+            sandbox_mode="thread",
+        ),
+    )
+
+    def _run_evolution_worker() -> None:
+        global _EXPERIMENT_RUNNING, _LAST_BROKER_STARTED_AT
+        try:
+            client = _DryRunEvolutionClient(seed_code=seed_code, use_case=use_case)
+            with client:
+                controller = EvolutionController(
+                    config=config,
+                    client=client,
+                    evaluator=evaluator,
+                    primary_metric="cost_reduction_pct",
+                    telemetry_broker=broker,
+                )
+                controller.run()
+        except Exception:
+            pass
+        finally:
+            with _EXPERIMENT_LOCK:
+                _EXPERIMENT_RUNNING = False
+                _LAST_BROKER_STARTED_AT = broker.get_current_state().get("started_at")
+
+    if not run_in_background:
+        _run_evolution_worker()
+    else:
+        worker_thread = threading.Thread(
+            target=_run_evolution_worker,
+            name=f"alpha-evolve-dry-run-{use_case}",
+            daemon=True,
+        )
+        with _EXPERIMENT_LOCK:
+            _EXPERIMENT_THREAD = worker_thread
+        worker_thread.start()
+
+        # Wait briefly (typically <2ms) so run_started is published before returning HTTP 200
+        for _ in range(250):
+            if (
+                broker.get_current_state().get("started_at") != prev_started_at
+                or not worker_thread.is_alive()
+            ):
+                break
+            time.sleep(0.002)
+        with _EXPERIMENT_LOCK:
+            _LAST_BROKER_STARTED_AT = broker.get_current_state().get("started_at")
+
+    return (
+        200,
+        {
+            "status": "started",
+            "use_case": use_case,
+            "experiment_name": exp_name,
+            "max_programs": max_programs,
+            "parallel_workers": parallel_workers,
+            "dry_run": True,
+            "stream_url": "/api/stream/events",
+        },
+    )
+
+
 def handle_api_request(
     path: str, payload: dict[str, Any] | None = None
 ) -> tuple[int, dict[str, str], Any]:
@@ -825,6 +1035,11 @@ def handle_api_request(
         headers["Content-Type"] = "application/json"
         sim_code, sim_body = run_digital_twin_simulation(merged_payload)
         return sim_code, headers, sim_body
+
+    if route_path == "/api/experiments/start":
+        headers["Content-Type"] = "application/json"
+        exp_code, exp_body = start_live_experiment(merged_payload)
+        return exp_code, headers, exp_body
 
     if route_path in ("/api/agent/replenish-query", "/api/agent/query"):
         headers["Content-Type"] = "application/json"
@@ -943,6 +1158,14 @@ try:
     async def post_live_candidate(request: Request) -> Any:
         payload = await _read_bounded_json(request)
         code, _, body = handle_api_request("/api/live/candidates", payload=payload)
+        return JSONResponse(content=body, status_code=code)
+
+    @app.post("/api/experiments/start", tags=["Cloud AlphaEvolve"])
+    async def post_start_experiment(request: Request) -> Any:
+        payload: dict[str, Any] = dict(request.query_params)
+        post_payload = await _read_bounded_json(request)
+        payload.update(post_payload)
+        code, _, body = handle_api_request("/api/experiments/start", payload=payload)
         return JSONResponse(content=body, status_code=code)
 
     @app.get("/api/stream/events", tags=["Telemetry"])
@@ -1109,6 +1332,7 @@ if __name__ == "__main__":
                     "/api/agent/query",
                     "/api/simulate",
                     "/api/live/candidates",
+                    "/api/experiments/start",
                 ):
                     content_len_hdr = self.headers.get("Content-Length")
                     status_code, check_res = parse_bounded_json_body(

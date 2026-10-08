@@ -2631,9 +2631,11 @@
       const pillStreamStatus = document.getElementById("pill-stream-status");
       const dotStreamStatus = document.getElementById("dot-stream-status");
       const textStreamStatus = document.getElementById("text-stream-status");
+      const btnTriggerEvolution = document.getElementById("btn-trigger-evolution");
       const liveToast = document.getElementById("live-toast");
       const liveToastText = document.getElementById("live-toast-text");
       let toastTimer = null;
+      let isEvolutionRunning = false;
 
       function showLiveToast(msg) {
         if (!liveToast || !liveToastText) return;
@@ -2650,6 +2652,60 @@
         pillStreamStatus.className = "pill " + (statusMode === "streaming" ? "status-streaming" : (statusMode === "connected" ? "status-live" : "status-archive"));
         dotStreamStatus.className = "status-dot" + (statusMode === "streaming" ? " pulse" : "");
         textStreamStatus.textContent = labelText;
+      }
+
+      function setEvolutionButtonState(running) {
+        isEvolutionRunning = Boolean(running);
+        if (!btnTriggerEvolution) return;
+        btnTriggerEvolution.disabled = isEvolutionRunning;
+        btnTriggerEvolution.classList.toggle("is-running", isEvolutionRunning);
+        btnTriggerEvolution.textContent = isEvolutionRunning
+          ? "⏳ Evolving..."
+          : "⚡ Run Live Evolution";
+      }
+
+      function triggerLiveEvolution() {
+        if (isEvolutionRunning || typeof fetch !== "function") return;
+        pauseReplay();
+        setEvolutionButtonState(true);
+        setStreamStatus("streaming", "STARTING DRY-RUN...");
+
+        fetch("/api/experiments/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            use_case: currentUseCaseId,
+            max_programs: 4
+          })
+        })
+          .then(res => {
+            return res.json().catch(() => ({})).then(data => ({
+              ok: res.ok,
+              status: res.status,
+              data: data
+            }));
+          })
+          .then(result => {
+            if (!result.ok) {
+              setEvolutionButtonState(false);
+              const errMsg = (result.data && result.data.detail) || "Evolution request rate-limited or failed";
+              setStreamStatus("connected", result.status === 429 ? "RATE LIMITED (WAIT)" : "REQUEST FAILED");
+              showLiveToast("⚠️ " + errMsg);
+              return;
+            }
+            const expTitle = (result.data && result.data.experiment_name) || currentUseCaseId;
+            setStreamStatus("streaming", "LIVE: " + expTitle);
+            showLiveToast("🚀 Triggered Dry-Run: " + expTitle);
+          })
+          .catch(() => {
+            setEvolutionButtonState(false);
+            setStreamStatus("archive", "OFFLINE ARCHIVE");
+            showLiveToast("⚠️ Unable to reach server for live evolution");
+          });
+      }
+
+      if (btnTriggerEvolution) {
+        btnTriggerEvolution.addEventListener("click", triggerLiveEvolution);
       }
 
       function connectTelemetryStream() {
@@ -2676,10 +2732,13 @@
           try {
             const snapshot = JSON.parse(e.data);
             if (snapshot.status === "RUNNING") {
+              setEvolutionButtonState(true);
               setStreamStatus("streaming", "LIVE: " + (snapshot.experiment_name || "RUNNING") + " (" + snapshot.evaluated_count + " EVALUATED)");
             } else if (snapshot.status === "COMPLETED") {
+              setEvolutionButtonState(false);
               setStreamStatus("connected", "RUN COMPLETED (" + snapshot.evaluated_count + " EVALUATED)");
             } else {
+              setEvolutionButtonState(false);
               setStreamStatus("connected", "ADC VERIFIED (IDLE)");
             }
           } catch (err) {
@@ -2690,6 +2749,7 @@
         sse.addEventListener("run_started", function(e) {
           try {
             const runData = JSON.parse(e.data);
+            setEvolutionButtonState(true);
             setStreamStatus("streaming", "LIVE: " + (runData.experiment_name || "OPTIMIZING"));
             showLiveToast("🚀 AlphaEvolve Run Started: " + (runData.experiment_name || "New Run"));
           } catch (err) {
@@ -2718,7 +2778,7 @@
                 ? ("★ New Breakthrough Candidate (Iter " + iter + ") | Score: " + scoreVal.toFixed(2) + "%")
                 : ("Evaluated Candidate (Iter " + iter + ") | Score: " + scoreVal.toFixed(2) + "%"),
               metrics: {
-                total_cost: baseFrame.metrics ? baseFrame.metrics.total_cost : 45238,
+                total_cost: (cand.scores && cand.scores.total_cost) || (baseFrame.metrics ? baseFrame.metrics.total_cost : 45238),
                 spoilage_cost: baseFrame.metrics ? baseFrame.metrics.spoilage_cost : 16145,
                 holding_cost: baseFrame.metrics ? baseFrame.metrics.holding_cost : 14120,
                 stockout_penalty: baseFrame.metrics ? baseFrame.metrics.stockout_penalty : 14573,
@@ -2791,6 +2851,7 @@
         sse.addEventListener("run_completed", function(e) {
           try {
             const finishData = JSON.parse(e.data);
+            setEvolutionButtonState(false);
             setStreamStatus("connected", "RUN COMPLETED (Best: " + (finishData.best_score || 0).toFixed(2) + "%)");
             showLiveToast("🏁 Optimization Run Completed! Best Score: " + (finishData.best_score || 0).toFixed(2) + "%");
           } catch (err) {
@@ -2799,6 +2860,7 @@
         });
 
         sse.onerror = function() {
+          setEvolutionButtonState(false);
           setStreamStatus("archive", "ARCHIVE MODE (OFFLINE)");
         };
       }
