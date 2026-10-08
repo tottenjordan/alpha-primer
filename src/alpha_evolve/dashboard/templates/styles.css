@@ -145,6 +145,47 @@
       background: hsla(215, 20%, 65%, 0.08);
     }
 
+    .btn-trigger-evolution {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      padding: var(--space-1) 12px;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(
+        135deg,
+        hsla(160, 84%, 39%, 0.22) 0%,
+        hsla(189, 94%, 43%, 0.22) 100%
+      );
+      border: 1px solid hsla(160, 84%, 39%, 0.55);
+      color: var(--accent-emerald);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+      box-shadow: var(--border-specular);
+    }
+
+    .btn-trigger-evolution:hover:not(:disabled) {
+      border-color: var(--accent-cyan);
+      color: var(--text-primary);
+      background: linear-gradient(
+        135deg,
+        hsla(160, 84%, 39%, 0.32) 0%,
+        hsla(189, 94%, 43%, 0.32) 100%
+      );
+    }
+
+    .btn-trigger-evolution:disabled,
+    .btn-trigger-evolution.is-running {
+      border-color: hsla(189, 94%, 43%, 0.45);
+      color: var(--accent-cyan);
+      background: hsla(189, 94%, 43%, 0.12);
+      cursor: not-allowed;
+      opacity: 0.85;
+    }
+
     .status-dot {
       width: 7px;
       height: 7px;

@@ -688,3 +688,521 @@ def test_whatif_sandbox_client_js_live_simulate_and_race_guard() -> None:
         check=True,
     )
     assert "ALL_JS_CHECKS_PASSED" in proc.stdout
+
+
+def test_server_start_live_experiment_inventory_and_sse_streaming() -> None:
+    """Verify POST /api/experiments/start runs EvolutionController and streams telemetry events."""
+    from alpha_evolve.dashboard.telemetry_broker import get_global_broker
+
+    broker = get_global_broker()
+    broker.clear()
+    sub_q = broker.subscribe()
+
+    try:
+        code, headers, body = handle_api_request(
+            "/api/experiments/start",
+            payload={
+                "use_case": "inventory_replenishment",
+                "max_programs": 4,
+                "parallel_workers": 4,
+                "background": False,
+            },
+        )
+        assert code == 200
+        assert headers["Content-Type"] == "application/json"
+        for key in SECURITY_HEADERS:
+            assert key in headers
+        assert body["status"] == "started"
+        assert body["use_case"] == "inventory_replenishment"
+        assert body["max_programs"] == 4
+        assert body["dry_run"] is True
+        assert body["stream_url"] == "/api/stream/events"
+
+        events = []
+        while not sub_q.empty():
+            events.append(sub_q.get_nowait())
+
+        event_types = [e["event_type"] for e in events]
+        assert event_types[0] == "run_started"
+        assert event_types[-1] == "run_completed"
+        cand_events = [e for e in events if e["event_type"] == "candidate_evaluated"]
+        assert len(cand_events) == 4
+        assert [c["data"]["iteration"] for c in cand_events] == [0, 1, 2, 3]
+        assert cand_events[0]["data"]["is_baseline"] is True
+        scores = [c["data"]["score"] for c in cand_events]
+        # Progressive inventory replenishment milestone mutations monotonically improve score to >33%
+        assert scores[0] < scores[1] < scores[2] < scores[3]
+        assert scores[-1] > 33.0
+
+        _, _, state = handle_api_request("/api/live/state")
+        assert state["status"] == "COMPLETED"
+        assert state["evaluated_count"] == 4
+        assert state["best_score"] == scores[-1]
+    finally:
+        broker.unsubscribe(sub_q)
+
+
+def test_server_start_live_experiment_fleet_routing_and_rate_limiting() -> None:
+    """Verify background execution, rate-limiting (HTTP 429), and fleet_routing evolution streaming."""
+    import time
+
+    from alpha_evolve.dashboard.telemetry_broker import get_global_broker
+
+    broker = get_global_broker()
+    broker.clear()
+    sub_q = broker.subscribe()
+
+    try:
+        # 1. Start background dry-run for fleet_routing
+        code, _, body = handle_api_request(
+            "/api/experiments/start",
+            payload={
+                "use_case": "fleet_routing",
+                "max_programs": 3,
+                "parallel_workers": 3,
+                "experiment_name": "Fleet Live Test",
+            },
+        )
+        assert code == 200
+        assert body["status"] == "started"
+        assert body["use_case"] == "fleet_routing"
+        assert body["experiment_name"] == "Fleet Live Test"
+
+        # 2. Immediate concurrent request must be rejected with HTTP 429 rate_limited + Retry-After header
+        code_429, headers_429, body_429 = handle_api_request(
+            "/api/experiments/start",
+            payload={"use_case": "fleet_routing", "max_programs": 2},
+        )
+        assert code_429 == 429
+        assert "Retry-After" in headers_429
+        assert int(headers_429["Retry-After"]) >= 1
+        assert body_429["status"] == "rate_limited"
+        assert "Rate limit exceeded" in body_429["detail"]
+        assert body_429["retry_after_s"] > 0.0
+
+        # 3. Wait for background evolution thread to finish
+        deadline = time.monotonic() + 8.0
+        state = broker.get_current_state()
+        while state["status"] != "COMPLETED" and time.monotonic() < deadline:
+            time.sleep(0.05)
+            state = broker.get_current_state()
+
+        assert state["status"] == "COMPLETED"
+        assert state["evaluated_count"] == 3
+        assert state["experiment_name"] == "Fleet Live Test"
+
+        events = []
+        while not sub_q.empty():
+            events.append(sub_q.get_nowait())
+
+        cand_events = [e for e in events if e["event_type"] == "candidate_evaluated"]
+        assert len(cand_events) == 3
+        scores = [c["data"]["score"] for c in cand_events]
+        # Progressive fleet routing milestone mutations improve cost_reduction_pct
+        assert scores[0] < scores[1] < scores[2]
+    finally:
+        broker.unsubscribe(sub_q)
+
+
+def test_server_start_live_experiment_validation_and_clamping() -> None:
+    """Verify /api/experiments/start rejects invalid use_case and clamps malformed parameters."""
+    from alpha_evolve.dashboard.telemetry_broker import get_global_broker
+
+    broker = get_global_broker()
+    broker.clear()
+
+    # 1. Invalid use_case returns 400
+    code_bad, _, body_bad = handle_api_request(
+        "/api/experiments/start",
+        payload={"use_case": "invalid_domain"},
+    )
+    assert code_bad == 400
+    assert "Invalid use_case" in body_bad["detail"]
+
+    # 2. Malformed parameters clamp safely to [2, 15] and [1, 4]
+    code_clamp, _, body_clamp = handle_api_request(
+        "/api/experiments/start",
+        payload={
+            "use_case": "inventory_replenishment",
+            "max_programs": -10,
+            "parallel_workers": "invalid",
+            "experiment_name": "   ",
+            "background": False,
+        },
+    )
+    assert code_clamp == 200
+    assert body_clamp["max_programs"] == 2
+    assert body_clamp["parallel_workers"] == 4
+    assert "Inventory Replenishment" in body_clamp["experiment_name"]
+
+
+def test_server_http_socket_sse_stream_and_live_experiment() -> None:
+    """Verify live HTTP socket SSE stream (/api/stream/events) concurrently with POST /api/experiments/start."""
+    import http.client
+    import http.server
+    import json
+    import os
+    import threading
+
+    from server import FallbackHandler
+
+    from alpha_evolve.dashboard.telemetry_broker import get_global_broker
+
+    broker = get_global_broker()
+    broker.clear()
+
+    prev_quiet = os.environ.get("QUIET_HTTP_LOGS")
+    os.environ["QUIET_HTTP_LOGS"] = "1"
+    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), FallbackHandler)
+    port = httpd.server_address[1]
+    srv_thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    srv_thread.start()
+
+    sse_conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+    post_conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+    try:
+        # 1. Open SSE stream connection
+        sse_conn.request("GET", "/api/stream/events")
+        sse_resp = sse_conn.getresponse()
+        assert sse_resp.status == 200
+        assert "text/event-stream" in (sse_resp.getheader("Content-Type") or "")
+        # Ensure Cache-Control is not duplicated with no-store
+        assert sse_resp.getheader("Cache-Control") == "no-cache"
+
+        # Read initial state_snapshot event from socket
+        line1 = sse_resp.fp.readline().decode("utf-8").strip()
+        line2 = sse_resp.fp.readline().decode("utf-8").strip()
+        _ = sse_resp.fp.readline()
+        assert line1 == "event: state_snapshot"
+        assert line2.startswith("data: ")
+        init_snapshot = json.loads(line2[len("data: ") :])
+        assert init_snapshot["status"] == "IDLE"
+
+        # 2. Trigger POST /api/experiments/start over HTTP socket
+        req_body = json.dumps(
+            {
+                "use_case": "inventory_replenishment",
+                "max_programs": 3,
+                "parallel_workers": 3,
+            }
+        ).encode("utf-8")
+        post_conn.request(
+            "POST",
+            "/api/experiments/start",
+            body=req_body,
+            headers={
+                "Content-Type": "application/json",
+                "Content-Length": str(len(req_body)),
+            },
+        )
+        post_resp = post_conn.getresponse()
+        post_data = json.loads(post_resp.read().decode("utf-8"))
+        assert post_resp.status == 200
+        assert post_data["status"] == "started"
+
+        # 3. Immediate concurrent POST over HTTP socket must return 429 with Retry-After header
+        post_conn.request(
+            "POST",
+            "/api/experiments/start",
+            body=req_body,
+            headers={
+                "Content-Type": "application/json",
+                "Content-Length": str(len(req_body)),
+            },
+        )
+        rate_resp = post_conn.getresponse()
+        rate_data = json.loads(rate_resp.read().decode("utf-8"))
+        assert rate_resp.status == 429
+        assert rate_resp.getheader("Retry-After") is not None
+        assert rate_data["status"] == "rate_limited"
+
+        # 4. Read SSE frames from live socket until run_completed
+        received_events: list[tuple[str, dict]] = []
+        current_event_type = ""
+        for _ in range(60):
+            raw_line = sse_resp.fp.readline()
+            if not raw_line:
+                break
+            line = raw_line.decode("utf-8").strip()
+            if not line or line.startswith(":"):
+                continue
+            if line.startswith("event: "):
+                current_event_type = line[len("event: ") :]
+            elif line.startswith("data: ") and current_event_type:
+                payload = json.loads(line[len("data: ") :])
+                received_events.append((current_event_type, payload))
+                if current_event_type == "run_completed":
+                    break
+                current_event_type = ""
+
+        ev_names = [et for et, _ in received_events]
+        assert ev_names[0] == "run_started"
+        assert ev_names[-1] == "run_completed"
+        cand_frames = [p for et, p in received_events if et == "candidate_evaluated"]
+        assert len(cand_frames) == 3
+        assert cand_frames[0]["score"] < cand_frames[1]["score"] < cand_frames[2]["score"]
+    finally:
+        sse_conn.close()
+        post_conn.close()
+        httpd.shutdown()
+        httpd.server_close()
+        if prev_quiet is None:
+            os.environ.pop("QUIET_HTTP_LOGS", None)
+        else:
+            os.environ["QUIET_HTTP_LOGS"] = prev_quiet
+
+
+def test_live_evolution_trigger_button_client_js_execution() -> None:
+    """Verify #btn-trigger-evolution in dashboard header triggers POST /api/experiments/start and syncs with SSE."""
+    import json
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    root_dir = Path(__file__).resolve().parent.parent
+    index_html = (root_dir / "dashboard" / "index.html").read_text(encoding="utf-8")
+    assert 'id="btn-trigger-evolution"' in index_html
+    assert '"/api/experiments/start"' in index_html
+    assert "innerHTML" not in index_html
+
+    node_path = shutil.which("node")
+    if not node_path:
+        return
+
+    app_js_path = root_dir / "src" / "alpha_evolve" / "dashboard" / "templates" / "app.js"
+    master_path = root_dir / "records" / "master_trajectories.json"
+
+    node_harness = f"""
+    const fs = require('fs');
+    const masterData = fs.readFileSync({json.dumps(str(master_path))}, 'utf8');
+    const appJs = fs.readFileSync({json.dumps(str(app_js_path))}, 'utf8');
+
+    const elements = new Map();
+    let sseListeners = {{}};
+
+    function makeEl(tag, id) {{
+      return {{
+        tagName: tag,
+        id: id || '',
+        className: '',
+        textContent: '',
+        disabled: false,
+        value: '0',
+        children: [],
+        attributes: new Map(),
+        listeners: {{}},
+        classList: {{
+          classes: new Set(),
+          add(c) {{ this.classes.add(c); }},
+          remove(c) {{ this.classes.delete(c); }},
+          toggle(c, force) {{
+            if (force === undefined) {{
+              if (this.classes.has(c)) this.classes.delete(c); else this.classes.add(c);
+            }} else if (force) {{
+              this.classes.add(c);
+            }} else {{
+              this.classes.delete(c);
+            }}
+          }},
+          contains(c) {{ return this.classes.has(c); }}
+        }},
+        appendChild(child) {{ this.children.push(child); return child; }},
+        replaceChildren(...nodes) {{ this.children = nodes; }},
+        insertBefore(node) {{ this.children.push(node); }},
+        remove() {{}},
+        setAttribute(k, v) {{ this.attributes.set(k, String(v)); }},
+        getAttribute(k) {{ return this.attributes.get(k) || null; }},
+        addEventListener(ev, fn) {{
+          if (!this.listeners[ev]) this.listeners[ev] = [];
+          this.listeners[ev].push(fn);
+        }},
+        querySelectorAll() {{ return []; }},
+        getBoundingClientRect() {{ return {{ left: 0, top: 0, width: 600, height: 260 }}; }},
+        getContext() {{
+          return {{
+            scale() {{}}, clearRect() {{}}, fillRect() {{}}, beginPath() {{}},
+            moveTo() {{}}, lineTo() {{}}, stroke() {{}}, fill() {{}}, arc() {{}},
+            setLineDash() {{}}, fillText() {{}}, strokeRect() {{}},
+            createLinearGradient() {{ return {{ addColorStop() {{}} }}; }}
+          }};
+        }}
+      }};
+    }}
+
+    function getEl(id) {{
+      if (!elements.has(id)) {{
+        const e = makeEl('div', id);
+        if (id === 'master-trajectory-data') e.textContent = masterData;
+        if (id === 'btn-trigger-evolution') e.textContent = '⚡ Run Live Evolution';
+        elements.set(id, e);
+      }}
+      return elements.get(id);
+    }}
+
+    const useCaseBtns = ['inventory_replenishment', 'fleet_routing'].map(uc => {{
+      const b = makeEl('button', 'btn-' + uc);
+      b.setAttribute('data-use-case', uc);
+      return b;
+    }});
+
+    class MockEventSource {{
+      constructor() {{ sseListeners = {{}}; }}
+      addEventListener(ev, fn) {{ sseListeners[ev] = fn; }}
+    }}
+
+    global.EventSource = MockEventSource;
+    global.window = {{
+      location: {{ protocol: 'http:' }},
+      devicePixelRatio: 1,
+      EventSource: MockEventSource,
+      addEventListener() {{}}
+    }};
+    global.document = {{
+      createElement(tag) {{ return makeEl(tag, ''); }},
+      createTextNode(txt) {{ return {{ textContent: String(txt) }}; }},
+      createDocumentFragment() {{ return makeEl('fragment', ''); }},
+      getElementById(id) {{ return getEl(id); }},
+      querySelectorAll(sel) {{
+        if (sel === '.use-case-btn') return useCaseBtns;
+        return [];
+      }}
+    }};
+
+    global.setTimeout = () => 1;
+    global.clearTimeout = () => {{}};
+    global.setInterval = () => 1;
+    global.clearInterval = () => {{}};
+
+    let startCalls = [];
+    let nextStartResponse = {{
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({{
+        status: 'started',
+        use_case: 'inventory_replenishment',
+        experiment_name: 'Inventory Replenishment Digital Twin (Live Dry-Run)',
+        max_programs: 4
+      }})
+    }};
+
+    global.fetch = (url, opts) => {{
+      const body = opts && opts.body ? JSON.parse(opts.body) : {{}};
+      if (url === '/api/experiments/start') {{
+        startCalls.push({{ url, method: opts.method, body }});
+        return Promise.resolve(nextStartResponse);
+      }}
+      return Promise.resolve({{ ok: true, json: () => Promise.resolve({{}}) }});
+    }};
+
+    eval(appJs);
+
+    async function runTriggerChecks() {{
+      const btn = getEl('btn-trigger-evolution');
+      const clickHandlers = btn.listeners['click'] || [];
+      if (clickHandlers.length === 0) throw new Error('Missing click listener on #btn-trigger-evolution');
+
+      // 1. Click trigger button -> disables button & posts to /api/experiments/start
+      clickHandlers[0]();
+      if (!btn.disabled || !btn.classList.contains('is-running') || btn.textContent !== '⏳ Evolving...') {{
+        throw new Error('Button did not enter running state on click');
+      }}
+      if (startCalls.length !== 1 || startCalls[0].method !== 'POST' || startCalls[0].body.use_case !== 'inventory_replenishment') {{
+        throw new Error('Unexpected fetch call on trigger: ' + JSON.stringify(startCalls));
+      }}
+      await new Promise(r => setImmediate(r));
+      if (!getEl('text-stream-status').textContent.includes('LIVE: Inventory Replenishment')) {{
+        throw new Error('Unexpected stream status after start: ' + getEl('text-stream-status').textContent);
+      }}
+
+      // 2. Simulate SSE run_started + candidate_evaluated WITHOUT total_cost (real InventoryReplenishmentEvaluator format)
+      // Also test spoilage_rate_pct: 0.0 to ensure zero-value metrics are not overwritten by falsy || fallback
+      sseListeners['run_started']({{
+        data: JSON.stringify({{
+          experiment_name: 'Inventory Replenishment Digital Twin (Live Dry-Run)',
+          target_function_name: 'compute_replenishment_orders',
+          max_programs: 4
+        }})
+      }});
+      sseListeners['candidate_evaluated']({{
+        data: JSON.stringify({{
+          iteration: 3,
+          score: 25.0,
+          is_best: true,
+          scores: {{
+            cost_reduction_pct: 25.0,
+            raw_cost_reduction_pct: 25.0,
+            fill_rate_pct: 95.5,
+            spoilage_rate_pct: 0.0
+          }}
+        }})
+      }});
+      // 68410 * (1 - 0.25) = 51307.5 -> rounds to $51,308
+      if (getEl('kpi-total-cost').textContent !== '$51,308') {{
+        throw new Error('Expected derived total_cost $51,308 when total_cost omitted, got ' + getEl('kpi-total-cost').textContent);
+      }}
+      if (getEl('kpi-spoilage-rate').textContent !== '0.00% rate') {{
+        throw new Error('Expected zero spoilage_rate_pct (0.00% rate) to be preserved, got ' + getEl('kpi-spoilage-rate').textContent);
+      }}
+
+      // 3. Rapid domain switch to fleet_routing while inventory_replenishment stream is still emitting
+      useCaseBtns[1].listeners['click'][0]();
+      const fleetChampCostText = getEl('kpi-total-cost').textContent;
+      if (fleetChampCostText !== '$2,931') {{
+        throw new Error('Expected fleet_routing champion cost $2,931 after switching tab, got ' + fleetChampCostText);
+      }}
+
+      // Emit an inventory_replenishment candidate_evaluated event while user is viewing fleet_routing
+      sseListeners['candidate_evaluated']({{
+        data: JSON.stringify({{
+          iteration: 31,
+          score: 34.5,
+          is_best: true,
+          scores: {{ total_cost: 44800, fill_rate_pct: 94.2, spoilage_rate_pct: 8.1 }}
+        }})
+      }});
+      // Active fleet_routing view must NOT be corrupted by inventory_replenishment event!
+      if (getEl('kpi-total-cost').textContent !== '$2,931') {{
+        throw new Error('Cross-domain SSE event corrupted active fleet_routing view: ' + getEl('kpi-total-cost').textContent);
+      }}
+
+      // Switch back to inventory_replenishment -> Gen 31 ($44,800) must be present!
+      useCaseBtns[0].listeners['click'][0]();
+      if (getEl('kpi-total-cost').textContent !== '$44,800') {{
+        throw new Error('Expected inventory_replenishment to retain background Gen 31 ($44,800), got ' + getEl('kpi-total-cost').textContent);
+      }}
+
+      sseListeners['run_completed']({{
+        data: JSON.stringify({{ best_score: 34.5, evaluated_count: 4 }})
+      }});
+      if (btn.disabled || btn.classList.contains('is-running') || btn.textContent !== '⚡ Run Live Evolution') {{
+        throw new Error('Button did not reset after SSE run_completed');
+      }}
+
+      // 4. Simulate HTTP 429 rate-limit response
+      nextStartResponse = {{
+        ok: false,
+        status: 429,
+        json: () => Promise.resolve({{ status: 'rate_limited', detail: 'Rate limit exceeded' }})
+      }};
+      clickHandlers[0]();
+      await new Promise(r => setImmediate(r));
+      if (btn.disabled || getEl('text-stream-status').textContent !== 'RATE LIMITED (WAIT)') {{
+        throw new Error('Expected button to re-enable and show RATE LIMITED (WAIT) on HTTP 429');
+      }}
+      if (!getEl('live-toast-text').textContent.includes('Rate limit exceeded')) {{
+        throw new Error('Expected toast with Rate limit exceeded detail');
+      }}
+
+      console.log('TRIGGER_EVOLUTION_JS_CHECKS_PASSED');
+    }}
+    runTriggerChecks().catch(err => {{ console.error(err); process.exit(1); }});
+    """
+
+    proc = subprocess.run(
+        [node_path, "-e", node_harness],
+        cwd=str(root_dir),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "TRIGGER_EVOLUTION_JS_CHECKS_PASSED" in proc.stdout

@@ -2631,9 +2631,58 @@
       const pillStreamStatus = document.getElementById("pill-stream-status");
       const dotStreamStatus = document.getElementById("dot-stream-status");
       const textStreamStatus = document.getElementById("text-stream-status");
+      const btnTriggerEvolution = document.getElementById("btn-trigger-evolution");
       const liveToast = document.getElementById("live-toast");
       const liveToastText = document.getElementById("live-toast-text");
       let toastTimer = null;
+      let isEvolutionRunning = false;
+      let activeStreamUseCaseId = null;
+
+      function numOr(val, fallback) {
+        return typeof val === "number" && !Number.isNaN(val) ? val : fallback;
+      }
+
+      function inferEventUseCase(payload) {
+        if (!payload || typeof payload !== "object") {
+          return activeStreamUseCaseId || currentUseCaseId;
+        }
+        if (
+          typeof payload.use_case === "string" &&
+          masterData.use_cases &&
+          masterData.use_cases[payload.use_case]
+        ) {
+          return payload.use_case;
+        }
+        if (payload.target_function_name === "assign_and_sequence_routes") {
+          return "fleet_routing";
+        }
+        if (payload.target_function_name === "compute_replenishment_orders") {
+          return "inventory_replenishment";
+        }
+        if (payload.scores && typeof payload.scores === "object") {
+          if (
+            typeof payload.scores.on_time_delivery_pct === "number" ||
+            typeof payload.scores.total_distance_km === "number"
+          ) {
+            return "fleet_routing";
+          }
+          if (
+            typeof payload.scores.spoilage_rate_pct === "number" ||
+            typeof payload.scores.raw_cost_reduction_pct === "number"
+          ) {
+            return "inventory_replenishment";
+          }
+        }
+        if (typeof payload.experiment_name === "string" && payload.experiment_name) {
+          if (/fleet|routing|vrptw/i.test(payload.experiment_name)) {
+            return "fleet_routing";
+          }
+          if (/inventory|replenish/i.test(payload.experiment_name)) {
+            return "inventory_replenishment";
+          }
+        }
+        return activeStreamUseCaseId || currentUseCaseId;
+      }
 
       function showLiveToast(msg) {
         if (!liveToast || !liveToastText) return;
@@ -2650,6 +2699,62 @@
         pillStreamStatus.className = "pill " + (statusMode === "streaming" ? "status-streaming" : (statusMode === "connected" ? "status-live" : "status-archive"));
         dotStreamStatus.className = "status-dot" + (statusMode === "streaming" ? " pulse" : "");
         textStreamStatus.textContent = labelText;
+      }
+
+      function setEvolutionButtonState(running) {
+        isEvolutionRunning = Boolean(running);
+        if (!btnTriggerEvolution) return;
+        btnTriggerEvolution.disabled = isEvolutionRunning;
+        btnTriggerEvolution.classList.toggle("is-running", isEvolutionRunning);
+        btnTriggerEvolution.textContent = isEvolutionRunning
+          ? "⏳ Evolving..."
+          : "⚡ Run Live Evolution";
+      }
+
+      function triggerLiveEvolution() {
+        if (isEvolutionRunning || typeof fetch !== "function") return;
+        const requestedUseCase = currentUseCaseId;
+        activeStreamUseCaseId = requestedUseCase;
+        pauseReplay();
+        setEvolutionButtonState(true);
+        setStreamStatus("streaming", "STARTING DRY-RUN...");
+
+        fetch("/api/experiments/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            use_case: requestedUseCase,
+            max_programs: 4
+          })
+        })
+          .then(res => {
+            return res.json().catch(() => ({})).then(data => ({
+              ok: res.ok,
+              status: res.status,
+              data: data
+            }));
+          })
+          .then(result => {
+            if (!result.ok) {
+              setEvolutionButtonState(false);
+              const errMsg = (result.data && result.data.detail) || "Evolution request rate-limited or failed";
+              setStreamStatus("connected", result.status === 429 ? "RATE LIMITED (WAIT)" : "REQUEST FAILED");
+              showLiveToast("⚠️ " + errMsg);
+              return;
+            }
+            const expTitle = (result.data && result.data.experiment_name) || requestedUseCase;
+            setStreamStatus("streaming", "LIVE: " + expTitle);
+            showLiveToast("🚀 Triggered Dry-Run: " + expTitle);
+          })
+          .catch(() => {
+            setEvolutionButtonState(false);
+            setStreamStatus("archive", "OFFLINE ARCHIVE");
+            showLiveToast("⚠️ Unable to reach server for live evolution");
+          });
+      }
+
+      if (btnTriggerEvolution) {
+        btnTriggerEvolution.addEventListener("click", triggerLiveEvolution);
       }
 
       function connectTelemetryStream() {
@@ -2675,11 +2780,17 @@
         sse.addEventListener("state_snapshot", function(e) {
           try {
             const snapshot = JSON.parse(e.data);
+            if (snapshot && snapshot.experiment_name) {
+              activeStreamUseCaseId = inferEventUseCase(snapshot);
+            }
             if (snapshot.status === "RUNNING") {
+              setEvolutionButtonState(true);
               setStreamStatus("streaming", "LIVE: " + (snapshot.experiment_name || "RUNNING") + " (" + snapshot.evaluated_count + " EVALUATED)");
             } else if (snapshot.status === "COMPLETED") {
+              setEvolutionButtonState(false);
               setStreamStatus("connected", "RUN COMPLETED (" + snapshot.evaluated_count + " EVALUATED)");
             } else {
+              setEvolutionButtonState(false);
               setStreamStatus("connected", "ADC VERIFIED (IDLE)");
             }
           } catch (err) {
@@ -2690,6 +2801,8 @@
         sse.addEventListener("run_started", function(e) {
           try {
             const runData = JSON.parse(e.data);
+            activeStreamUseCaseId = inferEventUseCase(runData);
+            setEvolutionButtonState(true);
             setStreamStatus("streaming", "LIVE: " + (runData.experiment_name || "OPTIMIZING"));
             showLiveToast("🚀 AlphaEvolve Run Started: " + (runData.experiment_name || "New Run"));
           } catch (err) {
@@ -2700,17 +2813,40 @@
         sse.addEventListener("candidate_evaluated", function(e) {
           try {
             const cand = JSON.parse(e.data);
-            const iter = cand.iteration !== undefined ? cand.iteration : trajectories.length;
-            const scoreVal = typeof cand.score === "number" ? cand.score : 0.0;
-            const isBest = cand.is_best || false;
+            const eventUcId = inferEventUseCase(cand);
+            const targetUc = (masterData.use_cases && masterData.use_cases[eventUcId]) || uc;
+            const targetTraj = targetUc.trajectory_generations || trajectories;
+            const targetBaseSum = targetUc.baseline_summary || baselineSum;
+            const targetPareto = targetUc.pareto_frontier || paretoFrontier;
+            const targetRibbon = targetUc.ribbon_milestones || ribbonMilestones;
+            const isActiveDomain = eventUcId === currentUseCaseId;
 
-            const baseFrame = trajectories[Math.min(iter, trajectories.length - 1)] || trajectories[0];
-            const defaultMilestoneKey = currentUseCaseId === "fleet_routing"
+            const iter = cand.iteration !== undefined ? cand.iteration : targetTraj.length;
+            const scoreVal = typeof cand.score === "number" ? cand.score : 0.0;
+            const isBest = Boolean(cand.is_best);
+
+            const baseFrame = targetTraj[Math.min(iter, targetTraj.length - 1)] || targetTraj[0] || {};
+            const baseMetrics = baseFrame.metrics || {};
+            const defaultMilestoneKey = eventUcId === "fleet_routing"
               ? (iter < 7 ? "0" : (iter < 16 ? "7" : (iter < 30 ? "16" : "30")))
               : (iter < 8 ? "0" : (iter < 17 ? "8" : (iter < 30 ? "17" : "30")));
-            const iterMilestoneKey = (baseFrame && baseFrame.generation === iter && baseFrame.milestone_key)
+            const iterMilestoneKey = (baseFrame.generation === iter && baseFrame.milestone_key)
               ? String(baseFrame.milestone_key)
               : defaultMilestoneKey;
+
+            const scoresObj = (cand.scores && typeof cand.scores === "object") ? cand.scores : null;
+            const baseTotalCost = numOr(targetBaseSum.total_cost, eventUcId === "fleet_routing" ? 4099 : 68410);
+            const hasReductionMetric = (
+              (scoresObj && typeof scoresObj.raw_cost_reduction_pct === "number") ||
+              typeof cand.score === "number"
+            );
+            const reducPctForCost = (scoresObj && typeof scoresObj.raw_cost_reduction_pct === "number")
+              ? scoresObj.raw_cost_reduction_pct
+              : scoreVal;
+            const fallbackTotalCost = hasReductionMetric
+              ? Math.round(baseTotalCost * (1.0 - reducPctForCost / 100.0))
+              : numOr(baseMetrics.total_cost, eventUcId === "fleet_routing" ? 2931 : 45238);
+
             const newFrame = {
               generation: iter,
               milestone_key: iterMilestoneKey,
@@ -2718,48 +2854,43 @@
                 ? ("★ New Breakthrough Candidate (Iter " + iter + ") | Score: " + scoreVal.toFixed(2) + "%")
                 : ("Evaluated Candidate (Iter " + iter + ") | Score: " + scoreVal.toFixed(2) + "%"),
               metrics: {
-                total_cost: baseFrame.metrics ? baseFrame.metrics.total_cost : 45238,
-                spoilage_cost: baseFrame.metrics ? baseFrame.metrics.spoilage_cost : 16145,
-                holding_cost: baseFrame.metrics ? baseFrame.metrics.holding_cost : 14120,
-                stockout_penalty: baseFrame.metrics ? baseFrame.metrics.stockout_penalty : 14573,
-                fill_rate_pct: (cand.scores && cand.scores.fill_rate_pct) || (baseFrame.metrics ? baseFrame.metrics.fill_rate_pct : 93.49),
-                spoilage_rate_pct: (cand.scores && cand.scores.spoilage_rate_pct) || (baseFrame.metrics ? baseFrame.metrics.spoilage_rate_pct : 8.45),
-                total_distance_km: (cand.scores && cand.scores.total_distance_km) || (baseFrame.metrics ? baseFrame.metrics.total_distance_km : 1388),
-                on_time_delivery_pct: (cand.scores && cand.scores.on_time_delivery_pct) || (baseFrame.metrics ? baseFrame.metrics.on_time_delivery_pct : 86.0),
-                total_tardiness_hours: (cand.scores && cand.scores.total_tardiness_hours) || (baseFrame.metrics ? baseFrame.metrics.total_tardiness_hours : 8.0),
-                vehicles_used: (cand.scores && cand.scores.vehicles_used) || (baseFrame.metrics ? baseFrame.metrics.vehicles_used : 5),
+                total_cost: numOr(scoresObj && scoresObj.total_cost, fallbackTotalCost),
+                spoilage_cost: numOr(scoresObj && scoresObj.spoilage_cost, numOr(baseMetrics.spoilage_cost, 16145)),
+                holding_cost: numOr(scoresObj && scoresObj.holding_cost, numOr(baseMetrics.holding_cost, 14120)),
+                stockout_penalty: numOr(scoresObj && scoresObj.stockout_penalty, numOr(baseMetrics.stockout_penalty, 14573)),
+                fill_rate_pct: numOr(scoresObj && scoresObj.fill_rate_pct, numOr(baseMetrics.fill_rate_pct, 93.49)),
+                spoilage_rate_pct: numOr(scoresObj && scoresObj.spoilage_rate_pct, numOr(baseMetrics.spoilage_rate_pct, 8.45)),
+                total_distance_km: numOr(scoresObj && scoresObj.total_distance_km, numOr(baseMetrics.total_distance_km, 1388)),
+                on_time_delivery_pct: numOr(scoresObj && scoresObj.on_time_delivery_pct, numOr(baseMetrics.on_time_delivery_pct, 86.0)),
+                total_tardiness_hours: numOr(scoresObj && scoresObj.total_tardiness_hours, numOr(baseMetrics.total_tardiness_hours, 8.0)),
+                vehicles_used: numOr(scoresObj && scoresObj.vehicles_used, numOr(baseMetrics.vehicles_used, 5)),
                 cost_reduction_pct: scoreVal,
                 fitness_score: scoreVal
               },
               daily_series: baseFrame.daily_series
             };
 
-            if (iter >= trajectories.length) {
-              while (trajectories.length < iter) {
-                const fillIdx = trajectories.length;
-                const fillKey = currentUseCaseId === "fleet_routing"
+            if (iter >= targetTraj.length) {
+              while (targetTraj.length < iter) {
+                const fillIdx = targetTraj.length;
+                const fillKey = eventUcId === "fleet_routing"
                   ? (fillIdx < 7 ? "0" : (fillIdx < 16 ? "7" : (fillIdx < 30 ? "16" : "30")))
                   : (fillIdx < 8 ? "0" : (fillIdx < 17 ? "8" : (fillIdx < 30 ? "17" : "30")));
-                trajectories.push({
+                targetTraj.push({
                   generation: fillIdx,
                   milestone_key: fillKey,
                   event_summary: baseFrame.event_summary || ("Gen " + fillIdx),
-                  metrics: Object.assign({}, baseFrame.metrics),
+                  metrics: Object.assign({}, baseMetrics),
                   daily_series: baseFrame.daily_series
                 });
               }
-              trajectories.push(newFrame);
+              targetTraj.push(newFrame);
             } else {
-              trajectories[iter] = newFrame;
+              targetTraj[iter] = newFrame;
             }
 
-            maxGen = trajectories.length - 1;
-            if (scrubber) {
-              scrubber.max = maxGen;
-            }
-
-            if (!paretoFrontier.some(p => p.generation === iter)) {
-              paretoFrontier.push({
+            if (!targetPareto.some(p => p.generation === iter)) {
+              targetPareto.push({
                 generation: iter,
                 cost_reduction_pct: scoreVal,
                 fill_rate_pct: newFrame.metrics.fill_rate_pct,
@@ -2768,20 +2899,31 @@
               });
             }
 
-            if (isBest && !ribbonMilestones.some(m => m.generation === iter)) {
-              ribbonMilestones.push({
+            const addedRibbonMilestone = isBest && !targetRibbon.some(m => m.generation === iter);
+            if (addedRibbonMilestone) {
+              targetRibbon.push({
                 generation: iter,
                 label: "Gen " + iter,
                 badge: "★ Gen " + iter,
                 title: "Breakthrough Candidate (Iter " + iter + ")",
                 cost_reduc: scoreVal,
-                fill_rate: newFrame.metrics.fill_rate_pct,
+                fill_rate: eventUcId === "fleet_routing"
+                  ? newFrame.metrics.on_time_delivery_pct
+                  : newFrame.metrics.fill_rate_pct,
                 innovation: "Evolved Program Candidate with +" + scoreVal.toFixed(1) + "% cost reduction"
               });
-              renderMilestoneRibbon();
             }
 
-            updateDisplay(iter);
+            if (isActiveDomain) {
+              maxGen = targetTraj.length - 1;
+              if (scrubber) {
+                scrubber.max = maxGen;
+              }
+              if (addedRibbonMilestone) {
+                renderMilestoneRibbon();
+              }
+              updateDisplay(iter);
+            }
             showLiveToast((isBest ? "🏆 NEW BEST! " : "⚡ Evaluated: ") + "Gen " + iter + " (" + (scoreVal > 0 ? "+" : "") + scoreVal.toFixed(2) + "%)");
           } catch (err) {
             console.warn("Failed to parse candidate_evaluated event", err);
@@ -2791,6 +2933,7 @@
         sse.addEventListener("run_completed", function(e) {
           try {
             const finishData = JSON.parse(e.data);
+            setEvolutionButtonState(false);
             setStreamStatus("connected", "RUN COMPLETED (Best: " + (finishData.best_score || 0).toFixed(2) + "%)");
             showLiveToast("🏁 Optimization Run Completed! Best Score: " + (finishData.best_score || 0).toFixed(2) + "%");
           } catch (err) {
@@ -2799,6 +2942,7 @@
         });
 
         sse.onerror = function() {
+          setEvolutionButtonState(false);
           setStreamStatus("archive", "ARCHIVE MODE (OFFLINE)");
         };
       }
